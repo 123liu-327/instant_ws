@@ -1,0 +1,56 @@
+<launch>
+  <!-- 硬件驱动层 -->
+  <group ns="drivers">
+    <!-- 1. 相机驱动 -->
+    <node pkg="ucar_camera" name="ucar_camera" type="ucar_camera.py" output="screen"/>
+    
+    <!-- 2. 雷达驱动 -->
+    <node name="ydlidar_node" pkg="ydlidar" type="ydlidar_node" output="screen" respawn="false">
+      <param name="port" type="string" value="/dev/ttyS4"/>  
+      <param name="frame_id" type="string" value="laser_frame"/>
+      <param name="resolution_fixed" type="bool" value="true"/>
+      <param name="auto_reconnect" type="bool" value="true"/>
+      <param name="reversion" type="bool" value="true"/>
+      <param name="angle_min" type="double" value="-180" />
+      <param name="angle_max" type="double" value="180" />
+      <param name="range_min" type="double" value="0.08" />
+      <param name="range_max" type="double" value="16.0" />
+      <param name="ignore_array" type="string" value="" />
+      <param name="samp_rate" type="int" value="9"/>
+      <param name="frequency" type="double" value="10"/>
+    </node>
+
+    <!-- 3. 底盘驱动 -->
+    <node pkg="ucar_controller" name="base_driver" type="base_driver" output="screen">
+      <rosparam command="load" file="$(find ucar_controller)/config/driver_params_ucarV2.yaml" />
+    </node>
+  </group>
+
+  <!-- 等待硬件初始化完成 -->
+<node pkg="rostopic" type="rostopic" name="wait_for_drivers" 
+      args="echo -n 1 /scan" output="log" 
+      launch-prefix="bash -c 'while ! rostopic echo -n 1 /scan &gt;/dev/null 2&gt;&amp;1; do sleep 0.5; done; $0 $@'"/>
+  <!-- 巡线任务层 -->
+  <group ns="navigation" depends_on="drivers">
+    <!-- 1. 控制台节点（新终端） -->
+    <node pkg="ucar_nav" name="followline_service_control" type="followline_service_control.py" 
+          output="screen" launch-prefix="xterm -e"/>
+
+    <!-- 2. 主巡线程序（新终端） -->
+    <node pkg="ucar_nav" name="ucar_follow_line" type="ucar_followline.py" 
+          output="screen" launch-prefix="xterm -e">
+      <env name="PYTHONUNBUFFERED" value="1"/> <!-- 保证Python输出实时显示 -->
+    </node>
+
+    <!-- 3. 避障节点（新终端） -->
+    <node pkg="ucar_nav" name="obstacle_avoidance_node" type="escape_obstacle.py" 
+          output="screen" launch-prefix="xterm -e">
+      <param name="enabled" type="bool" value="false"/> <!-- 初始不激活 -->
+    </node>
+  </group>
+
+  <!-- 启动后提示 -->
+  <node name="startup_complete" pkg="rostopic" type="rostopic" 
+        args="pub /startup_complete std_msgs/Bool 'true' -l" 
+        launch-prefix="bash -c 'sleep 5; $0 $@'"/>
+</launch>

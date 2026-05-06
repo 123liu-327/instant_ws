@@ -1,0 +1,14 @@
+# 目标消息
+float32 linear_velocity  # 目标线速度
+float32 angular_velocity  # 目标角速度
+float32 duration         # 运动持续时间
+
+---
+
+# 结果消息
+bool success  # 运动是否成功
+
+---
+
+# 反馈消息
+float32 current_time  # 当前时间

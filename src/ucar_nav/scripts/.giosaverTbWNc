@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+import sys
+import os
+ros_python_path = "/opt/ros/noetic/lib/python3/dist-packages"
+if ros_python_path not in sys.path:
+    sys.path.append(ros_python_path)
+os.environ["PYTHONPATH"] = ":".join(sys.path)  # 确保子进程继承
+import cv2
+import numpy as np
+import rospy
+import time
+from cv_bridge import CvBridge 
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import Imu
+from tf.transformations import euler_from_quaternion
+
+import signal
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan
+from multiprocessing import Event, Value, Lock, Process
+from geometry_msgs.msg import Twist ,Point
+from std_msgs.msg import Bool
+import threading
+import os
+import multiprocessing
+import math
+
+from followline_service_control import run_control_node
+
+#=============================================================================
+## 6月3号改动： 
+## 在calculate_speed类里面新添加了停车控制器、恢复模式旋转器、检查车道线是否失效函数
+## 在process_frame中改了流程：图像检查->算法执行->检查车道线有效性->检查是否有入库角点->分情况进行速度计算并发布指令（新添加检查车道线和车库角点）
+
+## 6月23号改动：
+## 在迷宫法巡线增加了断点时的处理，解决了即将进入车库时的图像断点线问题
+## 以及改动了角点检测参数，增强了检测的鲁棒性
+## 改动了车库出现检测函数，增加了对车库角点的检测，会优先选择下方的点对
+## 另外还改动了车库控制器，当出现三个及以上的车库点是只会选择下面的两个点作为前视点进行入库
+
+
+## 6月24号改动：
+## 改动了停车控制器，不再根据角点来判断是否停车，而是检测前方车库上边界与基准点的距离来判断是否停车，即detect_white_line_distance函数
+## 把避障class打包到了另一个py文件，在开头使用import导入
+## 新写了一个函数detect_roundabout_entry检测是否进入环岛
+## 在巡线函数的detect中调用了detect_roundabout_entry函数，以此来记录进入环岛的状态
+## 改变了避障函数，增加了对环岛状态的判断，当进入环岛时，避障行为则为原地旋转，若没有进入环岛，则会绕过障碍物
+
+## 6月25号改动：
+## 打算修改巡线算法的逻辑，因为当在环岛遇上障碍物时车子要掉头环岛，但是由于车子巡线模式未切换，所以会导致车子在环岛内绕圈
+## 所以打算在巡线节点node的主循环run里面监测环岛状态，看情况切换巡线模式
+
+## 6月30号改动：
+## 弃用了之前监测环岛状态的方法，采用ros参数服务器全局参量escape_mode告知避障进程选择避障方式：掉头环岛 or 绕路前行
+
+## 7月26号改动：
+## 如果当障碍物出现在环岛出口时，小车先调头，再用固定速度固定时间绕行环岛，绕行结束后再继续巡线
+
+# ================== 全局参数配置区 ==================
+# 调试参数
+DEBUG = True                # 启用调试模式,显示窗口
+
+# 全局变量定义（避障会使用到）
+roundabout_flag = 0  # 环岛状态标志
+previous_left_valid = True   # 记录上一次左线状态
+previous_right_valid = True  # 记录上一次右线状态
+
+#二值化参数
+BINARY_THRESHOLD = 180
+low_threshold = 40
+high_threshold = 150
+kernel_size = 3
+
+# 种子点搜索参数
+SEARCH_HEIGHT = 50  # 最大向上搜索范围
+SEED_THRESHOLD = 80 # 种子点阈值
+
+# 寻线方法相关参数
+MOVE_OFFSET =  186            # 向法线方向移动距离(像素)
+MAX_STEPS = 200             # 最大迭代次数
+BLOCK_SIZE = 5  # 迷宫法核大小
+CLIP_VALUE = 3  # 裁剪值
+
+TRACK_WIDTH = 0.39  # 米，赛道宽度 39cm
+
+# 车库角点检测参数
+CORNER_WINDOW_SIZE = 20     # 角点检测窗口大小（计算点的选取）（待调试）
+ANGLE_THRESHOLD = 55       # 视为车库角点的角度阈值，可适当降低容错
+NMS_THRESHOLD =  20          # 非极大值抑制，剔除附近的重复角点（待调试）
+
+#==== 纯跟踪算法参数==================
+LOOKAHEAD_DISTANCE = 120     # 前视距离
+LATERAR_GAIN = 5.5            # 曲率计算部分dx横向补偿增益（待调试）
+
+# 前向速度限制常量
+MAX_LINEAR_SPEED = 0.3     # m/s 目前是调横向和转向控制的pid，所以先设为0.0前向速度
+MIN_LINEAR_SPEED = 0.0     # m/s
+
+# 转向控制参数量
+MAX_ANGULAR_SPEED = 0.8   # rad/s
+MIN_ANGULAR_SPEED = 0.0
+KP_YAW = 0.6                # 航向P增益
+KD_YAW = 0.1                # 航向D增益
+KI_YAW = 0.0                # 航向I增益（抗稳态误差）
+YAW_ERROR_THRESHOLD = 0.10	   # 航向误差死区(rad)，如果觉得微小的误差影响不大，可以适当调大，反之可以调小
+
+# 停车控制器参数
+STOP_DISTANCE = 70          # 停车的判断条件是前视点与基准位置的差值小于该阈值 
+
+# 曲率适应参数常量
+CURVATURE_SPEED_FACTOR = 0.9 # 曲率对速度的影响系数（系数越大前向速度会越小）
+
+
+
+# 相机内参
+camera_matrix = np.array([
+    [637.5526471889214*0.5, 0.0, 639.0844243459007*0.5],
+    [0.0, 637.5149155824262*0.5, 359.5701497245531*0.5],
+    [0.0, 0.0, 1.0]    ], dtype=np.float32)
+
+# 畸变系数
+dist_coeffs = np.array([
+    -0.3511004161703222, 0.22238663945200993,
+    0.00032134526224666563, 0.0012957640630325122,
+    -0.12254735437504892    ], dtype=np.float32)
+
+
+def my_print(head, head_type='info', content=None):
+    # 如果content参数为空，则将其赋值为空字符串
+    if content is None:
+        content = ''
+    # 根据head_type参数的值，设置不同的背景色和文字颜色
+    if head_type == 'info':
+        bg = 42
+        word = 38
+    elif head_type == 'warn':
+        bg = 43
+        word = 31
+    elif head_type == 'err':
+        bg = 41
+        word = 38
+    elif head_type == 'data':
+        bg = 47
+        word = 30
+    else:
+        bg = 45
+        word = 38
+    # 打印带有不同颜色头部的信息
+    print(f"\n\033[{bg};{word}m   {head}   \033[0m\n{content}\n")
+
+# ================= 图像预处理 =================
+class PreProcess:
+    """
+    图像与处理：灰度化、高斯模糊、腐蚀、膨胀、阈值化、透视变换
+    使用方法：实例化 -> 调用process方法
+    """
+    def __init__(self):
+        """
+        初始化
+        """
+        # 图像预处理参数配置区 ======================================
+        self.img_size = (640, 360)  # 图像尺寸
+        self.vehicle_pt_original = np.array([[self.img_size[0] // 2, self.img_size[1] - 1]], dtype=np.float32) # 车辆基准位置
+
+        self.threshold = BINARY_THRESHOLD
+        self.low_threshold = low_threshold
+        self.high_threshold = high_threshold
+        self.kernel_size = kernel_size
+
+        # BEV参数配置区 ======================================
+        self.output_size = (640, 360)  # (width, height)
+        self.pitch_deg = 17	        # 初始俯仰角
+        self.camera_height = 0.11     # 相机高度(米)
+        self.ground_width = 0.60      # 地面检测宽度(米)
+        self.ground_depth = 0.45	      # 地面检测深度(米)
+        
+        # 预计算变换矩阵
+        self.H = None
+        self._init_perspective_matrix()
+
+    def adaptive_threshold(self, img, block_size=11, down_value=9, low_value=0, high_value=255):
+        """自适应阈值二值化处理
+        参数:
+            img: 输入图像(BGR格式)
+            block_size: 计算局部阈值的邻域大小(奇数)
+            down_value: 从平均灰度值中减去的调整值
+            low_value: 低于阈值时赋予的值
+            high_value: 高于阈值时赋予的值
+        返回:
+            处理后的二值图像(黑色线条，白色背景)
+        """
+        # 获取图像尺寸
+        height, width = img.shape[:2]
+
+        # 转为灰度图
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # 高斯模糊
+        blur = cv2.GaussianBlur(gray, (self.kernel_size, self.kernel_size), 0)
+
+        # 自适应阈值 - 使用均值法
+        binary = cv2.adaptiveThreshold(
+            blur, high_value, 
+            cv2.ADAPTIV

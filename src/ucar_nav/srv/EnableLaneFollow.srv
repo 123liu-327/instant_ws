@@ -1,0 +1,7 @@
+# 文件路径：srv/EnableLaneFollow.srv
+# 功能：启用或停用巡线功能, 并设置巡线模式
+bool enable      # 启用/停用指令
+int32 mode       # 巡线模式
+---
+bool success     # 操作结果
+string message   # 附加信息

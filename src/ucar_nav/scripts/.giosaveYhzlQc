@@ -1,0 +1,813 @@
+#!/usr/bin/env python3
+import sys
+import os
+ros_python_path = "/opt/ros/noetic/lib/python3/dist-packages"
+if ros_python_path not in sys.path:
+    sys.path.append(ros_python_path)
+os.environ["PYTHONPATH"] = ":".join(sys.path)  # 确保子进程继承
+import cv2
+import numpy as np
+import rospy
+import time
+from cv_bridge import CvBridge 
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import Imu
+from tf.transformations import euler_from_quaternion
+
+import signal
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan
+from multiprocessing import Event, Value, Lock, Process
+from geometry_msgs.msg import Twist ,Point
+from std_msgs.msg import Bool
+import threading
+import os
+import multiprocessing
+import math
+
+from followline_service_control import run_control_node
+
+#=============================================================================
+## 6月3号改动： 
+## 在calculate_speed类里面新添加了停车控制器、恢复模式旋转器、检查车道线是否失效函数
+## 在process_frame中改了流程：图像检查->算法执行->检查车道线有效性->检查是否有入库角点->分情况进行速度计算并发布指令（新添加检查车道线和车库角点）
+
+## 6月23号改动：
+## 在迷宫法巡线增加了断点时的处理，解决了即将进入车库时的图像断点线问题
+## 以及改动了角点检测参数，增强了检测的鲁棒性
+## 改动了车库出现检测函数，增加了对车库角点的检测，会优先选择下方的点对
+## 另外还改动了车库控制器，当出现三个及以上的车库点是只会选择下面的两个点作为前视点进行入库
+
+
+## 6月24号改动：
+## 改动了停车控制器，不再根据角点来判断是否停车，而是检测前方车库上边界与基准点的距离来判断是否停车，即detect_white_line_distance函数
+## 把避障class打包到了另一个py文件，在开头使用import导入
+## 新写了一个函数detect_roundabout_entry检测是否进入环岛
+## 在巡线函数的detect中调用了detect_roundabout_entry函数，以此来记录进入环岛的状态
+## 改变了避障函数，增加了对环岛状态的判断，当进入环岛时，避障行为则为原地旋转，若没有进入环岛，则会绕过障碍物
+
+## 6月25号改动：
+## 打算修改巡线算法的逻辑，因为当在环岛遇上障碍物时车子要掉头环岛，但是由于车子巡线模式未切换，所以会导致车子在环岛内绕圈
+## 所以打算在巡线节点node的主循环run里面监测环岛状态，看情况切换巡线模式
+
+
+# ================== 全局参数配置区 ==================
+# 调试参数
+DEBUG = True                # 启用调试模式,显示窗口
+
+# 全局变量定义（避障会使用到）
+roundabout_flag = 0  # 环岛状态标志
+previous_left_valid = True   # 记录上一次左线状态
+previous_right_valid = True  # 记录上一次右线状态
+
+#二值化参数
+BINARY_THRESHOLD = 180
+low_threshold = 40
+high_threshold = 150
+kernel_size = 3
+
+# 种子点搜索参数
+SEARCH_HEIGHT = 50  # 最大向上搜索范围
+SEED_THRESHOLD = 80 # 种子点阈值
+
+# 寻线方法相关参数
+MOVE_OFFSET =  145            # 向法线方向移动距离(像素)
+MAX_STEPS = 200             # 最大迭代次数
+BLOCK_SIZE = 5  # 迷宫法核大小
+CLIP_VALUE = 3  # 裁剪值
+
+TRACK_WIDTH = 0.39  # 米，赛道宽度 39cm
+
+# 车库角点检测参数
+CORNER_WINDOW_SIZE = 20     # 角点检测窗口大小（计算点的选取）（待调试）
+ANGLE_THRESHOLD = 55       # 视为车库角点的角度阈值，可适当降低容错
+NMS_THRESHOLD =  20          # 非极大值抑制，剔除附近的重复角点（待调试）
+
+#==== 纯跟踪算法参数==================
+LOOKAHEAD_DISTANCE = 120     # 前视距离
+LATERAR_GAIN = 6.4            # 曲率计算部分dx横向补偿增益（待调试）
+
+# 前向速度限制常量
+MAX_LINEAR_SPEED = 0.20     # m/s 目前是调横向和转向控制的pid，所以先设为0.0前向速度
+MIN_LINEAR_SPEED = 0.0     # m/s
+
+# 转向控制参数量
+MAX_ANGULAR_SPEED = 0.4   # rad/s
+MIN_ANGULAR_SPEED = 0.0
+KP_YAW = 0.4                # 航向P增益
+KD_YAW = 0.1                # 航向D增益
+KI_YAW = 0.1                # 航向I增益（抗稳态误差）
+YAW_ERROR_THRESHOLD = 0.08	   # 航向误差死区(rad)，如果觉得微小的误差影响不大，可以适当调大，反之可以调小
+
+# 停车控制器参数
+STOP_DISTANCE = 70          # 停车的判断条件是前视点与基准位置的差值小于该阈值 
+
+# 曲率适应参数常量
+CURVATURE_SPEED_FACTOR = 0.8 # 曲率对速度的影响系数（系数越大前向速度会越小）
+
+
+
+# 相机内参
+camera_matrix = np.array([
+    [637.5526471889214*0.5, 0.0, 639.0844243459007*0.5],
+    [0.0, 637.5149155824262*0.5, 359.5701497245531*0.5],
+    [0.0, 0.0, 1.0]    ], dtype=np.float32)
+
+# 畸变系数
+dist_coeffs = np.array([
+    -0.3511004161703222, 0.22238663945200993,
+    0.00032134526224666563, 0.0012957640630325122,
+    -0.12254735437504892    ], dtype=np.float32)
+
+
+def my_print(head, head_type='info', content=None):
+    # 如果content参数为空，则将其赋值为空字符串
+    if content is None:
+        content = ''
+    # 根据head_type参数的值，设置不同的背景色和文字颜色
+    if head_type == 'info':
+        bg = 42
+        word = 38
+    elif head_type == 'warn':
+        bg = 43
+        word = 31
+    elif head_type == 'err':
+        bg = 41
+        word = 38
+    elif head_type == 'data':
+        bg = 47
+        word = 30
+    else:
+        bg = 45
+        word = 38
+    # 打印带有不同颜色头部的信息
+    print(f"\n\033[{bg};{word}m   {head}   \033[0m\n{content}\n")
+
+# ================= 图像预处理 =================
+class PreProcess:
+    """
+    图像与处理：灰度化、高斯模糊、腐蚀、膨胀、阈值化、透视变换
+    使用方法：实例化 -> 调用process方法
+    """
+    def __init__(self):
+        """
+        初始化
+        """
+        # 图像预处理参数配置区 ======================================
+        self.img_size = (640, 360)  # 图像尺寸
+        self.vehicle_pt_original = np.array([[self.img_size[0] // 2, self.img_size[1] - 1]], dtype=np.float32) # 车辆基准位置
+
+        self.threshold = BINARY_THRESHOLD
+        self.low_threshold = low_threshold
+        self.high_threshold = high_threshold
+        self.kernel_size = kernel_size
+
+        # BEV参数配置区 ======================================
+        self.output_size = (640, 360)  # (width, height)
+        self.pitch_deg = 23        # 初始俯仰角
+        self.camera_height = 0.11     # 相机高度(米)
+        self.ground_width = 0.79      # 地面检测宽度(米)
+        self.ground_depth = 0.45	      # 地面检测深度(米)
+        
+        # 预计算变换矩阵
+        self.H = None
+        self._init_perspective_matrix()
+
+    def adaptive_threshold(self, img, block_size=11, down_value=9, low_value=0, high_value=255):
+        """自适应阈值二值化处理
+        参数:
+            img: 输入图像(BGR格式)
+            block_size: 计算局部阈值的邻域大小(奇数)
+            down_value: 从平均灰度值中减去的调整值
+            low_value: 低于阈值时赋予的值
+            high_value: 高于阈值时赋予的值
+        返回:
+            处理后的二值图像(黑色线条，白色背景)
+        """
+        # 获取图像尺寸
+        height, width = img.shape[:2]
+
+        # 转为灰度图
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # 高斯模糊
+        blur = cv2.GaussianBlur(gray, (self.kernel_size, self.kernel_size), 0)
+
+        # 自适应阈值 - 使用均值法
+        binary = cv2.adaptiveThreshold(
+            blur, high_value, 
+            cv2.ADAPTIVE_THRESH_MEAN_C, 
+            cv2.THRESH_BINARY_INV,  # 注意使用INV以得到黑色线条
+            block_size, 
+            down_value
+        )
+
+        # 形态学操作（可根据需要调整）
+        kernel = np.ones((self.kernel_size, self.kernel_size), np.uint8)
+        closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        dilated = cv2.dilate(closed, kernel, iterations=1)
+        eroded = cv2.erode(dilated, kernel, iterations=1)
+
+        # 创建全图结果（上半部分填充白色）
+
+        if DEBUG:
+            cv2.imshow("Adaptive Threshold", eroded)
+
+        return eroded
+
+    def THreshold(self, img):
+        """二值化处理
+        传入参数： img
+        返回参数： 二值化处理后的图像
+        处理步骤： 取图像 -> 转为灰度图 -> 高斯模糊 -> 腐蚀 -> 膨胀 -> 自适应二值化
+        """
+        # 获取图像的高度和宽度
+        height, width = img.shape[:2]  
+        roi = img[height//2:,:]
+        # 转为灰度图
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # 高斯模糊
+        blur = cv2.GaussianBlur(gray, (kernel_size, kernel_size), 0)
+        # 方案1 自适应二值化
+        # dual_lane = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 5)
+        # 方案2 边缘检测
+        dual_lane = cv2.Canny(blur, self.low_threshold, self.high_threshold)
+        # 创建一个闭运算的核
+        kernel = np.ones((self.kernel_size, self.kernel_size), np.uint8)
+        closed = cv2.morphologyEx(dual_lane, cv2.MORPH_CLOSE, kernel)
+        # 在闭运算结果上应用dilate和erode操作
+        dilated = cv2.dilate(closed, kernel, iterations=1)
+        eroded = cv2.erode(dilated, kernel, iterations=1)
+        # 创建掩码，黑色为线条，其它部分为白色
+        dual_lane = np.where(eroded == 255, 0, 255).astype(np.uint8)
+        dual_lane = 255 - dual_lane
+
+        #将erode，dilate，binary全部可视化
+        if DEBUG:
+            # cv2.imshow("gray", gray)
+            # cv2.imshow("blur", blur)
+            # cv2.imshow("erode", erode)
+            # cv2.imshow("dilate", dilate)
+            cv2.imshow("binary", dual_lane)
+
+        return dual_lane
+
+    def show_pitch_direction(self, img):
+        """可视化俯仰角方向"""
+        h, w = img.shape[:2]
+        # 绘制相机视锥
+        cv2.line(img, (w//2, h), (w//2, h//2), (0,255,0), 2)  # 中心线
+        # 根据俯仰角绘制方向
+        pitch_pixels = int(100 * np.tan(np.deg2rad(self.pitch_deg)))
+        cv2.line(img, (w//2, h), (w//2 + pitch_pixels, h//2), (0,0,255), 2)
+        cv2.imshow("Pitch Direction", img)
+    
+    def _init_perspective_matrix(self):
+        """预计算单应性矩阵"""
+        pitch = np.deg2rad(self.pitch_deg)
+    
+        # 地面坐标系四个角点 (世界坐标系)
+        ground_points = np.array([
+            [-self.ground_width/2, 0, 0],
+            [self.ground_width/2, 0, 0],
+            [self.ground_width/2, self.ground_depth, 0],
+            [-self.ground_width/2, self.ground_depth, 0]
+        ], dtype=np.float32)
+
+        image_points = []
+        for pt in ground_points:
+            X_ground, Y_ground, _ = pt
+        
+            # 相机坐标系转换（注意Y轴方向）
+            X_cam = X_ground
+            Y_cam = (self.camera_height * np.cos(pitch) - Y_ground * np.sin(pitch))  # 添加负号
+            Z_cam = self.camera_height * np.sin(pitch) + Y_ground * np.cos(pitch)
+            
+#            if Z_cam <= 0.01:
+#                raise ValueError("俯仰角或地面范围设置不合理，导致点在相机后方")
+            
+            # 投影到图像
+            u = (camera_matrix[0,0] * X_cam / Z_cam) + camera_matrix[0,2]
+            v = (camera_matrix[1,1] * Y_cam / Z_cam) + camera_matrix[1,2]
+            image_points.append([u, v])
+        
+#        for pt in image_points:
+#            u, v = pt
+#            if u < 0 or u >= self.img_size[0] or v < 0 or v >= self.img_size[1]:
+#                print(f"警告: 投影点({u},{v})超出图像范围")
+        # 目标BEV图像坐标
+        bev_dst = np.array([
+            [0, self.output_size[1]-1],
+            [self.output_size[0]-1, self.output_size[1]-1],
+            [self.output_size[0]-1, 0],
+            [0, 0]
+        ], dtype=np.float32)
+
+        # 计算单应性矩阵
+        self.H = cv2.getPerspectiveTransform(
+            np.array(image_points, dtype=np.float32), 
+            bev_dst
+        )
+        # 计算逆变换矩阵
+        self.H_inv = cv2.getPerspectiveTransform(bev_dst, np.array(image_points, dtype=np.float32))
+    
+    def show_ground_area(self, img):
+        """在原始图像上绘制地面检测区域"""
+        pitch = np.deg2rad(self.pitch_deg)
+    
+        # 定义地面网格点
+        X = np.linspace(-self.ground_width/2, self.ground_width/2, 5)
+        Y = np.linspace(0, self.ground_depth, 5)
+    
+        # 绘制网格
+        for x in X:
+            for y in Y:
+                # 计算投影
+                X_cam = x
+                Y_cam = self.camera_height * np.cos(pitch) - y * np.sin(pitch)
+                Z_cam = self.camera_height * np.sin(pitch) + y * np.cos(pitch)
+
+                u = int((camera_matrix[0,0] * X_cam / Z_cam) + camera_matrix[0,2])
+                v = int((camera_matrix[1,1] * Y_cam / Z_cam) + camera_matrix[1,2])
+
+                if 0 <= u < self.img_size[0] and 0 <= v < self.img_size[1]:
+                    cv2.circle(img, (u, v), 3, (0, 255, 0), -1)
+    
+        cv2.imshow("Ground Detection Area", img)
+        return img
+    
+    def PerspectiveTransform(self, img):
+        """
+        执行逆透视变换
+        :param img: 输入图像(BGR格式)
+        :return: 鸟瞰图(BGR格式)以及车辆基准位置（鸟瞰图中）
+        """
+        if self.H is None:
+            raise RuntimeError("未初始化变换矩阵，请先调用_init_perspective_matrix()")
+            
+        # undistorted = cv2.undistort(undistorted, camera_matrix, dist_coeffs)
+ 
+        # 图像执行变换时添加边框处理
+        bev_image = cv2.warpPerspective(
+            img, 
+            self.H, 
+            self.output_size,
+            flags=cv2.INTER_LINEAR + cv2.WARP_FILL_OUTLIERS,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0  # 黑色填充
+        )
+
+        if DEBUG:
+            cv2.imshow("birdview", bev_image)
+        return bev_image
+
+    def inv_PerspectiveTransform(self, img):
+        """
+        逆透视变换
+        传入参数： img输入图像
+        """
+        # 进行逆透视变换
+        inv_perspective_img = cv2.warpPerspective(
+            img, 
+            self.H_inv, 
+            self.output_size
+        )
+
+        return inv_perspective_img
+
+    def process(self, img):
+        """
+        处理图像
+        传入参数： img输入图像
+        返回值： 经过二值化、透视变换后的图像
+        """
+       #去畸变
+        # img = cv2.undistort(src=img, cameraMatrix=camera_matrix, distCoeffs=dist_coeffs)
+        #车辆基准位置定为图像中心底部
+
+        # 二值化
+        # binary_img = self.THreshold(img)
+        # cv2.imshow("binary", binary_img)
+
+        # 自适应二值化
+        binary_img = self.adaptive_threshold(img)
+ 
+        # 透视变换（返回变化后的图像）
+        bird_view_img = self.PerspectiveTransform(binary_img)
+        cv2.imshow("birdview", bird_view_img)
+
+        car_pt_in_bev_image = cv2.perspectiveTransform(
+                self.vehicle_pt_original.reshape(1,1,2),  # 特殊shape：(1,1,2)
+                self.H
+            )[0][0]  # 得到[x',y']  
+
+
+        if DEBUG:
+            self.show_ground_area(np.copy(img))    
+ 
+        # 返回 鸟瞰图、车辆基准位置、二值化图像
+        return bird_view_img, car_pt_in_bev_image
+
+# ================= 获取车道线行驶线，曲率 =================
+class Lanedetection:
+    """
+    自动寻找车道线，行驶线，并计算曲率，前视点
+    使用方法： 调用detect方法
+    输入值： bird_view: 透视变换后的二值图像，mode: 0-左线 1-右线，car_pt: 车辆基准位置(鸟瞰图中)
+    返回值： result_img （仅当DEBUG=True时） , curvature
+    """
+    def __init__(self, mode=1,dst_size=(640, 360)):
+        """
+        车道线检测器
+        行驶线获取
+        :param mode: 0-左线 1-右线
+        """      
+        self.calculspeed = calculate_speed() # 速度计算类
+        
+    def find_seed_point(self, img, side, car_pt):
+        """
+        寻找种子点
+        :param img: 二值化图像或者透视变换后的图像
+        :param side: 'left' or 'right'
+        :param car_pt: 车辆基准位置
+        :return: 种子点坐标（x，y）
+        """
+        car_x, car_y = int(car_pt[0]), int(car_pt[1])
+        height, width = img.shape[:2]
+
+        # 搜索参数
+        search_height = SEARCH_HEIGHT  # 最大向上搜索范围
+        threshold = SEED_THRESHOLD  # 阈值
+
+        # 根据左右侧设置不同的搜索方向
+        if side == 'left':
+            # 左侧搜索：优先向左搜索
+            search_range = range(-200, 0, 1)  # 向左搜索
+            neighbor_check = -1  # 检查左侧相邻像素
+        else:  # 'right'
+            # 右侧搜索：优先向右搜索
+            search_range = range(0, 200, 1)  # 向右搜索
+            neighbor_check = 1  # 检查右侧相邻像素
+
+        # 1. 优先在车辆所在行附近搜索
+        for y_offset in range(0, search_height, 1):  # 逐行搜索
+            y = car_y - 18- y_offset
+            if y < 0:
+                break
+
+            # 在当前行向指定方向搜索
+            for x_offset in search_range:
+                x = car_x + x_offset
+                if 0 <= x < width:
+                    if img[y, x] > threshold:
+                        # 检查是否连续两个或以上的像素点大于阈值
+                        if img[y, x + neighbor_check] > threshold:
+                            return x + neighbor_check, y
+
+        # 2. 如果附近没找到，向上逐行搜索
+        for y in range(car_y - 1, max(0, car_y - search_height), -1):
+            for x_offset in search_range:
+                x = car_x + x_offset
+                if 0 <= x < width:
+                    if img[y, x] > threshold:
+                        # 检查是否连续两个或以上的像素点大于阈值
+                        if img[y, x + neighbor_check] > threshold:
+                            return x + neighbor_check, y
+
+        # 3. 搜索失败，返回空种子点
+        print(f"未找到有效的{side}侧种子点")
+        return None, None
+
+    def _maze_handfind_lane(self, binary_img, side, car_pt):
+        """方案2：迷宫法车道检测（支持左右手法则）"""
+        # 方向定义：0-上, 1-右, 2-下, 3-左
+        dir_front = [(0, -1), (1, 0), (0, 1), (-1, 0)]  # 前方向量
+        dir_frontleft = [(-1, -1), (1, -1), (1, 1), (-1, 1)]  # 左前方向量
+        dir_frontright = [(1, -1), (1, 1), (-1, 1), (-1, -1)]  # 右前方向量
+        
+        # 初始化参数
+        step_count = 0
+        max_steps = MAX_STEPS  # 最大步数限制
+        block_size = BLOCK_SIZE  # 自适应阈值块大小（奇数）
+        clip_value = CLIP_VALUE  # 阈值调整值
+        half = block_size // 2
+        search_range = 15  # 扩展搜索范围
+
+        # 获取图像尺寸并初始化搜索区域
+        height, width = binary_img.shape[:2]
+        car_x, car_y = int(car_pt[0]), int(car_pt[1])
+        search_width = 2 * car_x
+        search_height = car_y
+        
+        
+        # 获取种子点并验证有效性
+        seed_x, seed_y = self.find_seed_point(binary_img, side, car_pt)
+        
+        # 验证种子点有效性
+        if (seed_x is None or seed_y is None):
+       #     print(f"[DEBUG] {side}侧种子点无效: ({seed_x}, {seed_y})")
+            return np.array([]), np.array([])  # 返回空数组
+        
+        x, y = int(seed_x), int(seed_y)
+
+        dir_idx = 0  # 初始化方向索引
+        
+        # 初始化车道线坐标列表
+        lane_x, lane_y = [], []
+        turn_count = 0
+        stuck_count = 0  # 添加卡死计数器
+        prev_pos = (x, y)
+        
+        def extended_search(curr_x, curr_y, curr_dir_idx, local_thres):
+            """扩展搜索函数：向前方(y轴负方向)搜索车道线"""
+            #print(f"[DEBUG] {side}侧开始扩展搜索，当前位置: ({curr_x}, {curr_y})")
+            
+            # 固定搜索方向：向前方(y轴负方向)
+            # 不再依赖当前运动方向，而是固定向图像上方搜索
+            search_directions = [
+                (0, -1),   # 正前方 (向上)
+                (-1, -1),  # 左前方 (左上)
+                (1, -1)    # 右前方 (右上)
+            ]
+            
+            # 在每个方向搜索
+            for direction in search_directions:
+                dx, dy = direction
+                
+                # 在当前方向搜索指定范围
+                for distance in range(1, search_range + 1):
+                    search_x = curr_x + dx * distance
+                    search_y = curr_y + dy * distance
+                    
+                    # 边界检查
+                    if (search_x < half or search_x >= width - half or 
+                        search_y < half or search_y >= height - half):
+                        break
+                    
+                    # 额外检查：确保搜索的点在搜索区域内
+                    if search_x >= search_width or search_y >= search_height:
+                        break
+                        
+                    # 检查该点是否为车道线
+                    if binary_img[search_y, search_x] >= local_thres:
+                        #print(f"[DEBUG] {side}侧扩展搜索找到车道线: ({search_x}, {search_y}), 距离: {distance}")
+                        return search_x, search_y
+            
+            #print(f"[DEBUG] {side}侧扩展搜索未找到车道线")
+            return None, None
+
+    
+        # 主循环
+        while (step_count < max_steps and 
+            half <= x < width - half and 
+            half <= y < height - half and
+            stuck_count < 4):   # 添加卡死保护
+            
+            # 记录当前点
+            lane_x.append(x)
+            lane_y.append(y)
+            step_count += 1
+            
+            # 计算局部自适应阈值
+            local_region = binary_img[y-half:y+half+1, x-half:x+half+1]
+            local_thres = np.mean(local_region) - clip_value
+            
+            # 边界检查
+            front_x = x + dir_front[dir_idx][0]
+            front_y = y + dir_front[dir_idx][1]
+            side_x = x + (dir_frontleft[dir_idx][0] if side == 'left' else dir_frontright[dir_idx][0])
+            side_y = y + (dir_frontleft[dir_idx][1] if side == 'left' else dir_frontright[dir_idx][1])
+            
+            # 确保坐标在有效范围内
+            if (front_x < 0 or front_x >= width or front_y < 0 or front_y >= height or
+                side_x < 0 or side_x >= width or side_y < 0 or side_y >= height):
+                break
+            
+            # 获取像素值
+            front_value = binary_img[front_y, front_x]
+            side_value = binary_img[side_y, side_x]
+            
+            # 保存当前位置用于卡死检测
+            old_pos = (x, y)
+            
+            # 检查是否需要进行扩展搜索（转向次数达到阈值）
+            if turn_count >= 2:
+                #print(f"[DEBUG] {side}侧转向次数达到{turn_count}，尝试扩展搜索")
+                new_x, new_y = extended_search(x, y, dir_idx, local_thres)
+                
+                if new_x is not None and new_y is not None:
+                    # 找到了新的车道线点，跳转过去
+                    x, y = new_x, new_y
+                    turn_count = 0  # 重置转向计数
+                    stuck_count = 0  # 重置卡死计数
+                  #  print(f"[DEBUG] {side}侧扩展搜索成功，跳转到: ({x}, {y})")
+                    continue
+                else:
+                    # 扩展搜索也没找到，结束循环
+               #     print(f"[DEBUG] {side}侧扩展搜索失败，结束搜索")
+                    break
+            
+            # 左右手法则决策
+            if side == 'left':
+                if front_value < local_thres:
+                    dir_idx = (dir_idx + 1) % 4
+                    turn_count += 1
+                elif side_value < local_thres:
+                    x, y = front_x, front_y
+                    turn_count = 0
+                else:
+                    x, y = side_x, side_y
+                    dir_idx = (dir_idx - 1) % 4
+                    turn_count = 0
+            else:
+                if front_value < local_thres:
+                    dir_idx = (dir_idx - 1) % 4
+                    turn_count += 1
+                elif side_value < local_thres:
+                    x, y = front_x, front_y
+                    turn_count = 0
+                else:
+                    x, y = side_x, side_y
+                    dir_idx = (dir_idx + 1) % 4
+                    turn_count = 0
+            
+            # 限制搜索区域
+            x = int(np.clip(x, 0, search_width - 1))
+            y = int(np.clip(y, 0, search_height - 1))
+            
+            # 卡死检测
+            if (x, y) == old_pos:
+                stuck_count += 1
+            else:
+                stuck_count = 0
+        
+        # 车道线有效性验证
+        lane_x_arr = np.array(lane_x)
+        lane_y_arr = np.array(lane_y)
+        
+        # 添加调试打印语句
+        #print(f"此次搜寻得到车道线： {side}线数量为{len(lane_x_arr)}") 
+          
+        return lane_x_arr, lane_y_arr
+
+
+    def detect_corners(self, leftx, lefty, rightx, righty, 
+                    window_size=20, angle_threshold=60, 
+                    nms_threshold=10, debug=False):
+        """
+        识别车道线中的角点（基于向量夹角法 + 非极大抑制）
+        
+        参数:
+            leftx, lefty: 左车道线像素坐标数组
+            rightx, righty: 右车道线像素坐标数组
+            window_size: 计算角度时前后点的距离（单位：像素，默认20）
+            angle_threshold: 视为角点的最小角度阈值（度，默认60）
+            nms_threshold: 非极大抑制的邻域范围（像素，默认10）
+            debug: 是否输出调试信息
+            
+        返回:
+            {
+                'left_corners': [(x, y, angle), ...],  # 左线角点列表(坐标+角度)
+                'right_corners': [(x, y, angle), ...], # 右线角点列表
+                'all_corners': [(x, y, angle, 'L'/'R'), ...] # 合并角点+左右标记
+            }
+        """
+        def _calculate_angles(x_arr, y_arr):
+            # 添加空数组检查
+            if len(x_arr) == 0 or len(y_arr) == 0:
+                return []
+            angles = []
+            n = len(x_arr)
+            for i in range(window_size, n - window_size):
+                # 前向向量
+                dx1 = x_arr[i] - x_arr[i - window_size]
+                dy1 = y_arr[i] - y_arr[i - window_size]
+                # 后向向量
+                dx2 = x_arr[i + window_size] - x_arr[i]
+                dy2 = y_arr[i + window_size] - y_arr[i]
+                
+                # 计算夹角（角度制）
+                dot = dx1 * dx2 + dy1 * dy2
+                det = dx1 * dy2 - dy1 * dx2
+                angle = math.degrees(math.atan2(det, dot))
+                angle = abs(angle)  # 取绝对值（0~180°）
+                angles.append((x_arr[i], y_arr[i], angle))
+            
+            return angles
+        
+        def _apply_nms(corners):
+            if not corners:
+                return []
+            
+            # 按角度降序排序
+            sorted_corners = sorted(corners, key=lambda x: -x[2])
+            kept = []
+            
+            while sorted_corners:
+                current = sorted_corners.pop(0)
+                kept.append(current)
+                
+                # 移除邻域内的其他点
+                sorted_corners = [
+                    c for c in sorted_corners 
+                    if math.hypot(c[0]-current[0], c[1]-current[1]) > nms_threshold
+                ]
+            
+            return kept
+        
+        # 处理左右车道线
+        left_angles = _calculate_angles(leftx, lefty) if len(leftx) > 3*window_size else []
+        right_angles = _calculate_angles(rightx, righty) if len(rightx) > 3*window_size else []
+        
+        # 筛选角度大于阈值的点
+        left_candidates = [(x, y, a) for (x, y, a) in left_angles if a >= angle_threshold]
+        right_candidates = [(x, y, a) for (x, y, a) in right_angles if a >= angle_threshold]
+        
+        # 非极大抑制
+        left_corners = _apply_nms(left_candidates)
+        right_corners = _apply_nms(right_candidates)
+        
+        # 合并结果（添加左右标记L/R）
+        all_corners = [
+            (*corner, 'L') for corner in left_corners
+        ] + [
+            (*corner, 'R') for corner in right_corners
+        ]
+        
+        return {
+            'left_corners': left_corners,
+            'right_corners': right_corners,
+            'all_corners': all_corners
+        }
+    
+
+    def process_raw_lane_points(self, left_x=None, left_y=None, right_x=None, right_y=None, side='center'):
+        """
+        改进版-支持双车道线处理的车道点处理算法
+        
+        Args:
+            left_x, left_y: 左车道线的x,y坐标数组
+            right_x, right_y: 右车道线的x,y坐标数组  
+            side: 处理模式 ('left', 'right', 'center')
+            
+        Returns:
+            offset_x, offset_y: 处理后的行驶路径坐标
+        """
+        offset_pixels = MOVE_OFFSET
+        
+        # 1. 预处理车道线数据
+        left_points = self._preprocess_lane_data(left_x, left_y) if left_x is not None else np.array([])
+        right_points = self._preprocess_lane_data(right_x, right_y) if right_x is not None else np.array([])
+        
+        left_count = len(left_points)
+        right_count = len(right_points)
+        
+        print(f"[DEBUG] 车道线点数 - 左: {left_count}, 右: {right_count}")
+        
+        # 2. 根据车道线数量选择处理策略
+        if left_count > 160 and right_count > 160:
+            # 策略1: 双车道线充足，计算中线
+            my_print("[DEBUG] 使用双车道线中线策略")
+            return self._process_dual_lanes(left_points, right_points)
+            
+        elif left_count > 160 and right_count <= 160:
+            # 策略2: 仅左车道线充足，使用左线平移
+            my_print("[DEBUG] 使用左车道线平移策略")
+            return self._process_single_lane(left_points, 'left', offset_pixels)
+            
+        elif right_count > 160 and left_count <= 160:
+            # 策略3: 仅右车道线充足，使用右线平移
+            my_print("[DEBUG] 使用右车道线平移策略")
+            return self._process_single_lane(right_points, 'right', offset_pixels)
+            
+        else:
+            # 策略4: 双车道线都不充足，尝试使用较好的一条
+            my_print("[DEBUG] 双车道线都不充足，选择较好的一条")
+            if left_count >= right_count and left_count >= 5:
+                return self._process_single_lane(left_points, 'left', offset_pixels)
+            elif right_count > left_count and right_count >= 5:
+                return self._process_single_lane(right_points, 'right', offset_pixels)
+            else:
+                my_print("[DEBUG] 车道线数据不足，返回空数组")
+                return np.array([]), np.array([])
+
+    def _preprocess_lane_data(self, raw_x, raw_y):
+        """预处理车道线数据"""
+        if raw_x is None or raw_y is None or len(raw_x) == 0 or len(raw_y) == 0:
+            return np.array([])
+            
+        # 转换为numpy数组并过滤无效点
+        raw_points = np.column_stack((np.array(raw_x), np.array(raw_y)))
+        raw_points = raw_points[~np.isnan(raw_points).any(axis=1)]
+        return raw_points
+
+    def _process_dual_lanes(self, left_points, right_points):
+        """处理双车道线，计算中线路径"""
+        try:
+            # 1. 对两条车道线分别进行分层处理
+            left_centers = self._extract_layer_centers(left_points)
+            right_centers = self._extract_layer_centers(right_points)
+            
+            if len(left_centers) < 3 or len(right_centers) < 3:
+                print("[DEBUG] 中心点不足，回退到单车道线处理")
+            
