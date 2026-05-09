@@ -86,6 +86,7 @@ if ! rostopic list | grep -q "/ucar_camera/image_raw"; then
 else
   echo "✓ 摄像头话题 /ucar_camera/image_raw 存在"
 fi
+# sudo fuser -k /dev/video0
 
 # 启动二维码识别节点
 echo "启动二维码识别节点..."
@@ -102,6 +103,22 @@ else
   echo "二维码识别节点已运行"
 fi
 
+URL_RESULT_DIR="$WS_DIR/url_result"
+mkdir -p "$URL_RESULT_DIR"
+QR_BAG_FILE="$URL_RESULT_DIR/qr_code_result_$(date +%Y%m%d_%H%M%S).bag"
+echo "启动二维码结果话题录包..."
+if ! pgrep -f "rosbag record.* /qr_code_result" > /dev/null; then
+  rosbag record -O "$QR_BAG_FILE" /qr_code_result > /tmp/full_system_qr_node_result_bag.log 2>&1 &
+  sleep 1
+  if pgrep -f "rosbag record.* /qr_code_result" > /dev/null; then
+    echo "✓ 正在录制 /qr_code_result 到: $QR_BAG_FILE"
+  else
+    echo "警告: /qr_code_result 录包进程可能启动失败"
+    echo "查看日志: /tmp/full_system_qr_node_result_bag.log"
+  fi
+else
+  echo "/qr_code_result 录包进程已运行"
+fi
 # 发送二维码识别开始指令
 echo "发送二维码识别开始指令..."
 rostopic pub --once /qr_node_start std_msgs/String "data: 'start!'"
@@ -121,10 +138,9 @@ else
   echo "URL解析器已运行"
 fi
 
-# 启动任务处理器
 # echo "启动任务处理器..."
 # if ! rosnode list | grep -q "/qr_mission_novoice"; then
-#   rosrun ucar_controller process_qr.py > /tmp/full_system_processor.log 2>&1 &
+#   rosrun ucar_controller process_qr_test1.py > /tmp/full_system_processor.log 2>&1 &
 #   sleep 2
 #   if ! rosnode list | grep -q "/qr_mission_novoice"; then
 #     echo "错误: 任务处理器启动失败！"

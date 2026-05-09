@@ -67,7 +67,11 @@ class SharedVariables:
             "s9":           [0.12, -0.92, 0.0, 0.0, 0.0, -0.707, 0.707],     # 朝右
            "s9_twist_45":  [0.12, -0.92, 0.0, 0.0, 0.0, -0.9239,0.3827],   # 左转45度
             "s9_twist":     [0.12, -0.92, 0.0, 0.0, 0.0, 1.0,0.0],          #
-            # 可继续添加更多点位...
+            # 可继续添加更多点位..
+             "room_st":      [-0.80, -0.92, 0.0, 0.0, 0.0, 1.0,    0.0],     # 朝 180 度
+          "room_st_twist_45": [-0.80, -0.92, 0.0, 0.0, 0.0, 0.9239, 0.3827],  # 转到 135 度
+        "room_center":      [-0.80, -0.51, 0.0, 0.0, 0.0, 0.7071, 0.7071],  # 最后点，朝 90 度,
+            
         }
 
 SV = SharedVariables()
@@ -199,7 +203,8 @@ if __name__ == '__main__':
     # 定义巡航路径
     patrol_path = ["s0","s0_twist_45","s0_twist","s1", "s1_twist_45", "s1_twist","s2", "s2_twist_45","s2_twist",
                    "s3", "s3_twist_45","s3_twist","s4", "s4_twist_45","s4_twist","s50","s51","s5","s5_twist_45","s5_twist","s60","s61",
-                   "s6","s6_twist_45","s6_twist","s7","s7_twist_45","s7_twist","s8","s8_twist_45","s8_twist","s9","s9_twist_45","s9_twist"]
+                   "s6","s6_twist_45","s6_twist","s7","s7_twist_45","s7_twist","s8","s8_twist_45","s8_twist","s9","s9_twist_45","s9_twist",
+                   "room_st","room_st_twist_45","room_center"]  # 可根据需要调整巡航点顺序和数量
 
     # 执行定点巡航（内部使用 Action 发送每个目标点）
     cruise_points(patrol_path)

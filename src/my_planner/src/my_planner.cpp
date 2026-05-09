@@ -208,10 +208,10 @@ namespace my_planner {
         }
 
         //计算追踪目标点的速度
-        cmd_vel.linear.x = target_pose.pose.position.x * 3.0;//3.0
-        
-        cmd_vel.linear.y = target_pose.pose.position.y * 3.0;
-        
+         // 计算追踪目标点的速度，降低比例让定点导航线速度更柔和
+        const double linear_gain = 3.0;
+        cmd_vel.linear.x = target_pose.pose.position.x * linear_gain;
+        cmd_vel.linear.y = target_pose.pose.position.y * linear_gain;
         
         angular_error = target_pose.pose.position.y;
         error_sum += angular_error;
