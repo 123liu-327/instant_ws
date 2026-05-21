@@ -163,6 +163,7 @@ double initial_turn_pause_sec = 0.5;
 double initial_turn_integrated_angle_deg = 0.0;
 ros::Time initial_turn_last_time;
 bool initial_turn_has_last_time = false;
+double  min_pid_speed= 0.08    //                                     
 ros::Time initial_turn_pause_start;
 
 std::string normalize(std::string value) {
@@ -214,6 +215,7 @@ void startInitialTurnIfNeeded() {
     initial_turn_integrated_angle_deg = 0.0;
     initial_turn_last_time = ros::Time::now();
     initial_turn_has_last_time = true;
+    pid.reset();
     publishStatus(path_select == PathSelect::LEFT ? "ALIGNING_left" : "ALIGNING_right");
 }
 
@@ -550,12 +552,12 @@ bool handleInitialTurn() {
     // 原 follow_line.cpp 的 Round_step 转角算法就是这一句：
     // rotated_angle += dt * curent_wz * 57.3。这里保留同样思想，
     // curent_wz 单位是 rad/s，乘 57.3 约等于转换成 deg/s。
-    double dt = (now - initial_turn_last_time).toSec();
+    double dt = (now - initial_turn_last_time).toSec();//计算时间
     initial_turn_last_time = now;
     if (dt < 0.0 || dt > 0.2) {
         dt = 0.0;
     }
-    initial_turn_integrated_angle_deg += curent_wz * dt * 57.3;
+    initial_turn_integrated_angle_deg += curent_wz * dt * 57.3;//积分计算已经走过的角度
 
     const double turned_abs = std::abs(initial_turn_integrated_angle_deg);
     const int selected_count = selectedPathPointCount();
@@ -572,13 +574,32 @@ bool handleInitialTurn() {
                  pathToString(path_select).c_str(), initial_turn_integrated_angle_deg, curent_wz,
                  selected_count, angle_ok, line_ok);
         return true;
-    }
+    }//添加的角度和线判断指令
 
     geometry_msgs::Twist msg;
-    const double turn_speed = std::abs(initial_turn_angular_speed);
-    msg.linear.x = 0.0;
-    msg.angular.z = motion_state == MotionState::ALIGNING_LEFT ? turn_speed : -turn_speed;
+    const double turned_abs = std::abs(initial_turn_integrated_angle_deg);
+    msg.linear.x=0.0
+// 剩余角度，越接近目标越小
+    const double remaining_angle = std::max(0.0, initial_turn_angle_deg - turned_abs);
+
+    // PID 输出角速度大小
+    double pid_speed = pid.compute(initial_turn_angle_deg, turned_abs);
+
+    // 防止方向被 PID 符号影响，这里只取大小
+    pid_speed = std::abs(pid_speed);
+
+    // 限制最大角速度，避免太猛
+    pid_speed = std::min(pid_speed, std::abs(initial_turn_angular_speed));
+
+    // 给一个最小角速度，避免快到目标时转不动
+    pid_speed = std::max(pid_speed, min_pid_speed);
+
+    // 根据状态决定左转还是右转
+    msg.angular.z = motion_state == MotionState::ALIGNING_LEFT ? pid_speed : -pid_speed;
+
     pub.publish(msg);
+
+
     publishDebugImage();
 
     ROS_WARN_THROTTLE(0.5, "initial turn path=%s integrated_angle=%.2f wz=%.3f target=%.2f selected_rpts=%d threshold=%d",

@@ -33,6 +33,8 @@
 
   <!-- 正常巡线基础前进速度，转弯误差越大程序会自动降速。 -->
   <arg name="base_speed" default="0.30" />
+ <!-- 最低转角速度，用于初始的巡线。 -->
+  <arg name="min_pid_speed" default="0.08" />
 
   <!-- 是否启用起步预转角。Left/Right 会先原地转向目标岔路，Middle 不预转。 -->
   <arg name="initial_turn_enabled" default="true" />
@@ -66,5 +68,6 @@
     <param name="initial_turn_angular_speed" value="$(arg initial_turn_angular_speed)" />
     <param name="initial_turn_rpts_threshold" value="$(arg initial_turn_rpts_threshold)" />
     <param name="initial_turn_pause_sec" value="$(arg initial_turn_pause_sec)" />
+    <param name="min_pid_speed" value="$(arg min_pid_speed)" />
   </node>
 </launch>

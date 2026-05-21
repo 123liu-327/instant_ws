@@ -139,3 +139,182 @@ msg.angular.z = -error;
 ```
 
 也就是说，预转角只是解决起步岔路朝向问题，不改变后续图像识别、左线/右线/中线选择和停车逻辑。
+
+## 9. 如何判断发布左转还是右转
+
+起步方向由 `/follow_begin` 话题收到的字符串决定。程序在 `beginCallback()` 中解析消息：
+
+```cpp
+if (value == "left" || value == "l") {
+    path_select = PathSelect::LEFT;
+    track_type = TRACK_LEFT;
+}
+
+if (value == "right" || value == "r") {
+    path_select = PathSelect::RIGHT;
+    track_type = TRACK_RIGHT;
+}
+
+if (value == "middle" || value == "mid" || value == "center" || value == "m") {
+    path_select = PathSelect::MIDDLE;
+    track_type = TRACK_MIDDLE;
+}
+```
+
+也就是说，可以这样启动不同方向：
+
+```bash
+rostopic pub /follow_begin std_msgs/String "data: 'Left'" -1
+rostopic pub /follow_begin std_msgs/String "data: 'Right'" -1
+rostopic pub /follow_begin std_msgs/String "data: 'Middle'" -1
+```
+
+收到 `Left` 后，程序进入：
+
+```cpp
+motion_state = MotionState::ALIGNING_LEFT;
+```
+
+收到 `Right` 后，程序进入：
+
+```cpp
+motion_state = MotionState::ALIGNING_RIGHT;
+```
+
+收到 `Middle` 时不预转，直接进入正常巡线。
+
+## 10. 左转和右转是如何发布到底盘的
+
+真正发布速度的位置在 `handleInitialTurn()` 中：
+
+```cpp
+geometry_msgs::Twist msg;
+const double turn_speed = std::abs(initial_turn_angular_speed);
+
+msg.linear.x = 0.0;
+msg.angular.z = motion_state == MotionState::ALIGNING_LEFT
+    ? turn_speed
+    : -turn_speed;
+
+pub.publish(msg);
+```
+
+含义是：
+
+- `linear.x = 0.0`：预转时不前进，原地转向
+- `ALIGNING_LEFT`：发布正的 `angular.z`
+- `ALIGNING_RIGHT`：发布负的 `angular.z`
+- `initial_turn_angular_speed`：预转角速度大小，来自 launch 参数
+
+例如 launch 中：
+
+```xml
+<arg name="initial_turn_angular_speed" default="0.35" />
+```
+
+则：
+
+- 左转发布 `angular.z = +0.35`
+- 右转发布 `angular.z = -0.35`
+
+如果实际车的左右方向反了，说明底盘或 IMU 坐标方向和程序假设相反。可以在代码中交换正负号，或者先用下面命令单独测试底盘方向：
+
+```bash
+rostopic pub /cmd_vel geometry_msgs/Twist \
+"linear:
+  x: 0.0
+  y: 0.0
+  z: 0.0
+angular:
+  x: 0.0
+  y: 0.0
+  z: 0.35" -r 10
+```
+
+再把 `z` 改成 `-0.35`，观察哪个方向是物理左转、哪个方向是物理右转。
+
+## 11. 角度是如何判断转够的
+
+角度判断使用 IMU 角速度积分，不再使用 yaw 差：
+
+```cpp
+double dt = (now - initial_turn_last_time).toSec();
+initial_turn_last_time = now;
+initial_turn_integrated_angle_deg += curent_wz * dt * 57.3;
+```
+
+每一轮循环都会把当前 IMU 的 `angular_velocity.z` 积分到 `initial_turn_integrated_angle_deg` 中。
+
+判断是否转够角度的代码是：
+
+```cpp
+const double turned_abs = std::abs(initial_turn_integrated_angle_deg);
+const bool angle_ok = turned_abs >= initial_turn_angle_deg;
+```
+
+这里使用 `std::abs()`，所以不关心积分角是正还是负，只看“已经转过的角度大小”是否达到目标值。
+
+例如：
+
+- `initial_turn_angle_deg = 30.0`
+- 当前积分角 `integrated_angle = 12.0`，还没转够
+- 当前积分角 `integrated_angle = -31.5`，绝对值是 `31.5`，认为已经转够
+
+达到角度后，程序会：
+
+```cpp
+publishStop();
+motion_state = MotionState::ALIGN_PAUSE;
+```
+
+也就是先停车，然后进入预转后的停顿状态。
+
+## 12. 目标线点数也可以提前结束预转
+
+除了角度判断，还有一个视觉判断：
+
+```cpp
+const int selected_count = selectedPathPointCount();
+const bool line_ok = selected_count >= initial_turn_rpts_threshold;
+```
+
+含义是：如果预转过程中目标方向的线已经识别得足够多，也可以提前结束预转。
+
+左转时：
+
+```cpp
+selected_count = rptsc0e_num;
+```
+
+右转时：
+
+```cpp
+selected_count = rptsc1e_num;
+```
+
+中线时：
+
+```cpp
+selected_count = min(rptsc0e_num, rptsc1e_num);
+```
+
+最终结束条件是：
+
+```cpp
+if (angle_ok || line_ok) {
+    // 结束预转
+}
+```
+
+所以只要满足下面任意一个条件，预转就会结束：
+
+- 角速度积分角度达到 `initial_turn_angle_deg`
+- 目标线点数达到 `initial_turn_rpts_threshold`
+
+调试时如果你想只按角度结束，可以把点数阈值设大一些，例如：
+
+```xml
+<arg name="initial_turn_rpts_threshold" default="999" />
+```
+
+如果你想更依赖图像识别提前结束，就把阈值调小一些。
