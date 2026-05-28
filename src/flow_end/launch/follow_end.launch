@@ -15,12 +15,30 @@
 
   <!-- 启动/切换指令话题。发送 Left / Middle / Right / Stop。 -->
   <arg name="begin_topic" default="/follow_begin" />
+  <arg name="image_queue_size" default="1" />
+  <arg name="imu_queue_size" default="10" />
+  <arg name="odom_queue_size" default="10" />
+  <arg name="begin_queue_size" default="10" />
 
   <!-- 巡线完成或停车后发布结束消息的话题。 -->
   <arg name="end_topic" default="/follow_end" />
+  <arg name="status_topic" default="/flow_end/follow_test_status" />
+  <arg name="debug_topic" default="/flow_end/follow_test_debug" />
 
   <!-- 默认路径选择：left / middle / right。 -->
   <arg name="path_select" default="right" />
+  <arg name="default_dis_bias_left" default="0.0" />
+  <arg name="default_dis_bias_right" default="0.0" />
+  <arg name="left_dis_bias_left" default="6.0" />
+  <arg name="left_dis_bias_right" default="0.0" />
+  <arg name="right_dis_bias_left" default="0.0" />
+  <arg name="right_dis_bias_right" default="-15.0" />
+  <arg name="middle_dis_bias_left" default="0.0" />
+  <arg name="middle_dis_bias_right" default="0.0" />
+  <arg name="time_local" default="0.5" />
+  <arg name="left_time_local" default="0.5" />
+  <arg name="right_time_local" default="0.5" />
+  <arg name="middle_time_local" default="0.5" />
 
   <!-- 是否启用 L 型角点停车逻辑。 -->
   <arg name="parking_enabled" default="true" />
@@ -33,6 +51,9 @@
 
   <!-- 正常巡线基础前进速度。 -->
   <arg name="base_speed" default="0.30" />
+  <arg name="aim_distance" default="0.10" />
+  <arg name="aim_y_bias_m" default="0.20" />
+  <arg name="min_pid_speed" default="0.08" />
 
   <!-- 是否启用起步预转角。Left/Right 会先原地转向目标岔路，Middle 不预转。 -->
   <arg name="initial_turn_enabled" default="true" />
@@ -55,12 +76,33 @@
     <arg name="odom_topic" value="$(arg odom_topic)" />
     <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)" />
     <arg name="begin_topic" value="$(arg begin_topic)" />
+    <arg name="image_queue_size" value="$(arg image_queue_size)" />
+    <arg name="imu_queue_size" value="$(arg imu_queue_size)" />
+    <arg name="odom_queue_size" value="$(arg odom_queue_size)" />
+    <arg name="begin_queue_size" value="$(arg begin_queue_size)" />
     <arg name="end_topic" value="$(arg end_topic)" />
+    <arg name="status_topic" value="$(arg status_topic)" />
+    <arg name="debug_topic" value="$(arg debug_topic)" />
     <arg name="path_select" value="$(arg path_select)" />
+    <arg name="default_dis_bias_left" value="$(arg default_dis_bias_left)" />
+    <arg name="default_dis_bias_right" value="$(arg default_dis_bias_right)" />
+    <arg name="left_dis_bias_left" value="$(arg left_dis_bias_left)" />
+    <arg name="left_dis_bias_right" value="$(arg left_dis_bias_right)" />
+    <arg name="right_dis_bias_left" value="$(arg right_dis_bias_left)" />
+    <arg name="right_dis_bias_right" value="$(arg right_dis_bias_right)" />
+    <arg name="middle_dis_bias_left" value="$(arg middle_dis_bias_left)" />
+    <arg name="middle_dis_bias_right" value="$(arg middle_dis_bias_right)" />
+    <arg name="time_local" value="$(arg time_local)" />
+    <arg name="left_time_local" value="$(arg left_time_local)" />
+    <arg name="right_time_local" value="$(arg right_time_local)" />
+    <arg name="middle_time_local" value="$(arg middle_time_local)" />
     <arg name="parking_enabled" value="$(arg parking_enabled)" />
     <arg name="publish_debug_image" value="$(arg publish_debug_image)" />
     <arg name="show_window" value="$(arg show_window)" />
     <arg name="base_speed" value="$(arg base_speed)" />
+    <arg name="aim_distance" value="$(arg aim_distance)" />
+    <arg name="aim_y_bias_m" value="$(arg aim_y_bias_m)" />
+    <arg name="min_pid_speed" value="$(arg min_pid_speed)" />
     <arg name="initial_turn_enabled" value="$(arg initial_turn_enabled)" />
     <arg name="initial_turn_angle_deg" value="$(arg initial_turn_angle_deg)" />
     <arg name="initial_turn_angular_speed" value="$(arg initial_turn_angular_speed)" />

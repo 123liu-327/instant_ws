@@ -498,7 +498,7 @@ void _beginCallback(const std_msgs::String::ConstPtr &msg)
         track_type = TRACK_RIGHT;
         run_car = true;
         Dis_Bias_Left = 0.0;
-        Dis_Bias_Right = -10.0;
+        Dis_Bias_Right = -15.0;
         Time_local = 0.5;
     }
     else if (msg->data == "Middle" || msg->data == "middle" ||

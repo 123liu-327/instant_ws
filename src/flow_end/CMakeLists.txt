@@ -77,6 +77,7 @@ target_link_libraries(image_process_debug
 
 add_executable(follow_test
   src/follow_test.cpp
+  src/Callback_test.cpp
   src/follow_line_test.cpp
   src/PID.cpp
   src/corner_move.cpp

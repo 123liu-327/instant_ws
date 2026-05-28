@@ -1,14 +1,11 @@
-﻿#include <flow_end/follow_line_test.h>
+#include <flow_end/Callback_test.h>
+#include <flow_end/follow_line_test.h>
 
-// follow_test.cpp 只保留 ROS 节点入口和参数读取。
-// 具体巡线、角点检测、停车等业务逻辑全部放到 follow_line_test.cpp，
-// 这样后续修改地图策略时，不需要反复改 main 和话题初始化部分。
 int main(int argc, char **argv) {
     ros::init(argc, argv, "follow_test");
     ros::NodeHandle nh;
     ros::NodeHandle private_nh("~");
 
-    // 这些参数都可以在 follow_test.launch 中覆盖，默认值保持和原 flow_end 包一致。
     std::string image_topic;
     std::string imu_topic;
     std::string odom_topic;
@@ -27,8 +24,13 @@ int main(int argc, char **argv) {
     double initial_turn_angular_speed = 0.35;
     int initial_turn_rpts_threshold = 40;
     double initial_turn_pause_sec = 0.5;
+    double min_pid_speed = 0.08;
+    
+    // 视频保存相关参数
+    bool enable_video_record = true;
+    int video_fps = 10;
+    std::string video_save_path = "";
 
-    // 话题参数：把节点和外部系统解耦，换相机话题或控制话题时不用改代码。
     private_nh.param<std::string>("image_topic", image_topic, "/ucar_image/image_raw");
     private_nh.param<std::string>("imu_topic", imu_topic, "/imu");
     private_nh.param<std::string>("odom_topic", odom_topic, "/odom");
@@ -47,23 +49,30 @@ int main(int argc, char **argv) {
     private_nh.param<double>("initial_turn_angular_speed", initial_turn_angular_speed, 0.35);
     private_nh.param<int>("initial_turn_rpts_threshold", initial_turn_rpts_threshold, 40);
     private_nh.param<double>("initial_turn_pause_sec", initial_turn_pause_sec, 0.5);
+    private_nh.param<double>("min_pid_speed", min_pid_speed, 0.08);
+    
+    // 读取视频保存参数
+    private_nh.param<bool>("enable_video_record", enable_video_record, true);
+    private_nh.param<int>("video_fps", video_fps, 10);
+    private_nh.param<std::string>("video_save_path", video_save_path, "");
 
-    // 将参数传给具体逻辑文件。入口文件不直接访问巡线内部变量。
     flow_end::follow_test::configure(publish_debug_image, show_window, parking_enabled,
                                      base_speed, aim_distance, aim_y_bias_m,
                                      initial_turn_enabled, initial_turn_angle_deg,
                                      initial_turn_angular_speed, initial_turn_rpts_threshold,
-                                     initial_turn_pause_sec);
-    // path_select 支持 left/middle/right。非法值默认回退到 right，避免节点直接退出。
+                                     initial_turn_pause_sec, min_pid_speed);
+    
+    // 配置视频保存
+    flow_end::follow_test::configureVideo(enable_video_record, video_fps, video_save_path);
+
     if (!flow_end::follow_test::setPathSelect(path_param)) {
         ROS_WARN("Invalid path_select param '%s', fallback to right.", path_param.c_str());
         flow_end::follow_test::setPathSelect("right");
     }
 
-    // 初始化视觉处理查找表，并注册发布器/订阅器。
     flow_end::follow_test::initializeImagePipeline();
-    flow_end::follow_test::advertiseTopics(nh, cmd_vel_topic, end_topic);
-    flow_end::follow_test::subscribeTopics(nh, image_topic, imu_topic, odom_topic, begin_topic);
+    flow_end::callback_test::advertiseTopics(nh, cmd_vel_topic, end_topic);
+    flow_end::callback_test::subscribeTopics(nh, image_topic, imu_topic, odom_topic, begin_topic);
 
     flow_end::follow_test::publishStatus("IDLE");
     ROS_WARN("follow_test started. path_select=%s, waiting for %s Left/Middle/Right.",
@@ -72,8 +81,6 @@ int main(int argc, char **argv) {
     ros::Rate loop_rate(30);
     while (ros::ok() && !flow_end::follow_test::shouldExit()) {
         ros::spinOnce();
-        // followLineTestOnce() 内部会检查 run_car。
-        // 未收到 /follow_begin 时不会发布运动控制，只保持节点待命。
         flow_end::follow_test::followLineTestOnce();
         loop_rate.sleep();
     }

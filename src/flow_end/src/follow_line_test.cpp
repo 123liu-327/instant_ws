@@ -10,16 +10,17 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <vector>
+#include <ctime>
+#include <string>
 
 // follow_line_test.cpp 是 follow_test 节点的具体工作逻辑文件。
 // 这里保留原 flow_end 视觉巡线算法依赖的全局变量，同时去掉原地图中的环岛和激光雷达流程。
-// follow_test.cpp 负责参数和 ROS 入口，本文件负责：
-// 1. 接收图像/IMU/里程计/启动指令；
-// 2. 调用 process_image() 提取左右边线；
-// 3. 根据 left/middle/right 选择控制路径；
-// 4. 保留角点检测和停车逻辑；
-// 5. 发布 /cmd_vel、状态和调试图像。
+// follow_test.cpp 负责 ROS 入口，Callback_test.cpp 负责订阅回调。
+// 本文件只保留巡线业务逻辑：
+// 1. 调用 process_image() 提取左右边线；
+// 2. 根据 left/middle/right 选择控制路径；
+// 3. 保留角点检测、起步预转和停车逻辑；
+// 4. 发布 /cmd_vel、状态和调试图像。
 
 // 原工程的视觉算法大量使用全局变量。为了让 follow_test 独立于 follow.cpp/follow_line.cpp
 // 编译运行，这里重新定义这些变量，避免链接原来的完整地图逻辑。
@@ -129,26 +130,27 @@ float angle_deg_step1 = 0.0f;
 ros::Time Round_timer(0);
 float Laser_linear_dis = 0.0f;
 bool Laser_dis_check = false;
+bool is_degraded_mode = false;  // 退化模式标注：当无法使用首选路径时的退化状态
 
 namespace flow_end {
 namespace follow_test {
 
-// 测试节点的路径选择模式：
-// LEFT   使用左侧偏移线 rptsc0e；
-// MIDDLE 同时有左右线时取两条偏移线的中点；
-// RIGHT  使用右侧偏移线 rptsc1e。
-enum class PathSelect { LEFT, MIDDLE, RIGHT };
+cv::VideoWriter debug_video_writer;
+bool video_recording = false;
+bool enable_video_record = true;
+std::string video_save_path = "/tmp/follow_test_debug.avi";
+bool auto_video_save_path = true;
+int video_fps = 10;
 
 PathSelect path_select = PathSelect::RIGHT;
-enum class MotionState { IDLE, ALIGNING_LEFT, ALIGNING_RIGHT, ALIGN_PAUSE, FOLLOWING };
-
 MotionState motion_state = MotionState::IDLE;
 ros::Publisher debug_pub;
 ros::Publisher status_pub;
 float middle_path[POINTS_MAX_LEN][2];
 int middle_path_num = 0;
 
-// 这些运行参数由 follow_test.cpp 从 launch/private param 读入后通过 configure() 写入。
+// These runtime params are written through configure(); Callback_test.cpp refreshes
+// them from the private parameter server before each start command.
 bool publish_debug_image = true;
 bool show_window = false;
 bool parking_enabled = true;
@@ -163,7 +165,7 @@ double initial_turn_pause_sec = 0.5;
 double initial_turn_integrated_angle_deg = 0.0;
 ros::Time initial_turn_last_time;
 bool initial_turn_has_last_time = false;
-double  min_pid_speed= 0.08    //                                     
+double min_pid_speed = 0.08;
 ros::Time initial_turn_pause_start;
 
 std::string normalize(std::string value) {
@@ -257,80 +259,6 @@ void publishStatus(const std::string &state) {
     status_pub.publish(msg);
 }
 
-void imageCallback(const sensor_msgs::ImageConstPtr &msg) {
-    try {
-        // 相机输入统一转成 BGR8，并缩放到算法固定尺寸 RESULT_COL x RESULT_ROW。
-        // 原视觉算法使用二维数组处理图像，所以这里只缓存 resize 后的 cv::Mat。
-        cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-        cv::Mat resized;
-        cv::resize(cv_ptr->image, resized, cv::Size(RESULT_COL, RESULT_ROW));
-        std::lock_guard<std::mutex> lock(frame_mutex);
-        frame = resized.clone();
-    } catch (const cv_bridge::Exception &e) {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
-    }
-}
-
-void imuCallback(const sensor_msgs::Imu::ConstPtr &msg) {
-    // 保留 IMU 姿态信息，方便后续需要按地图状态增加姿态约束。
-    // 当前 follow_test 基础巡线控制主要依赖视觉误差。
-    tf::Quaternion quat;
-    tf::quaternionMsgToTF(msg->orientation, quat);
-    double roll, pitch, yaw;
-    tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
-    current_yaw = yaw * 180.0 / M_PI;
-    curent_wz = msg->angular_velocity.z;
-    current_angular_velocity_z = msg->angular_velocity.z;
-}
-
-void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
-    // 记录从第一次收到 odom 到当前的平面位移距离。
-    // 当前测试逻辑没有把 odom_dist 作为地图状态机条件，但停车/地图扩展时可以复用。
-    static bool has_origin = false;
-    static float x0 = 0.0f;
-    static float y0 = 0.0f;
-    const float x_now = msg->pose.pose.position.x;
-    const float y_now = msg->pose.pose.position.y;
-    if (!has_origin) {
-        x0 = x_now;
-        y0 = y_now;
-        has_origin = true;
-        return;
-    }
-    const float dx = x_now - x0;
-    const float dy = y_now - y0;
-    odom_dist = std::sqrt(dx * dx + dy * dy);
-}
-
-void beginCallback(const std_msgs::String::ConstPtr &msg) {
-    // /follow_begin 是测试节点的启动/切换入口：
-    // Left/Right/Middle 启动并切换路径；Stop/Pause 停车并进入 IDLE。
-    const std::string value = normalize(msg->data);
-    if (value == "stop" || value == "pause") {
-        run_car = false;
-        motion_state = MotionState::IDLE;
-        initial_turn_integrated_angle_deg = 0.0;
-        initial_turn_has_last_time = false;
-        publishStop();
-        publishStatus("IDLE");
-        ROS_WARN("follow_test stopped by command: %s", msg->data.c_str());
-        return;
-    }
-
-    if (!setPathSelect(msg->data)) {
-        ROS_WARN("Unknown follow_test command/path: %s", msg->data.c_str());
-        return;
-    }
-
-    run_car = true;
-    zeroCount = 0;
-    zero_flag = false;
-    startInitialTurnIfNeeded();
-    ROS_WARN("follow_test started, path_select=%s state=%s",
-             pathToString(path_select).c_str(),
-             motion_state == MotionState::FOLLOWING ? "FOLLOWING" : "ALIGNING");
-}
-
 void detectCorners() {
     // 角点检测沿用原 follow_line.cpp 的思路：
     // 对左右边线的局部角度数组 rpts0a/rpts1a 做非极大值式判断，
@@ -417,6 +345,11 @@ bool handleParkingCorner() {
     }
 
     if (!is_stop_corner) {
+        // 周期性打印角点检测状态（即使未检测到停车点）
+        ROS_WARN_THROTTLE(2.0, "[PARKING] CornerDetect | L0=%d(id=%d) | L1=%d(id=%d) | Y0=%d(id=%d) | Y1=%d(id=%d) | left_pts=%d | right_pts=%d | parking_enable=%d",
+                  Lpt0_found, Lpt0_rpts0s_id, Lpt1_found, Lpt1_rpts1s_id,
+                  Ypt0_found, Ypt0_rpts0s_id, Ypt1_found, Ypt1_rpts1s_id,
+                  rptsc0_num, rptsc1_num, parking_enabled);
         return false;
     }
 
@@ -428,7 +361,12 @@ bool handleParkingCorner() {
     geometry_msgs::Twist local_msg;
     ros::Time last_time = ros::Time::now();
 
-    ROS_WARN("Parking corner detected. target_dis=%.3f target_dis_x=%.3f", target_dis, target_dis_x);
+    ROS_WARN("[PARKING] ✓ 停车角点检测成功 | corner_dot=(%.1f,%.1f) | 图像中心=(%.1f,%.1f) | "
+             "纵向距离=%.3fm | 横向偏差=%.3fm | 线类型=%s | 角点ID=%d",
+             corner_dot[0], corner_dot[1], cx, cy,
+             target_dis, target_dis_x,
+             Lpt1_found ? "右侧L点" : "左侧L点",
+             Lpt1_found ? Lpt1_rpts1s_id : Lpt0_rpts0s_id);
     publishStatus("PARKING");
 
     while (ros::ok()) {
@@ -460,7 +398,6 @@ bool handleParkingCorner() {
             }
             run_car = false;
             publishStatus("FINISHED");
-            ROS_WARN("follow_test parking finished, STOP published.");
             return true;
         }
 
@@ -478,6 +415,7 @@ void selectControlPath() {
     middle_path_num = 0;
     rpts = nullptr;
     rpts_num = 0;
+    is_degraded_mode = false;  // 每次选择前重置退化状态
 
     if (path_select == PathSelect::LEFT) {
         if (rptsc0e_num > 0) {
@@ -486,6 +424,7 @@ void selectControlPath() {
         } else if (rptsc1e_num > 0) {
             rpts = rptsc1e;
             rpts_num = rptsc1e_num;
+            is_degraded_mode = true;  // LEFT模式但没有左线，退化使用右线
         }
         return;
     }
@@ -497,6 +436,7 @@ void selectControlPath() {
         } else if (rptsc0e_num > 0) {
             rpts = rptsc0e;
             rpts_num = rptsc0e_num;
+            is_degraded_mode = true;  // RIGHT模式但没有右线，退化使用左线
         }
         return;
     }
@@ -513,9 +453,11 @@ void selectControlPath() {
     } else if (rptsc0e_num > 0) {
         rpts = rptsc0e;
         rpts_num = rptsc0e_num;
+        is_degraded_mode = true;  // MIDDLE模式只有左线，退化为单侧
     } else if (rptsc1e_num > 0) {
         rpts = rptsc1e;
         rpts_num = rptsc1e_num;
+        is_degraded_mode = true;  // MIDDLE模式只有右线，退化为单侧
     }
 }
 
@@ -529,13 +471,9 @@ bool handleInitialTurn() {
         if (elapsed >= initial_turn_pause_sec) {
             motion_state = MotionState::FOLLOWING;
             publishStatus("RUNNING_" + pathToString(path_select));
-            ROS_WARN("initial turn pause finished path=%s pause=%.2f",
-                     pathToString(path_select).c_str(), elapsed);
             return true;
         }
 
-        ROS_WARN_THROTTLE(0.5, "initial turn pause path=%s elapsed=%.2f target=%.2f",
-                          pathToString(path_select).c_str(), elapsed, initial_turn_pause_sec);
         return true;
     }
 
@@ -570,17 +508,22 @@ bool handleInitialTurn() {
         initial_turn_has_last_time = false;
         initial_turn_pause_start = ros::Time::now();
         publishStatus("ALIGN_PAUSE_" + pathToString(path_select));
-        ROS_WARN("initial turn finished path=%s integrated_angle=%.2f wz=%.3f selected_rpts=%d angle_ok=%d line_ok=%d",
-                 pathToString(path_select).c_str(), initial_turn_integrated_angle_deg, curent_wz,
-                 selected_count, angle_ok, line_ok);
+
+        // 预转角完成调试信息
+        ROS_WARN("[INIT_TURN] 预转角完成 | path=%s | 积分角度=%.2f° | 目标角度=%.2f° | wz=%.3f rad/s | "
+                 "选中线点=%d | 阈值=%d | 角度达标=%d | 线点达标=%d",
+                 pathToString(path_select).c_str(),
+                 initial_turn_integrated_angle_deg,
+                 initial_turn_angle_deg,
+                 curent_wz,
+                 selected_count,
+                 initial_turn_rpts_threshold,
+                 angle_ok, line_ok);
         return true;
     }//添加的角度和线判断指令
 
     geometry_msgs::Twist msg;
-    const double turned_abs = std::abs(initial_turn_integrated_angle_deg);
-    msg.linear.x=0.0
-// 剩余角度，越接近目标越小
-    const double remaining_angle = std::max(0.0, initial_turn_angle_deg - turned_abs);
+    msg.linear.x = 0.0;
 
     // PID 输出角速度大小
     double pid_speed = pid.compute(initial_turn_angle_deg, turned_abs);
@@ -602,9 +545,18 @@ bool handleInitialTurn() {
 
     publishDebugImage();
 
-    ROS_WARN_THROTTLE(0.5, "initial turn path=%s integrated_angle=%.2f wz=%.3f target=%.2f selected_rpts=%d threshold=%d",
-                      pathToString(path_select).c_str(), initial_turn_integrated_angle_deg, curent_wz,
-                      initial_turn_angle_deg, selected_count, initial_turn_rpts_threshold);
+    // 预转角执行中调试信息
+   // Initial turn execution debug info
+ROS_WARN_THROTTLE(0.5,
+                  "[INIT_TURN] Turning | path=%s | integrated_angle=%.2f°/%.2f° | wz=%.3f rad/s | "
+                  "selected_points=%d/%d | dt=%.3fs | PID_output=%.3f | turn_direction=%s",
+                  pathToString(path_select).c_str(),
+                  initial_turn_integrated_angle_deg, initial_turn_angle_deg,
+                  curent_wz,
+                  selected_count, initial_turn_rpts_threshold,
+                  dt, pid_speed,
+                  motion_state == MotionState::ALIGNING_LEFT ? "LEFT" : "RIGHT");
+
     return true;
 }
 
@@ -630,18 +582,46 @@ void publishDebugImage(const sensor_msgs::ImageConstPtr &source_msg) {
     }
 
     cv::Mat debug_gray = convert2DArrayToMat(img_line_data);
+
+    // 显示窗口（如果启用）
     if (show_window) {
         cv::imshow("follow_test", debug_gray);
         cv::waitKey(1);
     }
-    if (publish_debug_image && debug_pub) {
-        std_msgs::Header header;
-        if (source_msg) {
-            header = source_msg->header;
+
+    // 视频保存（替代原来的ROS话题发布）
+    if (publish_debug_image && enable_video_record) {
+        // 第一次调用时初始化VideoWriter
+        if (!video_recording) {
+            // 生成带时间戳的文件名
+            std::time_t now = std::time(nullptr);
+            char timestamp[64];
+            std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", std::localtime(&now));
+
+            if (auto_video_save_path) {
+                video_save_path = "/tmp/follow_test_debug_" + std::string(timestamp) + ".avi";
+            }
+
+            debug_video_writer.open(
+                video_save_path,
+                cv::VideoWriter::fourcc('M', 'J', 'P', 'G'),
+                video_fps,
+                cv::Size(RESULT_COL, RESULT_ROW),
+                false  // 灰度图
+            );
+
+            if (debug_video_writer.isOpened()) {
+                video_recording = true;
+                ROS_INFO("[DEBUG_VIDEO] Started recording to: %s", video_save_path.c_str());
+            } else {
+                ROS_ERROR("[DEBUG_VIDEO] Failed to open video writer!");
+            }
         }
-        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(
-            header, sensor_msgs::image_encodings::MONO8, debug_gray).toImageMsg();
-        debug_pub.publish(msg);
+
+        // 写入当前帧
+        if (video_recording && debug_video_writer.isOpened()) {
+            debug_video_writer.write(debug_gray);
+        }
     }
 }
 
@@ -711,13 +691,17 @@ int followLineTestOnce() {
 
     geometry_msgs::Twist msg;
     msg.linear.x = v;
-    msg.angular.z = -error;
+    msg.angular.z = error;//这里的error具体作用，如果为0，则小车会原地转圈，如果为正，则小车会向左转，如果为负，则小车会向右转
+
     pub.publish(msg);
     publishDebugImage();
+// 主循环调试信息：输出当前选用的路径、路径点数量、是否退化、误差和速度，以及角点检测状态和丢线计数。
+ROS_WARN_THROTTLE(1.0, "[FOLLOW] Running | path=%s | rpts=%d | degraded=%d | error=%.3f rad | v=%.3f m/s | L0=%d | L1=%d | Y0=%d | Y1=%d | lost_line_count=%d | zero_flag=%d",
+                  pathToString(path_select).c_str(), rpts_num, is_degraded_mode,
+                  error, v,
+                  Lpt0_found, Lpt1_found, Ypt0_found, Ypt1_found,
+                  zeroCount, zero_flag);
 
-    ROS_WARN_THROTTLE(1.0, "follow_test path=%s rpts=%d error=%.3f v=%.3f L0=%d L1=%d Y0=%d Y1=%d",
-                      pathToString(path_select).c_str(), rpts_num, error, v,
-                      Lpt0_found, Lpt1_found, Ypt0_found, Ypt1_found);
     return 0;
 }
 
@@ -729,7 +713,7 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
                double speed, double distance, double y_bias_m,
                bool enable_initial_turn, double turn_angle_deg,
                double turn_angular_speed, int turn_rpts_threshold,
-               double turn_pause_sec) {
+               double turn_pause_sec, double min_turn_pid_speed) {
     // 保存 launch 参数，供后续图像调试、停车开关和速度控制使用。
     publish_debug_image = publish_debug;
     show_window = show_debug_window;
@@ -742,33 +726,28 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
     initial_turn_angular_speed = std::max(0.0, turn_angular_speed);
     initial_turn_rpts_threshold = std::max(1, turn_rpts_threshold);
     initial_turn_pause_sec = std::max(0.0, turn_pause_sec);
+    min_pid_speed = std::max(0.0, min_turn_pid_speed);
+}
+
+void configureVideo(bool enable_record, int fps, const std::string &save_path) {
+    enable_video_record = enable_record;
+    video_fps = std::max(1, std::min(30, fps));  // 限制在1-30 FPS范围内
+    auto_video_save_path = save_path.empty();
+    if (!save_path.empty()) {
+        video_save_path = save_path;
+    }
+    // 如果禁用了视频录制，确保关闭已打开的writer
+    if (!enable_record && debug_video_writer.isOpened()) {
+        debug_video_writer.release();
+        video_recording = false;
+        ROS_INFO("[DEBUG_VIDEO] Video recording disabled.");
+    }
 }
 
 void initializeImagePipeline() {
     // 建立逆透视映射表 point_map/PerImg_ip，process_image() 依赖这些查找表。
     ImagePerspective_Init();
     Global_move_timer = ros::Time::now();
-}
-
-void advertiseTopics(ros::NodeHandle &nh, const std::string &cmd_vel_topic,
-                     const std::string &end_topic) {
-    // pub/end_pub 使用原工程全局变量名，保证复用原有头文件和辅助函数时不需要大改。
-    pub = nh.advertise<geometry_msgs::Twist>(cmd_vel_topic, 10);
-    end_pub = nh.advertise<std_msgs::String>(end_topic, 10);
-    status_pub = nh.advertise<std_msgs::String>("/flow_end/follow_test_status", 10);
-    debug_pub = nh.advertise<sensor_msgs::Image>("/flow_end/follow_test_debug", 1);
-}
-
-void subscribeTopics(ros::NodeHandle &nh, const std::string &image_topic,
-                     const std::string &imu_topic, const std::string &odom_topic,
-                     const std::string &begin_topic) {
-    // subscribers 必须保持生命周期，否则函数返回后订阅器析构，回调不会再触发。
-    static std::vector<ros::Subscriber> subscribers;
-    subscribers.clear();
-    subscribers.push_back(nh.subscribe(image_topic, 1, imageCallback));
-    subscribers.push_back(nh.subscribe(imu_topic, 10, imuCallback));
-    subscribers.push_back(nh.subscribe(odom_topic, 10, odomCallback));
-    subscribers.push_back(nh.subscribe(begin_topic, 10, beginCallback));
 }
 
 bool shouldExit() {
@@ -778,7 +757,13 @@ bool shouldExit() {
 void shutdown() {
     // 节点退出时主动停车，避免调试时 Ctrl-C 后底盘保留上一条速度。
     publishStop();
-  
+
+    // 关闭视频录制
+    if (video_recording && debug_video_writer.isOpened()) {
+        debug_video_writer.release();
+        video_recording = false;
+        ROS_INFO("[DEBUG_VIDEO] Video saved to: %s", video_save_path.c_str());
+    }
 }
 
 }  // namespace follow_test
