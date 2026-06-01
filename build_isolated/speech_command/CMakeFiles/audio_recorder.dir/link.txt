@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -O2 -g -DNDEBUG  -shared -Wl,-soname,libaudio_recorder.so -o /home/ucar/ucar_ws/devel_isolated/speech_command/lib/libaudio_recorder.so CMakeFiles/audio_recorder.dir/src/AudioRecorder.cpp.o  -L/home/ucar/ucar_ws/src/speech_command/lib/arm64  -L/usr/include -Wl,-rpath,/home/ucar/ucar_ws/src/speech_command/lib/arm64:/usr/include -lhid_lib -lmsc 

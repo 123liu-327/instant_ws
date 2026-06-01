@@ -1,0 +1,6 @@
+fdilink_ahrs
+/home/iden/car_ws/devel/.private/fdilink_ahrs/lib/libcrc_table.so /home/iden/car_ws/devel/lib/libcrc_table.so
+/home/iden/car_ws/devel/.private/fdilink_ahrs/lib/fdilink_ahrs/ahrs_driver /home/iden/car_ws/devel/lib/fdilink_ahrs/ahrs_driver
+/home/iden/car_ws/devel/.private/fdilink_ahrs/lib/pkgconfig/fdilink_ahrs.pc /home/iden/car_ws/devel/lib/pkgconfig/fdilink_ahrs.pc
+/home/iden/car_ws/devel/.private/fdilink_ahrs/share/fdilink_ahrs/cmake/fdilink_ahrsConfig.cmake /home/iden/car_ws/devel/share/fdilink_ahrs/cmake/fdilink_ahrsConfig.cmake
+/home/iden/car_ws/devel/.private/fdilink_ahrs/share/fdilink_ahrs/cmake/fdilink_ahrsConfig-version.cmake /home/iden/car_ws/devel/share/fdilink_ahrs/cmake/fdilink_ahrsConfig-version.cmake

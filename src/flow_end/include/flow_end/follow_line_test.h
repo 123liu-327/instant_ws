@@ -11,7 +11,18 @@ namespace flow_end {
 namespace follow_test {
 
 enum class PathSelect { LEFT, MIDDLE, RIGHT };
-enum class MotionState { IDLE, ALIGNING_LEFT, ALIGNING_RIGHT, ALIGN_PAUSE, FOLLOWING };
+enum class MotionState {
+    IDLE,
+    ALIGNING_LEFT,
+    ALIGNING_RIGHT,
+    ALIGN_PAUSE,
+    FOLLOWING,
+    FOLLOWING_STRAIGHT,
+    Y_APPROACH,
+    Y_ALIGNING_LEFT,
+    Y_ALIGNING_RIGHT,
+    Y_ALIGN_PAUSE
+};
 
 // Shared follow_test state. Callback_test.cpp updates these through this header;
 // follow_line_test.cpp owns the definitions and the line-following behavior.
@@ -38,6 +49,12 @@ extern ros::Time initial_turn_last_time;
 extern bool initial_turn_has_last_time;
 extern double min_pid_speed;
 extern ros::Time initial_turn_pause_start;
+extern double y_approach_dist;
+extern double y_turn_angle_deg;
+extern double y_turn_angular_speed;
+extern double y_turn_pause_sec;
+extern int y_detect_max_id;
+extern int y_detect_confirm_frames;
 
 // 视频保存相关配置
 extern bool enable_video_record;
@@ -54,10 +71,20 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
                double initial_turn_angular_speed, int initial_turn_rpts_threshold,
                double initial_turn_pause_sec, double min_pid_speed);
 
+void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
+               double speed, double distance, double y_bias_m,
+               bool enable_initial_turn, double initial_turn_angle_deg,
+               double initial_turn_angular_speed, int initial_turn_rpts_threshold,
+               double initial_turn_pause_sec, double min_pid_speed,
+               double y_approach_dist, double y_turn_angle_deg,
+               double y_turn_angular_speed, double y_turn_pause_sec,
+               int y_detect_max_id, int y_detect_confirm_frames);
+
 void configureVideo(bool enable_record, int fps, const std::string &save_path);
 
 void initializeImagePipeline();
 void startInitialTurnIfNeeded();
+void resetParkingCornerState();
 void publishStatus(const std::string &state);
 void publishStop();
 int followLineTestOnce();

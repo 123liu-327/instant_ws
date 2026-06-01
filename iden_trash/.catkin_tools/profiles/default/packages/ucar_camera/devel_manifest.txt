@@ -1,0 +1,4 @@
+ucar_camera
+/home/iden/car_ws/devel/.private/ucar_camera/lib/pkgconfig/ucar_camera.pc /home/iden/car_ws/devel/lib/pkgconfig/ucar_camera.pc
+/home/iden/car_ws/devel/.private/ucar_camera/share/ucar_camera/cmake/ucar_cameraConfig-version.cmake /home/iden/car_ws/devel/share/ucar_camera/cmake/ucar_cameraConfig-version.cmake
+/home/iden/car_ws/devel/.private/ucar_camera/share/ucar_camera/cmake/ucar_cameraConfig.cmake /home/iden/car_ws/devel/share/ucar_camera/cmake/ucar_cameraConfig.cmake

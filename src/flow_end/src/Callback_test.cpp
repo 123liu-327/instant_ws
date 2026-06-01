@@ -95,6 +95,12 @@ void refreshRuntimeParams() {
     int turn_rpts_threshold = follow_test::initial_turn_rpts_threshold;
     double turn_pause_sec = follow_test::initial_turn_pause_sec;
     double min_turn_pid_speed = follow_test::min_pid_speed;
+    double branch_approach_dist = follow_test::y_approach_dist;
+    double branch_turn_angle_deg = follow_test::y_turn_angle_deg;
+    double branch_turn_angular_speed = follow_test::y_turn_angular_speed;
+    double branch_turn_pause_sec = follow_test::y_turn_pause_sec;
+    int branch_detect_max_id = follow_test::y_detect_max_id;
+    int branch_detect_confirm_frames = follow_test::y_detect_confirm_frames;
 
     private_nh.param<bool>("publish_debug_image", publish_debug, publish_debug);
     private_nh.param<bool>("show_window", show_debug_window, show_debug_window);
@@ -108,12 +114,21 @@ void refreshRuntimeParams() {
     private_nh.param<int>("initial_turn_rpts_threshold", turn_rpts_threshold, turn_rpts_threshold);
     private_nh.param<double>("initial_turn_pause_sec", turn_pause_sec, turn_pause_sec);
     private_nh.param<double>("min_pid_speed", min_turn_pid_speed, min_turn_pid_speed);
+    private_nh.param<double>("y_approach_dist", branch_approach_dist, branch_approach_dist);
+    private_nh.param<double>("y_turn_angle_deg", branch_turn_angle_deg, branch_turn_angle_deg);
+    private_nh.param<double>("y_turn_angular_speed", branch_turn_angular_speed, branch_turn_angular_speed);
+    private_nh.param<double>("y_turn_pause_sec", branch_turn_pause_sec, branch_turn_pause_sec);
+    private_nh.param<int>("y_detect_max_id", branch_detect_max_id, branch_detect_max_id);
+    private_nh.param<int>("y_detect_confirm_frames", branch_detect_confirm_frames, branch_detect_confirm_frames);
 
     follow_test::configure(publish_debug, show_debug_window, enable_parking,
                            speed, distance, y_bias_m, enable_initial_turn,
                            turn_angle_deg, turn_angular_speed,
                            turn_rpts_threshold, turn_pause_sec,
-                           min_turn_pid_speed);
+                           min_turn_pid_speed,
+                           branch_approach_dist, branch_turn_angle_deg,
+                           branch_turn_angular_speed, branch_turn_pause_sec,
+                           branch_detect_max_id, branch_detect_confirm_frames);
 }
 
 void advertiseTopics(ros::NodeHandle &nh, const std::string &cmd_vel_topic,
@@ -160,6 +175,8 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
 
     const float x_now = msg->pose.pose.position.x;
     const float y_now = msg->pose.pose.position.y;
+    current_linear_velocity_x = msg->twist.twist.linear.x;
+
     if (!has_origin) {
         x0 = x_now;
         y0 = y_now;
@@ -180,6 +197,7 @@ void beginCallback(const std_msgs::String::ConstPtr &msg) {
         follow_test::motion_state = follow_test::MotionState::IDLE;
         follow_test::initial_turn_integrated_angle_deg = 0.0;
         follow_test::initial_turn_has_last_time = false;
+        follow_test::resetParkingCornerState();
         follow_test::publishStop();
         follow_test::publishStatus("IDLE");
         ROS_WARN("[CMD] 停车指令 | command=%s | 状态=IDLE", msg->data.c_str());
@@ -195,6 +213,7 @@ void beginCallback(const std_msgs::String::ConstPtr &msg) {
     run_car = true;
     zeroCount = 0;
     zero_flag = false;
+    follow_test::resetParkingCornerState();
     follow_test::startInitialTurnIfNeeded();
     
     // 启动调试信息

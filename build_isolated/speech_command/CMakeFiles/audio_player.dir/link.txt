@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -O2 -g -DNDEBUG  -shared -Wl,-soname,libaudio_player.so -o /home/ucar/ucar_ws/devel_isolated/speech_command/lib/libaudio_player.so CMakeFiles/audio_player.dir/src/AudioPlayer.cpp.o  -L/home/ucar/ucar_ws/src/speech_command/lib/arm64  -L/usr/include -Wl,-rpath,/home/ucar/ucar_ws/src/speech_command/lib/arm64:/usr/include -lasound 

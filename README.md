@@ -6,6 +6,12 @@
 roslaunch ucar_controller all_process.launch
 
 rosrun ucar_controller process_5.5.1.py
+
+
+
+
+rostopic pub /follow_begin std_msgs/String "data: 'Middle'" 
+catkin_make -DCATKIN_WHITELIST_PACKAGES="flow_end" --force-cmake
 ```
 #注意修改导航启动文件是在src/ucar_nav/launch/ucar_navigation_test.launch
 

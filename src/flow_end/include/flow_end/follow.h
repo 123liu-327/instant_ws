@@ -169,7 +169,7 @@ extern int rpts0an_num, rpts1an_num;//对应数量
 extern float rptsc0[POINTS_MAX_LEN][2];//左线跟踪结果
 extern float rptsc1[POINTS_MAX_LEN][2];//右线跟踪结果
 extern int rptsc0_num, rptsc1_num;//点的数量
-#define ROAD_WIDTH      (0.36)//道路宽度（单位：米）
+#define ROAD_WIDTH      (0.39)//道路宽度（单位：米）
 //重新等距采样结果
 extern float rptsc0e[POINTS_MAX_LEN][2];//左线最终用于控制的结果
 extern float rptsc1e[POINTS_MAX_LEN][2];//右线最终用于控制的结果

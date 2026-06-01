@@ -4,9 +4,18 @@
   <param name="initial_pose_z" value="0.0"/>
   <!-- Run the map server -->
    
-  <include file="$(find ucar_controller)/launch/base_driver.launch" > </include>
+  <!-- <include file="$(find ucar_controller)/launch/base_driver.launch" > </include> -->
+
+  <include file="$(find iden_controller)/launch/my_base_driver_iden.launch" > </include>
+
 
   <include file="$(find ydlidar)/launch/ydlidar.launch" > </include>
+
+  <!-- ====== EKF 传感器融合: odom + imu → 更准的里程计 ====== -->
+  <!-- 回退: 删掉此 node + amcl remap 即可                   -->
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization" clear_params="true">
+    <rosparam command="load" file="$(find ucar_nav)/launch/config/ekf.yaml" />
+  </node>
 
   <node name="map_server" pkg="map_server" type="map_server" args="$(find ucar_nav)/maps/5.4.1.yaml" output="screen">
    <param name="frame_id" value="map" />

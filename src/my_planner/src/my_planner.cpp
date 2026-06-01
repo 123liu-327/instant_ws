@@ -10,9 +10,9 @@
 
 PLUGINLIB_EXPORT_CLASS(my_planner::MyPlanner, nav_core::BaseLocalPlanner)
 
-double Kp = 0.6;
-double Kd = 0.01;
-double Ki = 0.05;
+double Kp = 0.5;
+double Kd = 0.02;
+double Ki = 0.02;
 
 double angular_error = 0.0;
 double last_error = 0.0;
@@ -42,14 +42,18 @@ namespace my_planner {
          
     std::vector<geometry_msgs::PoseStamped> global_plan_;
     int target_index_;
+    int prev_target_index_ = -1;  // 追踪上一个目标点，用于重置积分
     bool pose_adjusting_;
     bool goal_reached_;
     bool MyPlanner::setPlan(const std::vector<geometry_msgs::PoseStamped>& plan)
     {
         target_index_ = 0;
+        prev_target_index_ = -1;
         global_plan_ = plan;
         pose_adjusting_ = false;
         goal_reached_ = false;
+        error_sum = 0.0;  // 重置全局积分
+        last_error = 0.0;
         return true;
     }
            
@@ -150,28 +154,35 @@ namespace my_planner {
         if (pose_adjusting_==true)
         {
             cmd_vel.linear.x = 0.0;
-            cmd_vel.linear.y= 0.0;
+            cmd_vel.linear.y = 0.0;
             double final_yaw = tf::getYaw(pose_final.pose.orientation);
             ROS_WARN("调整角度%.3f", final_yaw);
-            
+
             last_error = 0;
             double integral = 0;
 
-            const double pid_min = 0.3;  // 最小输出防止卡死
+            const double angle_gain = 1.0;   // 角度→速度增益
+            const double slow_zone = 0.2;    // rad (~11°): 提前开始减速
+            const double min_speed  = 0.08;  // 最低角速度，精细调整
+            const double tolerance  = 0.015; // rad (~0.86°): 到位容差，90°就是90°
 
-            if(fabs(final_yaw * 2.5) <=0.15){
-                if(final_yaw * 2.5 >0) cmd_vel.angular.z = 0.15;
-                else cmd_vel.angular.z = -0.15;
-            }
-            else cmd_vel.angular.z = final_yaw * 2.5;
-            if(fabs(final_yaw) < 0.005){
+            double abs_yaw = fabs(final_yaw);
+            double raw_speed = abs_yaw * angle_gain;
+
+            if (abs_yaw < tolerance) {
                 goal_reached_ = true;
                 ROS_WARN("到达目标点");
-                cmd_vel.linear.x = 0.0;
                 cmd_vel.angular.z = 0.0;
-                integral = 0;  // 重置积分
+                integral = 0;
                 last_error = 0;
-
+            } else if (abs_yaw > slow_zone) {
+                // 远离目标：全速，但封顶
+                if (raw_speed > 1.2) raw_speed = 1.2;
+                cmd_vel.angular.z = (final_yaw > 0) ? raw_speed : -raw_speed;
+            } else {
+                // 接近目标：线性减速，从 angle_gain*slow_zone 降到 min_speed
+                double speed = min_speed + (raw_speed - min_speed) * (abs_yaw / slow_zone);
+                cmd_vel.angular.z = (final_yaw > 0) ? speed : -speed;
             }
             return true;
         }
@@ -208,13 +219,22 @@ namespace my_planner {
         }
 
         //计算追踪目标点的速度
-         // 计算追踪目标点的速度，降低比例让定点导航线速度更柔和
         const double linear_gain = 3.0;
         cmd_vel.linear.x = target_pose.pose.position.x * linear_gain;
         cmd_vel.linear.y = target_pose.pose.position.y * linear_gain;
-        
+
+        // 切换到新航点时重置积分，防止跨航点累积
+        if (target_index_ != prev_target_index_) {
+            error_sum = 0.0;
+            last_error = 0.0;
+            prev_target_index_ = target_index_;
+        }
+
         angular_error = target_pose.pose.position.y;
         error_sum += angular_error;
+        // 积分抗饱和：限制在 ±0.5 范围内
+        if (error_sum > 0.5)  error_sum = 0.5;
+        if (error_sum < -0.5) error_sum = -0.5;
         error_diff = angular_error - last_error;
         output = Kp*angular_error + Kd*error_diff + Ki*error_sum;
         cmd_vel.angular.z = output;

@@ -1,0 +1,6 @@
+ydlidar
+/home/iden/car_ws/devel/.private/ydlidar/lib/ydlidar/ydlidar_client /home/iden/car_ws/devel/lib/ydlidar/ydlidar_client
+/home/iden/car_ws/devel/.private/ydlidar/lib/ydlidar/ydlidar_node /home/iden/car_ws/devel/lib/ydlidar/ydlidar_node
+/home/iden/car_ws/devel/.private/ydlidar/lib/pkgconfig/ydlidar.pc /home/iden/car_ws/devel/lib/pkgconfig/ydlidar.pc
+/home/iden/car_ws/devel/.private/ydlidar/share/ydlidar/cmake/ydlidarConfig.cmake /home/iden/car_ws/devel/share/ydlidar/cmake/ydlidarConfig.cmake
+/home/iden/car_ws/devel/.private/ydlidar/share/ydlidar/cmake/ydlidarConfig-version.cmake /home/iden/car_ws/devel/share/ydlidar/cmake/ydlidarConfig-version.cmake
