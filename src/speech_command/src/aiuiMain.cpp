@@ -101,6 +101,10 @@ int data_send(int argc, char **argv)
 	ros::Publisher pub_question = n.advertise<std_msgs::String>("/question", 10);
 	ros::Publisher pub_answer = n.advertise<std_msgs::String>("/answer", 10);
 	ros::Publisher pub_angle = n.advertise<std_msgs::Int32>("/angle", 10);
+	
+	// ─── 🔌 核心新增：注册发布裁判原话的话题发布者（名字与 Python 端完美对齐） ───
+	ros::Publisher pub_voice_raw_text = n.advertise<std_msgs::String>("/factory/voice_raw_text", 10);
+
 	string ros_package_path1 = ros::package::getPath("speech_command");
 	package_path1 = const_cast<char *>(ros_package_path1.c_str());
         
@@ -120,6 +124,16 @@ int data_send(int argc, char **argv)
 
 			cout << "问题:\t" << question_str << "\n"
 				 << "答案:\t" << answer_str << endl;
+
+			// ─── ⚡ 核心新增：将听到的裁判原话通过 ROS 甩给 Python 蓄水池 ───
+			if (!question_str.empty())
+			{
+				std_msgs::String voice_msg;
+				voice_msg.data = question_str;
+				pub_voice_raw_text.publish(voice_msg);
+				ROS_INFO("📢 [C++听觉] 裁判原话已成功抛出 -> /factory/voice_raw_text: %s", question_str.c_str());
+			}
+
 			if (sign_conversation_local == 1)
 			{
 				string command_ = FindKeyWords(question_str);
@@ -154,7 +168,7 @@ bool get_test_server(std_srvs::Trigger::Request &request,std_srvs::Trigger::Resp
 	get_request_test = false;
 	while (!get_request_test)
 	{
-		endTime = clock();											 
+		endTime = clock();                                             
 		if ((double)(endTime - startTime) / CLOCKS_PER_SEC > TIMEOUT) 
 		{
 			response.success = false;
@@ -180,7 +194,7 @@ void test_callback()
 	get_request_test = true;
 }
 
-// ====== 💡 核心修正：专门接收大模型文本并调用原厂 TTS 播报的回调函数 ======
+// ====== 💡 核心保留：专门接收大模型文本并调用原厂 TTS 播报的回调函数 ======
 void xunfei_llm_tts_callback(const std_msgs::String::ConstPtr& msg)
 {
     ROS_INFO("🗣️ [讯飞原厂TTS] 收到大模型长句子，开始实时合成播报...");
