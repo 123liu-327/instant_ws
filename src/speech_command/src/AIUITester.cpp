@@ -400,6 +400,12 @@ void TestListener::onEvent(const IAIUIEvent &event) const
 				mTtsFileHelper->createWriteFile("tts", ".pcm", false);
 				mTtsFileHelper->write((const char *)data, dataLen, 0, dataLen);
 				mTtsFileHelper->closeFile();
+				if (data != NULL && dataLen > 0)
+				{
+					ROS_INFO("[TTS PLAY] direct_write_final bytes=%d", dataLen);
+					globalAudioPlayer->Clear_Write();
+					globalAudioPlayer->Write((unsigned char *)data, dataLen);
+				}
 			}
 			else
 			{
