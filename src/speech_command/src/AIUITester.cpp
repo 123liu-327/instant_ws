@@ -53,6 +53,7 @@ void *read_and_play1()
 			globalAudioPlayer->Write((unsigned char *)data_to_speech, res1);
 		}
 	}
+	return NULL;
 }
 
 
@@ -86,7 +87,7 @@ int AudioRecorder::business_proc_callback(business_msg_t businessMsg)
  */
 void setParams()
 {
-	char *setParams = "{\"audioparams\":{\"vcn\":\"x2_xiaojuan\"}}";
+	const char *setParams = "{\"audioparams\":{\"vcn\":\"xiaoyan\"}}";
 	IAIUIMessage *setMsg = IAIUIMessage::create(AIUIConstant::CMD_SET_PARAMS, 0, 0, setParams, NULL);
 	globalAgent->sendMessage(setMsg);
 }
@@ -410,7 +411,7 @@ void TestListener::onEvent(const IAIUIEvent &event) const
 #if if_print_proc_log
 					cout << "[**import log**] write buffer's curret length:" << buffer_source.get_length() << endl;
 #endif
-					//read_and_play1();
+					read_and_play1();
 					mTtsFileHelper->write((const char *)data, dataLen, 0, dataLen);
 
 					if (2 == dts)
@@ -652,11 +653,11 @@ void gTTS(string text)
 	{
 		Buffer *textData = Buffer::alloc(text.length());
 		text.copy((char *)textData->data(), text.length());
-		string paramStr = "vcn=x2_xiaojuan"; //xiaoyan x2_pengfei x2_qige x2_yifei
+		string paramStr = "vcn=xiaoyan"; //xiaoyan xiaofeng
 		paramStr += ",speed=40";
 		paramStr += ",pitch=50";
 		paramStr += ",volume=80";
-		paramStr += ",aue=speex-wb;7";
+		paramStr += ",aue=raw";
 
 		IAIUIMessage *ttsMsg = IAIUIMessage::create(AIUIConstant::CMD_TTS,AIUIConstant::START, 0, paramStr.c_str(), textData);
 
