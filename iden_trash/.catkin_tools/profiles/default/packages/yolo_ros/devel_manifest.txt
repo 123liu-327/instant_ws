@@ -1,4 +1,0 @@
-yolo_ros
-/home/iden/car_ws/devel/.private/yolo_ros/lib/pkgconfig/yolo_ros.pc /home/iden/car_ws/devel/lib/pkgconfig/yolo_ros.pc
-/home/iden/car_ws/devel/.private/yolo_ros/share/yolo_ros/cmake/yolo_rosConfig.cmake /home/iden/car_ws/devel/share/yolo_ros/cmake/yolo_rosConfig.cmake
-/home/iden/car_ws/devel/.private/yolo_ros/share/yolo_ros/cmake/yolo_rosConfig-version.cmake /home/iden/car_ws/devel/share/yolo_ros/cmake/yolo_rosConfig-version.cmake

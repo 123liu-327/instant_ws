@@ -1,5 +1,0 @@
-line_follower
-/home/iden/car_ws/devel/.private/line_follower/lib/line_follower/line_follower_node /home/iden/car_ws/devel/lib/line_follower/line_follower_node
-/home/iden/car_ws/devel/.private/line_follower/lib/pkgconfig/line_follower.pc /home/iden/car_ws/devel/lib/pkgconfig/line_follower.pc
-/home/iden/car_ws/devel/.private/line_follower/share/line_follower/cmake/line_followerConfig.cmake /home/iden/car_ws/devel/share/line_follower/cmake/line_followerConfig.cmake
-/home/iden/car_ws/devel/.private/line_follower/share/line_follower/cmake/line_followerConfig-version.cmake /home/iden/car_ws/devel/share/line_follower/cmake/line_followerConfig-version.cmake

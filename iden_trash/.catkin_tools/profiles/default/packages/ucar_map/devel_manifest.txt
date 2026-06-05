@@ -1,4 +1,0 @@
-ucar_map
-/home/iden/car_ws/devel/.private/ucar_map/lib/pkgconfig/ucar_map.pc /home/iden/car_ws/devel/lib/pkgconfig/ucar_map.pc
-/home/iden/car_ws/devel/.private/ucar_map/share/ucar_map/cmake/ucar_mapConfig.cmake /home/iden/car_ws/devel/share/ucar_map/cmake/ucar_mapConfig.cmake
-/home/iden/car_ws/devel/.private/ucar_map/share/ucar_map/cmake/ucar_mapConfig-version.cmake /home/iden/car_ws/devel/share/ucar_map/cmake/ucar_mapConfig-version.cmake

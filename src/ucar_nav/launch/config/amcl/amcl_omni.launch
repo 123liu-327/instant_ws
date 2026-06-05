@@ -1,8 +1,5 @@
 <launch>
-<!-- ====== EKF回退: 删掉下面这行即可恢复原 /odom     ====== -->
-<!-- ======         同时删 navigation launch 的 EKF 节点 ====== -->
 <node pkg="amcl" type="amcl" name="amcl">
-  <remap from="odom" to="/odometry/filtered"/>
   <!-- Publish scans from best pose at a max of 10 Hz -->
   <param name="odom_model_type" value="omni"/>
   <param name="odom_alpha5" value="0.1"/>

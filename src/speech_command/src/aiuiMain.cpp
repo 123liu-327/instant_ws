@@ -197,12 +197,8 @@ void test_callback()
 // ====== 💡 核心保留：专门接收大模型文本并调用原厂 TTS 播报的回调函数 ======
 void xunfei_llm_tts_callback(const std_msgs::String::ConstPtr& msg)
 {
-    ROS_INFO("🗣️ [讯飞原厂TTS] 收到大模型长句子，开始实时合成播报...");
-    
-    // 直接丢给车子自带的 gTTS 现场念出来！
+    ROS_INFO("TTS callback received: %s", msg->data.c_str()); // 改为纯英文日志
     gTTS(msg->data.c_str()); 
-    
-    ROS_INFO("✅ [讯飞原厂TTS] 播报完毕。");
 }
 
 int main(int argc, char **argv)

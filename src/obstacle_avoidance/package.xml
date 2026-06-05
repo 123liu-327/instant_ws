@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>obstacle_avoidance</name>
+  <version>0.0.1</version>
+  <description>动态避障安全控制器</description>
+  <maintainer email="student@example.com">student</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>rospy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+</package>

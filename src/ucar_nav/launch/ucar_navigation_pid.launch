@@ -1,0 +1,76 @@
+<launch>
+  <!-- ===== PID 导航模式 =====
+       用法: roslaunch ucar_nav ucar_navigation_pid.launch
+       驱动: iden_controller PID闭环 + IdenPlanner 局部规划
+  -->
+  <param name="initial_pose_x" value="0.0"/>
+  <param name="initial_pose_y" value="0.0"/>
+  <param name="initial_pose_z" value="0.0"/>
+
+  <!-- 底盘驱动: iden_controller PID 闭环版本 -->
+  <include file="$(find iden_controller)/launch/my_base_driver_iden.launch" />
+
+  <!-- 激光雷达 -->
+  <include file="$(find ydlidar)/launch/ydlidar.launch" />
+
+  <!-- 地图服务 -->
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find ucar_nav)/maps/6.3.1.yaml" output="screen">
+    <param name="frame_id" value="map" />
+  </node>
+
+  <!-- AMCL 定位 -->
+  <include file="$(find ucar_nav)/launch/config/amcl/amcl_omni.launch" />
+
+  <!-- move_base: 全局规划 + IdenPlanner 局部规划 -->
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
+    <param name="base_local_planner" value="iden_planner/IdenPlanner"/>
+
+    <!-- ===== IdenPlanner 参数（运行时 rosparam set 可热重载）===== -->
+    <!-- PID -->
+    <param name="iden_planner/IdenPlanner/kp" value="3.0"/>
+    <param name="iden_planner/IdenPlanner/ki" value="0.02"/>
+    <param name="iden_planner/IdenPlanner/kd" value="0.02"/>
+    <param name="iden_planner/IdenPlanner/integral_limit" value="0.5"/>
+    <!-- 预瞄 -->
+    <param name="iden_planner/IdenPlanner/lookahead_dist" value="0.35"/>
+    <!-- 角度-速度耦合 -->
+    <param name="iden_planner/IdenPlanner/angle_power" value="1.5"/>
+    <param name="iden_planner/IdenPlanner/angle_full_speed_deg" value="0.0"/>
+    <param name="iden_planner/IdenPlanner/angle_zero_speed_deg" value="90.0"/>
+    <!-- 双向导航 -->
+    <param name="iden_planner/IdenPlanner/enable_bidirectional" value="true"/>
+    <param name="iden_planner/IdenPlanner/long_lookahead" value="0.5"/>
+    <param name="iden_planner/IdenPlanner/reverse_vote_ratio" value="0.7"/>
+    <param name="iden_planner/IdenPlanner/reverse_confirm_frames" value="3"/>
+    <!-- 速度限制 -->
+    <param name="iden_planner/IdenPlanner/max_linear_vel" value="0.8"/>
+    <param name="iden_planner/IdenPlanner/min_linear_vel" value="-0.8"/>
+    <param name="iden_planner/IdenPlanner/max_angular_vel" value="1.5"/>
+    <param name="iden_planner/IdenPlanner/linear_gain" value="4.0"/>
+    <!-- 位姿调整 -->
+    <param name="iden_planner/IdenPlanner/pose_dist_threshold" value="0.10"/>
+    <param name="iden_planner/IdenPlanner/pos_deadband" value="0.05"/>
+    <param name="iden_planner/IdenPlanner/yaw_deadband" value="0.10"/>
+    <param name="iden_planner/IdenPlanner/angle_adjust_gain" value="2.5"/>
+    <param name="iden_planner/IdenPlanner/slow_zone" value="0.2"/>
+    <param name="iden_planner/IdenPlanner/min_adjust_speed" value="0.12"/>
+    <param name="iden_planner/IdenPlanner/pose_tolerance" value="0.10"/>
+    <param name="iden_planner/IdenPlanner/pose_adjust_timeout" value="10.0"/>
+    <param name="iden_planner/IdenPlanner/pose_adjust_max_linear" value="0.10"/>
+    <!-- 碰撞检测 -->
+    <param name="iden_planner/IdenPlanner/collision_check_count" value="10"/>
+    <param name="iden_planner/IdenPlanner/collision_cooldown_max" value="20"/>
+    <param name="iden_planner/IdenPlanner/collision_replan_max" value="2"/>
+    <!-- 可视化（调试用，默认关闭，需时 rosparam set 打开）-->
+    <param name="iden_planner/IdenPlanner/enable_visualization" value="false"/>
+    <param name="iden_planner/IdenPlanner/enable_costmap_pub" value="false"/>
+    <!-- ======================================================== -->
+
+    <rosparam file="$(find ucar_nav)/launch/config/move_base/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find ucar_nav)/launch/config/move_base/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find ucar_nav)/launch/config/move_base/global_planner_params.yaml" command="load" />
+    <rosparam file="$(find ucar_nav)/launch/config/move_base/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find ucar_nav)/launch/config/move_base/global_costmap_params.yaml" command="load" />
+  </node>
+</launch>

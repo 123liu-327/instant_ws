@@ -1,0 +1,13 @@
+<launch>
+  <!-- ===== 定点巡航 PID 模式 =====
+       用法: roslaunch iden_controller cruise_pid.launch
+             rosrun iden_controller process_5.30.1.py
+
+       等价于: roslaunch ucar_nav ucar_navigation_pid.launch
+       区别:  此文件可直接从 iden_controller 包启动，
+              无需知道 ucar_nav 的 launch 文件名
+  -->
+
+  <!-- 委托给 ucar_nav 的 PID 导航启动文件 -->
+  <include file="$(find ucar_nav)/launch/ucar_navigation_pid.launch" />
+</launch>

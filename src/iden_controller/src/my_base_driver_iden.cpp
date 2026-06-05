@@ -120,8 +120,8 @@ namespace ucarController
     pravite_nh.param("ki_vy", ki_vy_, 0.2);
     pravite_nh.param("kd_vy", kd_vy_, 0.0);
     pravite_nh.param("kp_vth", kp_vth_, 1.0);
-    pravite_nh.param("ki_vth", ki_vth_, 0.3);
-    pravite_nh.param("kd_vth", kd_vth_, 0.0);
+    pravite_nh.param("ki_vth", ki_vth_, 0.1);
+    pravite_nh.param("kd_vth", kd_vth_, 0.05);
 
     // 积分抗饱和上限
     pravite_nh.param("integral_limit_vx", integral_limit_vx_, 0.5);
@@ -134,7 +134,7 @@ namespace ucarController
     pravite_nh.param("max_accel_th", max_accel_th_, 2.0);
 
     // cmd_vel 低通滤波系数 (1.0=无滤波, 越小越平滑)
-    pravite_nh.param("cmd_vel_filter_alpha", cmd_vel_filter_alpha_, 0.8);
+    pravite_nh.param("cmd_vel_filter_alpha", cmd_vel_filter_alpha_, 0.6);
 
     integral_vx_ = integral_vy_ = integral_vth_ = 0.0;
     last_error_vx_ = last_error_vy_ = last_error_vth_ = 0.0;
@@ -215,30 +215,35 @@ namespace ucarController
 
   void baseBringup::setSerial()
   {
-    try
+    const int MAX_RETRIES = 10;
+    for (int retry = 0; retry < MAX_RETRIES; retry++)
     {
-      serial_.setPort(port_);
-      serial_.setBaudrate(baud_);
-      serial_.setFlowcontrol(serial::flowcontrol_none);
-      serial_.setParity(serial::parity_none); // default is parity_none
-      serial_.setStopbits(serial::stopbits_one);
-      serial_.setBytesize(serial::eightbits);
-      serial::Timeout time_out = serial::Timeout::simpleTimeout(serial_timeout_);
-      serial_.setTimeout(time_out);
-      // serial_.open();
+      try
+      {
+        serial_.setPort(port_);
+        serial_.setBaudrate(baud_);
+        serial_.setFlowcontrol(serial::flowcontrol_none);
+        serial_.setParity(serial::parity_none); // default is parity_none
+        serial_.setStopbits(serial::stopbits_one);
+        serial_.setBytesize(serial::eightbits);
+        serial::Timeout time_out = serial::Timeout::simpleTimeout(serial_timeout_);
+        serial_.setTimeout(time_out);
+        return;  // 成功，退出
+        // serial_.open();
+      }
+      catch (const std::exception &e)
+      {
+        ROS_ERROR("AIcarController setSerial failed (retry %d/%d): %s",
+                  retry + 1, MAX_RETRIES, e.what());
+      }
+      catch (...)
+      {
+        ROS_ERROR("AIcarController setSerial failed with unknow reason (retry %d/%d)",
+                  retry + 1, MAX_RETRIES);
+      }
+      ros::Duration(cmd_dt_threshold_).sleep();
     }
-    catch (const std::exception &e)
-    {
-      ROS_ERROR("AIcarController setSerial failed, try again!");
-      ROS_ERROR("AIcarController setSerial: %s", e.what());
-      setSerial();
-    }
-    catch (...)
-    {
-      ROS_ERROR("AIcarController setSerial failed with unknow reason, try again!");
-      setSerial();
-    }
-    ros::Duration(cmd_dt_threshold_).sleep();
+    ROS_ERROR("AIcarController setSerial: all %d retries exhausted", MAX_RETRIES);
   }
 
   void baseBringup::openSerial()
@@ -383,7 +388,41 @@ namespace ucarController
         else if (angular_z < -angular_speed_max_)
           angular_z = -angular_speed_max_;
 
+        // 每秒热重载 PID 参数，支持 rosparam set 运行时调参
+        {
+          static int reload_counter = 0;
+          if (++reload_counter >= rate_)  // rate_ Hz → 1 秒刷新一次
+          {
+            reload_counter = 0;
+            ros::NodeHandle pravite_nh("~");
+            bool prev_enable = enable_pid_;
+            pravite_nh.getParam("enable_pid", enable_pid_);
+            pravite_nh.getParam("kp_vx", kp_vx_);
+            pravite_nh.getParam("ki_vx", ki_vx_);
+            pravite_nh.getParam("kd_vx", kd_vx_);
+            pravite_nh.getParam("kp_vy", kp_vy_);
+            pravite_nh.getParam("ki_vy", ki_vy_);
+            pravite_nh.getParam("kd_vy", kd_vy_);
+            pravite_nh.getParam("kp_vth", kp_vth_);
+            pravite_nh.getParam("ki_vth", ki_vth_);
+            pravite_nh.getParam("kd_vth", kd_vth_);
+            pravite_nh.getParam("integral_limit_vx", integral_limit_vx_);
+            pravite_nh.getParam("integral_limit_vy", integral_limit_vy_);
+            pravite_nh.getParam("integral_limit_vth", integral_limit_vth_);
+            pravite_nh.getParam("cmd_vel_filter_alpha", cmd_vel_filter_alpha_);
+            // PID 从关→开时，重置积分防止突变
+            if (!prev_enable && enable_pid_)
+            {
+              integral_vx_ = integral_vy_ = integral_vth_ = 0.0;
+              last_error_vx_ = last_error_vy_ = last_error_vth_ = 0.0;
+              last_pid_time_ = ros::Time::now();
+            }
+          }
+        }
+
         // PID 闭环修正：用实际车速反馈补偿指令速度
+        // 改进: ①测量值微分(消除设定值跳变冲击)
+        //       ②反算抗饱和(输出限幅时暂停积分，防止windup)
         if (enable_pid_)
         {
           lock.lock();
@@ -401,28 +440,51 @@ namespace ucarController
           if (dt <= 0.0 || dt > 1.0) dt = 1.0 / rate_;  // 异常值保护
           last_pid_time_ = now;
 
-          integral_vx_  += error_vx  * dt;
-          integral_vy_  += error_vy  * dt;
-          integral_vth_ += error_vth * dt;
+          // --- 微分：使用测量值微分(-actual)替代误差微分(error-last_error) ---
+          // 消除设定值突变时的"微分冲击"(derivative kick)
+          double deriv_vx  = -(actual_vx  - last_error_vx_)  / dt;
+          double deriv_vy  = -(actual_vy  - last_error_vy_)  / dt;
+          double deriv_vth = -(actual_vth - last_error_vth_) / dt;
 
-          // 积分抗饱和（可配置上限）
+          // 保存实际速度用于下一帧微分（复用 last_error_xx_ 变量名）
+          last_error_vx_  = actual_vx;
+          last_error_vy_  = actual_vy;
+          last_error_vth_ = actual_vth;
+
+          // --- 比例+微分先行计算 ---
+          double pid_vx  = kp_vx_  * error_vx  + kd_vx_  * deriv_vx;
+          double pid_vy  = kp_vy_  * error_vy  + kd_vy_  * deriv_vy;
+          double pid_vth = kp_vth_ * error_vth + kd_vth_ * deriv_vth;
+
+          // --- 反算抗饱和: 输出限幅时暂停积分 ---
+          // 仅当 P+D 未使输出饱和时，才累加积分（避免输出饱和时继续积分）
+          double pre_out_vx  = linear_x  + pid_vx  + ki_vx_  * integral_vx_;
+          double pre_out_vy  = linear_y  + pid_vy  + ki_vy_  * integral_vy_;
+          double pre_out_vth = angular_z + pid_vth + ki_vth_ * integral_vth_;
+
+          bool vx_saturated  = (pre_out_vx  > linear_speed_max_  || pre_out_vx  < -linear_speed_max_);
+          bool vy_saturated  = (pre_out_vy  > linear_speed_max_  || pre_out_vy  < -linear_speed_max_);
+          bool vth_saturated = (pre_out_vth > angular_speed_max_ || pre_out_vth < -angular_speed_max_);
+
+          // 仅在未饱和时累加积分（条件积分法 anti-windup）
+          if (!vx_saturated)
+            integral_vx_  += error_vx  * dt;
+          if (!vy_saturated)
+            integral_vy_  += error_vy  * dt;
+          if (!vth_saturated)
+            integral_vth_ += error_vth * dt;
+
+          // 积分限幅（硬上限保护）
           integral_vx_  = std::max(-integral_limit_vx_, std::min(integral_limit_vx_, integral_vx_));
           integral_vy_  = std::max(-integral_limit_vy_, std::min(integral_limit_vy_, integral_vy_));
           integral_vth_ = std::max(-integral_limit_vth_, std::min(integral_limit_vth_, integral_vth_));
 
-          double deriv_vx  = (error_vx  - last_error_vx_)  / dt;
-          double deriv_vy  = (error_vy  - last_error_vy_)  / dt;
-          double deriv_vth = (error_vth - last_error_vth_) / dt;
+          // --- 最终输出 = 前馈(ramp后) + P + I + D ---
+          linear_x  += pid_vx  + ki_vx_  * integral_vx_;
+          linear_y  += pid_vy  + ki_vy_  * integral_vy_;
+          angular_z += pid_vth + ki_vth_ * integral_vth_;
 
-          last_error_vx_  = error_vx;
-          last_error_vy_  = error_vy;
-          last_error_vth_ = error_vth;
-
-          linear_x  += kp_vx_  * error_vx  + ki_vx_  * integral_vx_  + kd_vx_  * deriv_vx;
-          linear_y  += kp_vy_  * error_vy  + ki_vy_  * integral_vy_  + kd_vy_  * deriv_vy;
-          angular_z += kp_vth_ * error_vth + ki_vth_ * integral_vth_ + kd_vth_ * deriv_vth;
-
-          // 再次限幅
+          // 最终限幅
           if (linear_x > linear_speed_max_)
             linear_x = linear_speed_max_;
           else if (linear_x < -linear_speed_max_)
@@ -520,14 +582,18 @@ namespace ucarController
       }
       catch (const std::exception &e)
       {
-        ROS_ERROR("AIcarController writeLoop: %s\n", e.what());
-        ROS_ERROR("AIcarController writeLoop error, waitfor reopen serial port\n");
+        ROS_ERROR_THROTTLE(1.0, "AIcarController writeLoop: %s", e.what());
+        ROS_ERROR_THROTTLE(1.0, "AIcarController writeLoop error, waitfor reopen serial port");
+        try { serial_.close(); } catch (...) {}
+        ros::Duration(1.0).sleep();  // 避免死循环刷屏
         setSerial();
         openSerial();
       }
       catch (...)
       {
-        ROS_ERROR("AIcarController writeLoop error, waitfor reopen serial port\n");
+        ROS_ERROR_THROTTLE(1.0, "AIcarController writeLoop error, waitfor reopen serial port");
+        try { serial_.close(); } catch (...) {}
+        ros::Duration(1.0).sleep();  // 避免死循环刷屏
         setSerial();
         openSerial();
       }
@@ -745,14 +811,20 @@ namespace ucarController
       } // try end
       catch (const std::exception &e)
       {
-        ROS_ERROR("AIcarController readLoop: %s\n", e.what());
-        ROS_ERROR("AIcarController readLoop error, try to reopen serial port\n");
+        ROS_ERROR_THROTTLE(1.0, "AIcarController readLoop: %s", e.what());
+        ROS_ERROR_THROTTLE(1.0, "AIcarController readLoop error, try to reopen serial port");
+        check_head_last[0] = 0xFF;  // 重置帧头状态，防止恢复后误匹配半个帧头
+        try { serial_.close(); } catch (...) {}
+        ros::Duration(1.0).sleep();  // 避免死循环刷屏
         setSerial();
         openSerial();
       }
       catch (...)
       {
-        ROS_ERROR("AIcarController readLoop error, try to reopen serial port\n");
+        ROS_ERROR_THROTTLE(1.0, "AIcarController readLoop error, try to reopen serial port");
+        check_head_last[0] = 0xFF;  // 重置帧头状态，防止恢复后误匹配半个帧头
+        try { serial_.close(); } catch (...) {}
+        ros::Duration(1.0).sleep();  // 避免死循环刷屏
         setSerial();
         openSerial();
       }
@@ -1138,7 +1210,7 @@ namespace ucarController
 
       quaternionToEuler(imu_data.orientation.w, imu_data.orientation.x,
                         imu_data.orientation.y, imu_data.orientation.z,
-                        yaw, roll, pitch);
+                        pitch, roll, yaw);  // 修复：参数顺序 pitch, roll, yaw
 
       // 获取解算出的 Roll、Pitch、Yaw �????
       // roll  = mahonyFilter.getRoll();

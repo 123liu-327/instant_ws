@@ -32,7 +32,7 @@
   <arg name="left_dis_bias_left" default="6.0" />
   <arg name="left_dis_bias_right" default="0.0" />
   <arg name="right_dis_bias_left" default="0.0" />
-  <arg name="right_dis_bias_right" default="-30.0" />
+  <arg name="right_dis_bias_right" default="-32.0" />
   <arg name="middle_dis_bias_left" default="0.0" />
   <arg name="middle_dis_bias_right" default="0.0" />
   <arg name="time_local" default="0.5" />
@@ -42,6 +42,9 @@
 
   <!-- 是否启用 L 型角点停车逻辑。 -->
   <arg name="parking_enabled" default="true" />
+  <arg name="parking_allow_either_l" default="true" />
+  <arg name="parking_extra_dist" default="0.315" />
+  <arg name="parking_forward_speed" default="0.15" />
 
   <!-- 是否发布调试图像 /flow_end/follow_test_debug，可用 rqt_image_view 查看。 -->
   <arg name="publish_debug_image" default="true" />
@@ -52,10 +55,10 @@
   <!-- 视频保存相关参数 -->
   <!-- 是否启用视频保存（启用后将替代ROS话题发布，直接保存为AVI文件） -->
   <arg name="enable_video_record" default="true" />
-  
+
   <!-- 视频帧率，建议10-15 FPS，过高会增加CPU和磁盘压力 -->
   <arg name="video_fps" default="10" />
-  
+
   <!-- 视频保存路径（留空则使用默认路径 /tmp/follow_test_debug_时间戳.avi） -->
   <arg name="video_save_path" default="" />
 
@@ -69,8 +72,46 @@
   <arg name="y_turn_angle_deg" default="45.0" />
   <arg name="y_turn_angular_speed" default="0.35" />
   <arg name="y_turn_pause_sec" default="0.5" />
-  <arg name="y_detect_max_id" default="10" />
-  <arg name="y_detect_confirm_frames" default="3" />
+  <arg name="y_detect_min_id" default="0" />
+  <arg name="y_center_aim_dist" default="0.45" />
+  <arg name="y_approach_speed" default="0.18" />
+  <arg name="y_center_max_wz" default="0.25" />
+  <arg name="y_lost_confirm_frames" default="3" />
+  <arg name="y_entry_min_odom" default="0.08" />
+  <arg name="y_entry_max_odom" default="0.60" />
+  <arg name="y_detect_max_id" default="100" />
+  <arg name="y_detect_confirm_frames" default="2" />
+  <arg name="y_crossbar_seek_speed" default="0.08" />
+  <arg name="y_crossbar_lost_confirm_frames" default="3" />
+  <arg name="y_crossbar_target_long_m" default="0.25" />
+  <arg name="y_crossbar_long_tolerance_m" default="0.10" />
+  <arg name="y_crossbar_max_abs_lat_m" default="0.18" />
+  <arg name="y_crossbar_confirm_frames" default="2" />
+  <arg name="y_crossbar_seek_max_odom" default="0.40" />
+  <arg name="control_path_smooth_window" default="2" />
+  <arg name="control_path_ema_alpha" default="0.35" />
+  <arg name="control_error_filter_alpha" default="0.65" />
+  <arg name="control_yaw_deadband" default="0.015" />
+  <arg name="control_kp_yaw" default="1.00" />
+  <arg name="control_ki_yaw" default="0.00" />
+  <arg name="control_kd_yaw" default="0.08" />
+  <arg name="control_integral_limit" default="0.30" />
+  <arg name="control_integral_error_threshold" default="0.25" />
+  <arg name="control_adaptive_error_threshold" default="0.35" />
+  <arg name="control_adaptive_kp_scale" default="1.25" />
+  <arg name="control_adaptive_kd_scale" default="1.40" />
+  <arg name="control_max_wz" default="0.65" />
+  <arg name="control_soft_wz_limit" default="0.55" />
+  <arg name="control_max_wz_rate" default="1.80" />
+  <arg name="control_turn_slowdown" default="0.65" />
+  <arg name="control_slow_error" default="0.45" />
+  <arg name="control_min_speed" default="0.05" />
+  <arg name="control_degraded_speed_scale" default="0.75" />
+  <arg name="control_max_accel" default="0.35" />
+  <arg name="control_max_decel" default="0.80" />
+  <arg name="control_cmd_filter_alpha" default="0.45" />
+  <arg name="lost_line_coast_sec" default="0.15" />
+  <arg name="lost_line_coast_speed_scale" default="0.60" />
 
   <!-- 是否启用起步预转角。Left/Right 会先原地转向目标岔路，Middle 不预转。 -->
   <arg name="initial_turn_enabled" default="true" />
@@ -114,6 +155,9 @@
     <param name="right_time_local" value="$(arg right_time_local)" />
     <param name="middle_time_local" value="$(arg middle_time_local)" />
     <param name="parking_enabled" value="$(arg parking_enabled)" />
+    <param name="parking_allow_either_l" value="$(arg parking_allow_either_l)" />
+    <param name="parking_extra_dist" value="$(arg parking_extra_dist)" />
+    <param name="parking_forward_speed" value="$(arg parking_forward_speed)" />
     <param name="publish_debug_image" value="$(arg publish_debug_image)" />
     <param name="show_window" value="$(arg show_window)" />
     <param name="enable_video_record" value="$(arg enable_video_record)" />
@@ -132,7 +176,45 @@
     <param name="y_turn_angle_deg" value="$(arg y_turn_angle_deg)" />
     <param name="y_turn_angular_speed" value="$(arg y_turn_angular_speed)" />
     <param name="y_turn_pause_sec" value="$(arg y_turn_pause_sec)" />
+    <param name="y_detect_min_id" value="$(arg y_detect_min_id)" />
+    <param name="y_center_aim_dist" value="$(arg y_center_aim_dist)" />
+    <param name="y_approach_speed" value="$(arg y_approach_speed)" />
+    <param name="y_center_max_wz" value="$(arg y_center_max_wz)" />
+    <param name="y_lost_confirm_frames" value="$(arg y_lost_confirm_frames)" />
+    <param name="y_entry_min_odom" value="$(arg y_entry_min_odom)" />
+    <param name="y_entry_max_odom" value="$(arg y_entry_max_odom)" />
     <param name="y_detect_max_id" value="$(arg y_detect_max_id)" />
     <param name="y_detect_confirm_frames" value="$(arg y_detect_confirm_frames)" />
+    <param name="y_crossbar_seek_speed" value="$(arg y_crossbar_seek_speed)" />
+    <param name="y_crossbar_lost_confirm_frames" value="$(arg y_crossbar_lost_confirm_frames)" />
+    <param name="y_crossbar_target_long_m" value="$(arg y_crossbar_target_long_m)" />
+    <param name="y_crossbar_long_tolerance_m" value="$(arg y_crossbar_long_tolerance_m)" />
+    <param name="y_crossbar_max_abs_lat_m" value="$(arg y_crossbar_max_abs_lat_m)" />
+    <param name="y_crossbar_confirm_frames" value="$(arg y_crossbar_confirm_frames)" />
+    <param name="y_crossbar_seek_max_odom" value="$(arg y_crossbar_seek_max_odom)" />
+    <param name="control_path_smooth_window" value="$(arg control_path_smooth_window)" />
+    <param name="control_path_ema_alpha" value="$(arg control_path_ema_alpha)" />
+    <param name="control_error_filter_alpha" value="$(arg control_error_filter_alpha)" />
+    <param name="control_yaw_deadband" value="$(arg control_yaw_deadband)" />
+    <param name="control_kp_yaw" value="$(arg control_kp_yaw)" />
+    <param name="control_ki_yaw" value="$(arg control_ki_yaw)" />
+    <param name="control_kd_yaw" value="$(arg control_kd_yaw)" />
+    <param name="control_integral_limit" value="$(arg control_integral_limit)" />
+    <param name="control_integral_error_threshold" value="$(arg control_integral_error_threshold)" />
+    <param name="control_adaptive_error_threshold" value="$(arg control_adaptive_error_threshold)" />
+    <param name="control_adaptive_kp_scale" value="$(arg control_adaptive_kp_scale)" />
+    <param name="control_adaptive_kd_scale" value="$(arg control_adaptive_kd_scale)" />
+    <param name="control_max_wz" value="$(arg control_max_wz)" />
+    <param name="control_soft_wz_limit" value="$(arg control_soft_wz_limit)" />
+    <param name="control_max_wz_rate" value="$(arg control_max_wz_rate)" />
+    <param name="control_turn_slowdown" value="$(arg control_turn_slowdown)" />
+    <param name="control_slow_error" value="$(arg control_slow_error)" />
+    <param name="control_min_speed" value="$(arg control_min_speed)" />
+    <param name="control_degraded_speed_scale" value="$(arg control_degraded_speed_scale)" />
+    <param name="control_max_accel" value="$(arg control_max_accel)" />
+    <param name="control_max_decel" value="$(arg control_max_decel)" />
+    <param name="control_cmd_filter_alpha" value="$(arg control_cmd_filter_alpha)" />
+    <param name="lost_line_coast_sec" value="$(arg lost_line_coast_sec)" />
+    <param name="lost_line_coast_speed_scale" value="$(arg lost_line_coast_speed_scale)" />
   </node>
 </launch>

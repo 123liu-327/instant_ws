@@ -20,22 +20,41 @@ class SharedVariables:
         self.tf_buffer = None
         self.tf_listener = None
 
+        # _t 转向点沿下一段方向偏移 15cm，边走边转避免纯旋转丢失 AMCL
         self.nav_point = {
-            "s0":  [1.54,  0.0,   0.0, 0.0, 0.0, 0.0, 1.0],
-            "s1":  [1.68, -0.42,  0.0, 0.0, 0.0, 0.0, 1.0],
-            "s2":  [2.07, -0.42,  0.0, 0.0, 0.0, 0.0, 1.0],
-            "s3":  [2.12, 0.01,  0.0, 0.0, 0.0, 0.0, 1.0],
-            "s4":  [3.10, -0.01,  0.0, 0.0, 0.0, 0.0, 1.0],
-            "s41": [3.10, -0.01,  0.0, 0.0, 0.0, -0.707, 0.707],
-            "s5":  [3.15, -0.42,  0.0, 0.0, 0.0, -0.707, 0.707],
-            "s6":  [3.13, -0.89,  0.0, 0.0, 0.0, -0.707, 0.707],
-            "s6_twist": [3.13, -0.89, 0.0, 0.0, 0.0, 1.0, 0.0],
-            "s7":  [3.13, -0.91,  0.0, 0.0, 0.0, 1.0, 0.0],
-            "s8":  [2.03, -0.95,  0.0, 0.0, 0.0, 1.0, 0.0],
-            "s9":  [1.18, -0.95,  0.0, 0.0, 0.0, 1.0, 0.0],
-            "s10": [1.07, -0.54,  0.0, 0.0, 0.0, 1.0, 0.0],
-            "s11": [0.228, -0.537, 0.0, 0.0, 0.0, 1.0, 0.0],
-            "s12": [-0.143, -0.13, 0.0, 0.0, 0.0, 1.0, 0.0],
+            "s0":  [1.07,  0.0,   0.0, 0.0, 0.0, 0.0, 1.0],
+            "s0t": [1.07, -0.05,  0.0, 0.0, 0.0, -0.7071, 0.7071],
+
+            "s1":  [1.07, -0.395,  0.0, 0.0, 0.0, -0.7071, 0.7071],
+            "s1t": [1.22, -0.395,  0.0, 0.0, 0.0, 0.0, 1.0],
+
+            "s2":  [1.60, -0.395,  0.0, 0.0, 0.0, 0.0, 1.0],
+            "s2t": [1.60, -0.345,  0.0, 0.0, 0.0, 0.7071, 0.7071],
+
+            "s3":  [1.60, 0.01,  0.0, 0.0, 0.0, 0.7071, 0.7071],
+            "s3t": [1.75, 0.01,  0.0, 0.0, 0.0, 0.0, 1.0],
+
+            "s4":  [2.62, -0.01,  0.0, 0.0, 0.0, 0.0, 1.0],
+            "s4t": [2.62, -0.06,  0.0, 0.0, 0.0, -0.7071, 0.7071],
+
+            "s5":  [2.62, -0.42,  0.0, 0.0, 0.0, -0.7071, 0.7071],
+
+            "s6":  [2.62, -0.99,  0.0, 0.0, 0.0, -0.7071, 0.7071],
+            "s6t": [2.47, -0.99, 0.0, 0.0, 0.0, 1.0, 0.0],
+
+            "s7":  [2.13, -0.99,  0.0, 0.0, 0.0, 1.0, 0.0],
+
+            "s8":  [1.53, -0.99,  0.0, 0.0, 0.0, 1.0, 0.0],
+
+            "s9":  [0.63, -0.99,  0.0, 0.0, 0.0, 1.0, 0.0],
+            "s9t": [0.63, -0.94,  0.0, 0.0, 0.0, 0.7071, 0.7071],
+
+            "s10": [0.63, -0.55,  0.0, 0.0, 0.0, -0.7071, 0.707],
+            "s10t": [0.48, -0.55,  0.0, 0.0, 0.0, 1.0, 0.0],
+
+            "s11": [-0.344, -0.55, 0.0, 0.0, 0.0, 1.0, 0.0],
+
+            "s12": [-0.344, -0.985, 0.0, 0.0, 0.0, 1.0, 0.0],
         }
 
 SV = SharedVariables()
@@ -43,10 +62,8 @@ SV = SharedVariables()
 
 # ---------------------------- 初始化 ----------------------------
 def init_move_base():
-    # 在 init_node 之后重新创建 action client
     SV.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
-    rospy.loginfo("等待 move_base action server...")
-    if not SV.move_base.wait_for_server(rospy.Duration(6)):
+    if not SV.move_base.wait_for_server(rospy.Duration(5)):
         rospy.logerr("无法连接 move_base action server")
         sys.exit(1)
     rospy.loginfo("move_base action server 已连接")
@@ -97,32 +114,18 @@ def reset_navigation():
         rospy.logerr("Service call failed: %s", e)
 
 def recovery_back_up():
-    """轻微前后晃动 + 小角度转向，适合 0.5m 窄赛道"""
-    pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-    rospy.sleep(0.2)
-
-    rospy.loginfo("Recovery: 轻微后退...")
-    cmd = Twist()
-    cmd.linear.x = -0.1
-    pub.publish(cmd)
-    rospy.sleep(0.8)  # 退 ~8cm
-
-    rospy.loginfo("Recovery: 小角度转向...")
-    cmd.linear.x = 0.0
-    cmd.angular.z = 0.3
-    pub.publish(cmd)
-    rospy.sleep(1.0)  # 转 ~17°
-
-    rospy.loginfo("Recovery: 轻微前进...")
-    cmd.angular.z = 0.0
-    cmd.linear.x = 0.1
-    pub.publish(cmd)
-    rospy.sleep(0.8)  # 进 ~8cm
-
-    pub.publish(Twist())
+    """仅清除代价地图，不移动机器人（避免把机器人从目标点推开）"""
+    rospy.loginfo("Recovery: 清除代价地图...")
+    rospy.wait_for_service('/move_base/clear_costmaps')
+    try:
+        clear_costmaps = rospy.ServiceProxy('/move_base/clear_costmaps', Empty)
+        clear_costmaps()
+    except rospy.ServiceException:
+        pass
+    rospy.sleep(0.5)
     rospy.loginfo("Recovery done.")
 
-def send_nav_point_and_wait(target_pose_list, waypoint_timeout=12, max_retries=3):
+def send_nav_point_and_wait(target_pose_list, waypoint_timeout=25, max_retries=3):
     """发送导航点，超时或失败后自动恢复重试，超过次数跳过"""
     if len(target_pose_list) != 7:
         rospy.logerr(f"导航点列表长度错误: {len(target_pose_list)}")
@@ -209,8 +212,19 @@ if __name__ == '__main__':
     rospy.loginfo("开始巡航")
 
     patrol_path = [
-        "s0", "s1", "s2", "s3", "s4", "s41", "s5", "s6", "s6_twist",
-        "s7", "s8", "s9", "s10", "s11", "s12",
+        # _t 点均沿下一段方向偏移 5cm，机器人边走边转，避免纯旋转丢失 AMCL
+        "s0", "s0t",
+        "s1", "s1t",
+        "s2", "s2t",
+        "s3", "s3t",
+        "s4", "s4t",
+        "s5",
+        "s6", "s6t",
+        "s7", "s8",
+        "s9", "s9t",
+        "s10", "s10t",
+        "s11",
+        "s12",
     ]
 
     cruise_points(patrol_path)

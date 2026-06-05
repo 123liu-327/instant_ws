@@ -6,7 +6,7 @@
 roslaunch ucar_controller all_process.launch
 
 rosrun ucar_controller process_5.5.1.py
-
+rostopic pub /follow_begin std_msgs/String "data: 'YLeft'" 
 
 
 

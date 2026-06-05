@@ -2,28 +2,17 @@
   <param name="initial_pose_x" value="0.0"/>
   <param name="initial_pose_y" value="0.0"/>
   <param name="initial_pose_z" value="0.0"/>
-  <!-- Run the map server -->
-   
-  <!-- <include file="$(find ucar_controller)/launch/base_driver.launch" > </include> -->
 
-  <include file="$(find iden_controller)/launch/my_base_driver_iden.launch" > </include>
-
+  <include file="$(find ucar_controller)/launch/base_driver.launch" > </include>
+  <!-- <include file="$(find iden_controller)/launch/my_base_driver_iden.launch" > </include> -->
 
   <include file="$(find ydlidar)/launch/ydlidar.launch" > </include>
 
-  <!-- ====== EKF 传感器融合: odom + imu → 更准的里程计 ====== -->
-  <!-- 回退: 删掉此 node + amcl remap 即可                   -->
-  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization" clear_params="true">
-    <rosparam command="load" file="$(find ucar_nav)/launch/config/ekf.yaml" />
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find ucar_nav)/maps/6.3.1.yaml" output="screen">
+   <param name="frame_id" value="map" />
   </node>
 
-  <node name="map_server" pkg="map_server" type="map_server" args="$(find ucar_nav)/maps/5.4.1.yaml" output="screen">
-   <param name="frame_id" value="map" />
-  </node> 
-
-  
   <include file="$(find ucar_nav)/launch/config/amcl/amcl_omni.launch">
-
   </include>
   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
     <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
@@ -35,12 +24,4 @@
     <rosparam file="$(find ucar_nav)/launch/config/move_base/local_costmap_params.yaml" command="load" />
     <rosparam file="$(find ucar_nav)/launch/config/move_base/global_costmap_params.yaml" command="load" />
   </node>
-  <!-- <node name="ucar_camera" pkg="ucar_camera" type="ucar_camera.py" output="screen"/>  -->
-  <!-- <node name="detect_node" pkg="yolo_ros" type="detection_node.py" output="log"/> -->
-  
-  <!-- <node name="qr_node" pkg="test" type="qr_node" output="screen"/> -->
-  <!-- <node name="nav_node" pkg="ucar_nav" type="nav_node" output="screen"/> -->
-
-  <!-- 等待 process.py (节点名 cruise_mode) 启动后才打开 Rviz -->
- 
 </launch>
