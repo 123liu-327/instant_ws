@@ -8,7 +8,7 @@ roslaunch ucar_controller all_process.launch
 rosrun ucar_controller process_5.5.1.py
 rostopic pub /follow_begin std_msgs/String "data: 'YLeft'" 
 
-
+rostopic pub /factory/tts_text std_msgs/String "data: 'hello test'"改为李队是宇宙大帅哥"
 
 rostopic pub /follow_begin std_msgs/String "data: 'Middle'" 
 catkin_make -DCATKIN_WHITELIST_PACKAGES="flow_end" --force-cmake
