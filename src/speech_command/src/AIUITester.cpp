@@ -42,25 +42,17 @@ unsigned int rate = AUDIO_RATE_SET;
 
 void *read_and_play1()
 {
-	int buffer_len = buffer_source.get_length();
-	ROS_INFO("[TTS PLAY] buffer_len=%d", buffer_len);
-	if (buffer_len > 0)
+	if (buffer_source.get_length() > 0)
 	{
 		read_flag = 1; //pthread_mutex_unlock(&mut);
 		char data_to_speech[200000];
-		int res1 = buffer_source.RingBuff_Tx(data_to_speech, buffer_len);
+		int res1 = buffer_source.RingBuff_Tx(data_to_speech, buffer_source.get_length());
 		read_flag = 0;
 		if (res1 != -1)
 		{
-			ROS_INFO("[TTS PLAY] write_to_audio bytes=%d", res1);
 			globalAudioPlayer->Write((unsigned char *)data_to_speech, res1);
 		}
-		else
-		{
-			ROS_WARN("[TTS PLAY] ring buffer read failed");
-		}
 	}
-	return NULL;
 }
 
 
@@ -94,7 +86,7 @@ int AudioRecorder::business_proc_callback(business_msg_t businessMsg)
  */
 void setParams()
 {
-	const char *setParams = "{\"audioparams\":{\"vcn\":\"xiaoyan\"}}";
+	char *setParams = "{\"audioparams\":{\"vcn\":\"x2_xiaojuan\"}}";
 	IAIUIMessage *setMsg = IAIUIMessage::create(AIUIConstant::CMD_SET_PARAMS, 0, 0, setParams, NULL);
 	globalAgent->sendMessage(setMsg);
 }
@@ -387,8 +379,6 @@ void TestListener::onEvent(const IAIUIEvent &event) const
 			int dts = content["dts"].asInt();
 
 			string errorinfo = content["error"].asString();
-			ROS_INFO("[TTS DATA] dts=%d dataLen=%d error=%s", dts, dataLen, errorinfo.c_str());
-	            
 
 			if (2 == dts && errorinfo == "AIUI DATA NULL")
 			{
@@ -400,12 +390,6 @@ void TestListener::onEvent(const IAIUIEvent &event) const
 				mTtsFileHelper->createWriteFile("tts", ".pcm", false);
 				mTtsFileHelper->write((const char *)data, dataLen, 0, dataLen);
 				mTtsFileHelper->closeFile();
-				if (data != NULL && dataLen > 0)
-				{
-					ROS_INFO("[TTS PLAY] direct_write_final bytes=%d", dataLen);
-					globalAudioPlayer->Clear_Write();
-					globalAudioPlayer->Write((unsigned char *)data, dataLen);
-				}
 			}
 			else
 			{
@@ -423,11 +407,10 @@ void TestListener::onEvent(const IAIUIEvent &event) const
 					cout << "[**import location] buffer's write location:" << buffer_source.get_tail() << endl;
 #endif
 					int res = buffer_source.RingBuff_Rx((char *)data, dataLen);
-					ROS_INFO("[TTS BUFFER] push_res=%d current_len=%d", res, buffer_source.get_length());
 #if if_print_proc_log
 					cout << "[**import log**] write buffer's curret length:" << buffer_source.get_length() << endl;
 #endif
-					read_and_play1();
+					//read_and_play1();
 					mTtsFileHelper->write((const char *)data, dataLen, 0, dataLen);
 
 					if (2 == dts)
@@ -667,25 +650,19 @@ void gTTS(string text)
 {
 	if (NULL != globalAgent)
 	{
-		ROS_INFO("[TTS REQUEST] text_len=%zu text=%s", text.length(), text.c_str());
 		Buffer *textData = Buffer::alloc(text.length());
 		text.copy((char *)textData->data(), text.length());
-		string paramStr = "vcn=xiaoyan"; //xiaoyan xiaofeng
+		string paramStr = "vcn=x2_xiaojuan"; //xiaoyan x2_pengfei x2_qige x2_yifei
 		paramStr += ",speed=40";
 		paramStr += ",pitch=50";
 		paramStr += ",volume=80";
-		paramStr += ",aue=raw";
-		ROS_INFO("[TTS REQUEST] params=%s", paramStr.c_str());
+		paramStr += ",aue=speex-wb;7";
 
 		IAIUIMessage *ttsMsg = IAIUIMessage::create(AIUIConstant::CMD_TTS,AIUIConstant::START, 0, paramStr.c_str(), textData);
 
 		globalAgent->sendMessage(ttsMsg);
 
 		ttsMsg->destroy();
-	}
-	else
-	{
-		ROS_ERROR("[TTS REQUEST] globalAgent is NULL");
 	}
 }
 
@@ -1002,7 +979,7 @@ void process_recv(const unsigned char *buf, int len)
 				}
 				cout<<"识别成功"<<endl;
 				system("/home/ucar/ucar_ws/src/speech_command/start.sh");
-				gSleep();
+				//gSleep();
                 }
             }
         }

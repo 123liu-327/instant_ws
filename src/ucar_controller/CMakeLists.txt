@@ -20,6 +20,9 @@ find_package(catkin REQUIRED COMPONENTS
   roslib
 )
 
+# add_executable(tts_verify src/tts_verify.cpp)  # 源文件缺失, 暂时禁用
+# target_link_libraries(tts_verify AIKit)
+
 ## Generate messages in the 'msg' folder
 # add_message_files(FILES
 #   # Battery_info.msg

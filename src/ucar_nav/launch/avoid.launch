@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- 激光雷达 -->
+  <include file="$(find ydlidar)/launch/lidar.launch"/>
+
+  <!-- 底盘驱动 -->
+  <include file="$(find ucar_controller)/launch/base_driver.launch"/>
+
+  <!-- 动态避障 -->
+  <node pkg="ucar_nav" type="avoid.py" name="avoid_obstacle" output="screen"/>
+
+</launch>

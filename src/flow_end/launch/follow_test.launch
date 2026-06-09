@@ -31,7 +31,7 @@
   <arg name="default_dis_bias_right" default="0.0" />
   <arg name="left_dis_bias_left" default="6.0" />
   <arg name="left_dis_bias_right" default="0.0" />
-  <arg name="right_dis_bias_left" default="0.0" />
+  <arg name="right_dis_bias_left" default="-22.0" />
   <arg name="right_dis_bias_right" default="-32.0" />
   <arg name="middle_dis_bias_left" default="0.0" />
   <arg name="middle_dis_bias_right" default="0.0" />
@@ -92,18 +92,18 @@
   <arg name="control_path_ema_alpha" default="0.35" />
   <arg name="control_error_filter_alpha" default="0.65" />
   <arg name="control_yaw_deadband" default="0.015" />
-  <arg name="control_kp_yaw" default="1.00" />
+  <arg name="control_kp_yaw" default="1.15" />
   <arg name="control_ki_yaw" default="0.00" />
   <arg name="control_kd_yaw" default="0.08" />
   <arg name="control_integral_limit" default="0.30" />
   <arg name="control_integral_error_threshold" default="0.25" />
   <arg name="control_adaptive_error_threshold" default="0.35" />
-  <arg name="control_adaptive_kp_scale" default="1.25" />
+  <arg name="control_adaptive_kp_scale" default="1.35" />
   <arg name="control_adaptive_kd_scale" default="1.40" />
   <arg name="control_max_wz" default="0.65" />
   <arg name="control_soft_wz_limit" default="0.55" />
   <arg name="control_max_wz_rate" default="1.80" />
-  <arg name="control_turn_slowdown" default="0.65" />
+  <arg name="control_turn_slowdown" default="0.75" />
   <arg name="control_slow_error" default="0.45" />
   <arg name="control_min_speed" default="0.05" />
   <arg name="control_degraded_speed_scale" default="0.75" />
@@ -196,6 +196,7 @@
     <param name="control_path_ema_alpha" value="$(arg control_path_ema_alpha)" />
     <param name="control_error_filter_alpha" value="$(arg control_error_filter_alpha)" />
     <param name="control_yaw_deadband" value="$(arg control_yaw_deadband)" />
+
     <param name="control_kp_yaw" value="$(arg control_kp_yaw)" />
     <param name="control_ki_yaw" value="$(arg control_ki_yaw)" />
     <param name="control_kd_yaw" value="$(arg control_kd_yaw)" />

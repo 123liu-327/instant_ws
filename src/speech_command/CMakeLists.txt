@@ -150,6 +150,10 @@ link_directories(
 add_executable(${PROJECT_NAME}_node src/aiuiMain.cpp
 )
 
+## 云端ASR链路独立测试工具（绕过唤醒/串口，直接测试云端识别）
+add_executable(cloud_asr_test src/cloud_asr_test.cpp src/FileUtil.cpp
+)
+
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -163,7 +167,13 @@ add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catk
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
 ${catkin_LIBRARIES}
-AIUITester hid_lib rt dl pthread stdc++ 
+AIUITester hid_lib rt dl pthread stdc++
+)
+
+## 云端ASR测试工具链接库
+target_link_libraries(cloud_asr_test
+${catkin_LIBRARIES}
+aiui msc asound jsoncpp rt dl pthread stdc++
 )
 
 # audio_player     
@@ -241,3 +251,4 @@ target_link_libraries(AIUITester aiui audio_recorder audio_player jsoncpp msc)
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+

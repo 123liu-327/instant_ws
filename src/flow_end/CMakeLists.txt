@@ -94,3 +94,7 @@ target_link_libraries(follow_test
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )
+
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+)

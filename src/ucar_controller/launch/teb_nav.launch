@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<launch>
+
+  <include file="$(find ydlidar)/launch/lidar.launch"/>
+  <include file="$(find ucar_controller)/launch/base_driver.launch"/>
+
+  <node pkg="tf" type="static_transform_publisher" name="tf_map_odom"
+        args="0 0 0 0 0 0 map odom 100"/>
+  <node pkg="tf" type="static_transform_publisher" name="tf_base_footprint"
+        args="0 0 0 0 0 0 base_link base_footprint 100"/>
+
+  <node pkg="map_server" type="map_server" name="map_server"
+        args="/home/ucar/teb_empty.yaml"/>
+
+  <node pkg="move_base" type="move_base" name="move_base" output="screen">
+    <param name="base_local_planner"  value="teb_local_planner/TebLocalPlannerROS"/>
+    <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
+
+    <!-- 机器人轮廓 -->
+    <param name="local_costmap/footprint" value="[[0.2,0.15],[0.2,-0.15],[-0.2,-0.15],[-0.2,0.15]]"/>
+    <param name="local_costmap/robot_radius" value="0.22"/>
+
+    <param name="local_costmap/global_frame"       value="map"/>
+    <param name="local_costmap/robot_base_frame"   value="base_link"/>
+    <param name="local_costmap/update_frequency"   value="10.0"/>
+    <param name="local_costmap/publish_frequency"  value="5.0"/>
+    <param name="local_costmap/rolling_window"     value="true"/>
+    <param name="local_costmap/width"              value="6.0"/>
+    <param name="local_costmap/height"             value="6.0"/>
+    <param name="local_costmap/resolution"         value="0.05"/>
+    <param name="local_costmap/observation_sources" value="laser_scan"/>
+    <param name="local_costmap/laser_scan/sensor_frame" value="laser_frame"/>
+    <param name="local_costmap/laser_scan/data_type"    value="LaserScan"/>
+    <param name="local_costmap/laser_scan/topic"        value="/scan"/>
+    <param name="local_costmap/laser_scan/marking"      value="true"/>
+    <param name="local_costmap/laser_scan/clearing"     value="true"/>
+
+    <param name="global_costmap/global_frame"      value="map"/>
+    <param name="global_costmap/robot_base_frame"  value="base_link"/>
+    <param name="global_costmap/update_frequency"  value="5.0"/>
+    <param name="global_costmap/static_map"        value="true"/>
+
+    <param name="TebLocalPlannerROS/odom_topic"          value="/odom"/>
+    <param name="TebLocalPlannerROS/holonomic_robot"     value="true"/>
+    <param name="TebLocalPlannerROS/max_vel_x"           value="0.3"/>
+    <param name="TebLocalPlannerROS/max_vel_y"           value="0.2"/>
+    <param name="TebLocalPlannerROS/max_vel_theta"       value="0.4"/>
+    <param name="TebLocalPlannerROS/acc_lim_x"           value="0.5"/>
+    <param name="TebLocalPlannerROS/acc_lim_theta"       value="0.8"/>
+    <param name="TebLocalPlannerROS/min_obstacle_dist"   value="0.25"/>
+    <param name="TebLocalPlannerROS/inflation_dist"      value="0.3"/>
+    <param name="TebLocalPlannerROS/dt_ref"              value="0.3"/>
+    <param name="TebLocalPlannerROS/weight_obstacle"     value="20.0"/>
+    <param name="TebLocalPlannerROS/weight_optimaltime"  value="1.0"/>
+    <param name="TebLocalPlannerROS/include_costmap_obstacles" value="true"/>
+  </node>
+
+</launch>

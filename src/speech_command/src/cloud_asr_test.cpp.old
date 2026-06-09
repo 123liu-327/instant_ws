@@ -1,0 +1,149 @@
+#include <ros/ros.h>
+#include <std_msgs/String.h>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <unistd.h>
+#include <cstdlib>
+
+using namespace std;
+
+// 声明全局的 ROS 订阅者和发布者
+ros::Subscriber speech_sub;
+ros::Publisher voice_cmd_pub;
+
+/**
+ * @brief 在 /tmp 目录下即时动态构造并生成 Python 语音合成脚本
+ * @param text 要合成的文本
+ */
+void createPythonScript(const string& text) {
+    ofstream py_file("/tmp/xf_tts_stable.py");
+    if (!py_file.is_open()) {
+        cerr << "❌ [错误] 无法在 /tmp 目录下创建临时 Python 脚本！" << endl;
+        return;
+    }
+
+    // 将完整的 Python 核心代码以字符串形式写入
+    py_file << "import websocket\n"
+               "import datetime\n"
+               "import hashlib\n"
+               "import base64\n"
+               "import hmac\n"
+               "import json\n"
+               "import os\n"
+               "import sys\n"
+               "from urllib.parse import urlencode\n\n"
+               "class Ws_Param(object):\n"
+               "    def __init__(self, APPID, APIKey, APISecret, Text):\n"
+               "        self.APPID = APPID\n"
+               "        self.APIKey = APIKey\n"
+               "        self.APISecret = APISecret\n"
+               "        self.Text = Text\n"
+               "        self.CommonArgs = {\"app_id\": self.APPID}\n"
+               "        self.BusinessArgs = {\"aue\": \"raw\", \"auf\": \"audio/L16;rate=16000\", \"vcn\": \"xiaoyan\", \"tte\": \"utf8\"}\n"
+               "        self.Data = {\"status\": 2, \"text\": str(base64.b64encode(self.Text.encode('utf-8')), \"utf-8\")}\n\n"
+               "    def create_url(self):\n"
+               "        url = 'wss://tts-api.xfyun.cn/v2/tts'\n"
+               "        now = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')\n"
+               "        signature_origin = \"host: tts-api.xfyun.cn\\n\"\n"
+               "        signature_origin += \"date: \" + now + \"\\n\"\n"
+               "        signature_origin += \"GET /v2/tts HTTP/1.1\"\n"
+               "        signature_sha = hmac.new(self.APISecret.encode('utf-8'), signature_origin.encode('utf-8'), digestmod=hashlib.sha256).digest()\n"
+               "        signature_sha = base64.b64encode(signature_sha).decode(encoding='utf-8')\n"
+               "        authorization_origin = f'api_key=\"{self.APIKey}\",algorithm=\"hmac-sha256\",headers=\"host date request-line\",signature=\"{signature_sha}\"'\n"
+               "        authorization = base64.b64encode(authorization_origin.encode('utf-8')).decode(encoding='utf-8').replace('\\n', '')\n"
+               "        v = {\"authorization\": authorization, \"date\": now, \"host\": \"tts-api.xfyun.cn\"}\n"
+               "        return url + '?' + urlencode(v)\n\n"
+               "def on_message(ws, message):\n"
+               "    try:\n"
+               "        res = json.loads(message)\n"
+               "        if res[\"code\"] != 0: ws.close(); return\n"
+               "        audio = base64.b64decode(res[\"data\"][\"audio\"])\n"
+               "        target_path = '/home/ucar/instant_ws/src/speech_command/tmp/tts_result.pcm'\n"
+               "        with open(target_path, 'ab') as f:\n"
+               "            f.write(audio)\n"
+               "        if res[\"data\"][\"status\"] == 2: ws.close()\n"
+               "    except: pass\n\n"
+               "if __name__ == \"__main__\":\n"
+               "    target_file = '/home/ucar/instant_ws/src/speech_command/tmp/tts_result.pcm'\n"
+               "    target_dir = os.path.dirname(target_file)\n"
+               "    if not os.path.exists(target_dir):\n"
+               "        os.makedirs(target_dir)\n"
+               "    if os.path.exists(target_file):\n"
+               "        os.remove(target_file)\n"
+               "    # 固化已经跑通的真实比赛凭据和传入的文本参数\n"
+               "    wsParam = Ws_Param(\"4c8a2ec8\", \"uFtKQJrDyzpKyiVHMAWM\", \"btlLJzACqGeZKYFoYQeF\", sys.argv[1])\n"
+               "    ws = websocket.WebSocketApp(wsParam.create_url(), on_message=on_message, on_error=None, on_close=None)\n"
+               "    ws.run_forever()\n";
+
+    py_file.close();
+}
+
+/**
+ * @brief 核心 TTS 流式语音合成与放音函数
+ * @param text 需要让小车开口说话的文本内容
+ */
+void speakText(const string& text) {
+    if (text.empty()) return;
+    
+    cout << "🤖 [比赛指令-核心TTS] 正在请求讯飞开放平台流式合成: \"" << text << "\"" << endl;
+
+    // 1. 目标音频文件的保存路径
+    string pcm_path = "/home/ucar/instant_ws/src/speech_command/tmp/tts_result.pcm";
+    unlink(pcm_path.c_str()); // 清理旧缓存
+
+    // 2. 核心大招：直接在 C++ 内部现场生出一个最新最全的 Python 脚本文件
+    createPythonScript(text);
+
+    // 3. 当场执行刚刚热腾腾生出来的 Python 脚本
+    string cmd = "python3 /tmp/xf_tts_stable.py \"" + text + "\"";
+    int ret = system(cmd.c_str());
+
+    // 4. 设备锁死为测试成功的 default 通道，直接播放目标包路径下的音频
+    cout << "🔊 [喇叭] 正在外放声音..." << endl;
+    string play_cmd = "aplay -D default -r 16000 -f S16_LE -c 1 " + pcm_path + " > /dev/null 2>&1";
+    system(play_cmd.c_str());
+}
+
+/**
+ * @brief 语音识别（ASR）节点的回调函数
+ */
+void speechCallback(const std_msgs::String::ConstPtr& msg) {
+    string current_text = msg->data;
+    if (current_text.empty()) return;
+
+    cout << "🎯 [当前听到文字] ➔ " << current_text << endl;
+
+    // 比赛中的动态对答响应逻辑
+    if (current_text.find("向左转") != string::npos || current_text.find("小飞") != string::npos) {
+        string reply = "收到指令 " + current_text;
+        speakText(reply);
+    }
+}
+
+int main(int argc, char** argv) {
+    // 初始化 ROS 节点
+    ros::init(argc, argv, "cloud_asr_test_node");
+    ros::NodeHandle nh;
+
+    cout << "========================================" << endl;
+    cout << "[STATE] WORKING - 录音听写链路就绪" << endl;
+    cout << "========================================" << endl;
+
+    // 程序启动时即时构造并通车宣告
+    speakText("语音控制与流式合成系统全链路通车。");
+
+    cout << "\n🎤 终极通车测试：可以说话了！" << endl;
+    cout << "========================================" << endl;
+
+    // 订阅语音文字话题
+    speech_sub = nh.subscribe("/speech_text_topic", 10, speechCallback);
+    
+    // 发布控制命令话题
+    voice_cmd_pub = nh.advertise<std_msgs::String>("/voice_control_cmd", 10);
+
+    // 循环等待话题回调
+    ros::spin();
+
+    return 0;
+}
