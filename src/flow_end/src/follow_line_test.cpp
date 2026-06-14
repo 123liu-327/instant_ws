@@ -949,8 +949,10 @@ bool handleInitialTurn() {
 
     const double turned_abs = std::abs(initial_turn_integrated_angle_deg);
     const int selected_count = selectedPathPointCount();
+    const double line_check_enable_angle = initial_turn_angle_deg * 2.0 / 3.0;
+    const bool line_check_enabled = turned_abs >= line_check_enable_angle;
     const bool angle_ok = turned_abs >= initial_turn_angle_deg;
-    const bool line_ok = selected_count >= initial_turn_rpts_threshold;
+    const bool line_ok = line_check_enabled && selected_count >= initial_turn_rpts_threshold;
 
     if (angle_ok || line_ok) {
         publishStop();
@@ -959,15 +961,17 @@ bool handleInitialTurn() {
         initial_turn_pause_start = ros::Time::now();
         publishStatus("ALIGN_PAUSE_" + pathToString(path_select));
 
-        // 预转角完成调试信息
-        ROS_WARN("[INIT_TURN] 预转角完成 | path=%s | 积分角度=%.2f° | 目标角度=%.2f° | wz=%.3f rad/s | "
-                 "选中线点=%d | 阈值=%d | 角度达标=%d | 线点达标=%d",
+        // Initial turn completion debug info.
+        ROS_WARN("[INIT_TURN] Finished | path=%s | integrated_angle=%.2fdeg | target_angle=%.2fdeg | wz=%.3f rad/s | "
+                 "selected_points=%d | threshold=%d | line_gate_angle=%.2fdeg | line_gate_enabled=%d | angle_ok=%d | line_ok=%d",
                  pathToString(path_select).c_str(),
                  initial_turn_integrated_angle_deg,
                  initial_turn_angle_deg,
                  curent_wz,
                  selected_count,
                  initial_turn_rpts_threshold,
+                 line_check_enable_angle,
+                 line_check_enabled,
                  angle_ok, line_ok);
         return true;
     }//添加的角度和线判断指令
@@ -999,11 +1003,12 @@ bool handleInitialTurn() {
    // Initial turn execution debug info
 ROS_WARN_THROTTLE(0.5,
                   "[INIT_TURN] Turning | path=%s | integrated_angle=%.2f°/%.2f° | wz=%.3f rad/s | "
-                  "selected_points=%d/%d | dt=%.3fs | PID_output=%.3f | turn_direction=%s",
+                  "selected_points=%d/%d | line_gate=%.2f°:%d | dt=%.3fs | PID_output=%.3f | turn_direction=%s",
                   pathToString(path_select).c_str(),
                   initial_turn_integrated_angle_deg, initial_turn_angle_deg,
                   curent_wz,
                   selected_count, initial_turn_rpts_threshold,
+                  line_check_enable_angle, line_check_enabled,
                   dt, pid_speed,
                   motion_state == MotionState::ALIGNING_LEFT ? "LEFT" : "RIGHT");
 
