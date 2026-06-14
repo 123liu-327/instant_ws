@@ -23,6 +23,7 @@ static IAIUIAgent* g_agent = nullptr;
 // 全局发布者
 ros::Publisher pub_voice_raw_text;
 ros::Publisher pub_task_state;
+ros::Subscriber sub_tts;
 
 const string XF_APPID      = "4c8a2ec8";
 const string XF_API_KEY    = "uFtKQJrDyzpKyiVHMAWM";
@@ -39,6 +40,20 @@ void speakText(const string& text) {
     system(cmd.c_str());
     string play_cmd = "aplay -D default -r 16000 -f S16_LE -c 1 " + pcm_path + " > /dev/null 2>&1 &";
     system(play_cmd.c_str());
+}
+
+void ttsCallback(
+    const std_msgs::String::ConstPtr& msg)
+{
+    if(msg->data.empty())
+        return;
+
+    cout
+        << "🔊 收到TTS文本: "
+        << msg->data
+        << endl;
+
+    speakText(msg->data);
 }
 
 class CloudTestListener : public IAIUIListener {
@@ -93,6 +108,12 @@ int main(int argc, char** argv) {
 
     pub_voice_raw_text = nh.advertise<std_msgs::String>("/factory/voice_raw_text", 10);
     pub_task_state = nh.advertise<std_msgs::Int32>("/factory/task_state", 10);
+
+    sub_tts =
+    nh.subscribe(
+        "/factory/tts_text",
+        10,
+        ttsCallback);
 
     string pkg_path = ros::package::getPath("speech_command");
     string cfg_path = pkg_path + "/config/AIUI/cfg/aiui.cfg";
