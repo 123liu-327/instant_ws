@@ -7,6 +7,7 @@ import requests
 from std_msgs.msg import String, Int32 # 导入 Int32 用于接收状态
 
 class SparkDualEnvPlannerNode:
+    
     def __init__(self):
         rospy.init_node('spark_dual_env_planner_node', anonymous=True)
         # 必须添加这两个初始化，否则代码运行时会找不到变量
@@ -94,39 +95,61 @@ class SparkDualEnvPlannerNode:
     # ... (后续 execute_combined_decision 等函数逻辑不变)
 
     def execute_combined_decision(self):
-        rospy.loginfo("⚡ [决策] 正在启动双环境并行调度...")
+        rospy.loginfo("⚡ [决策] 启动双层大模型链路...")
         
-        # 1. 语义拆解：获取干净的类别
+        # 1. 拆解指令
+        rospy.loginfo("🔍 [阶段1] 正在尝试拆解任务类别...")
         task_info = self.extract_task_categories(self.raw_voice_text)
-        real_cat = task_info.get("real", "食品大类") # 提供默认值防止空指针
-        sim_cat = task_info.get("sim", "日用品大类")
+        real_cat = task_info.get("real")
+        sim_cat = task_info.get("sim")
+        rospy.loginfo(f"✅ [阶段1] 拆解完成: 真实环境=[{real_cat}], 仿真环境=[{sim_cat}]")
         
-        # 2. 传入清洗后的变量，发起并行请求
-        rospy.loginfo(f"📡 发起决策: 真实[{real_cat}], 仿真[{sim_cat}]")
-        res_real = self.call_by_http(real_cat, self.scanned_items)
-        res_sim = self.call_by_http(sim_cat, self.scanned_items)
+        # 注意：你代码中此处有一段多余的 res_real/res_sim 调用，我已将其合并到下面的详细流程中
         
         try:
-            if res_real and res_real.status_code == 200 and res_sim and res_sim.status_code == 200:
-                # 3. 使用清洗后的 real_cat/sim_cat 进行解析
-                real_item, real_wh = self.parse_single_env(real_cat, res_real.text)
-                sim_item, sim_wh = self.parse_single_env(sim_cat, res_sim.text)
+            items_list = self.scanned_items
+            rospy.loginfo(f"📦 [阶段2] 待分拣物品列表: {items_list}")
+            
+            # 1. 跑第一路：真实环境大模型请求
+            rospy.loginfo("📡 [阶段2-1] 正在发起 [真实环境] HTTP 请求...")
+            res_real = self.call_by_http(real_cat, items_list)
+            if res_real is None:
+                rospy.logerr("❌ [阶段2-1] 真实环境请求返回 None")
+                return
+            rospy.loginfo(f"📡 [阶段2-1] 真实环境请求成功, 状态码: {res_real.status_code}")
+            
+            # 2. 跑第二路：仿真环境大模型请求
+            rospy.loginfo("📡 [阶段2-2] 正在发起 [仿真环境] HTTP 请求...")
+            res_sim = self.call_by_http(sim_cat, items_list)
+            if res_sim is None:
+                rospy.logerr("❌ [阶段2-2] 仿真环境请求返回 None")
+                return
+            rospy.loginfo(f"📡 [阶段2-2] 仿真环境请求成功, 状态码: {res_sim.status_code}")
+            
+            # 3. 解析结果
+            rospy.loginfo("🧠 [阶段3] 正在解析大模型返回的数据...")
+            real_item, real_wh = self.parse_single_env(real_cat, res_real.text)
+            sim_item, sim_wh = self.parse_single_env(sim_cat, res_sim.text)
+            rospy.loginfo(f"🧠 [阶段3] 解析结果: 真实={real_item}/{real_wh}, 仿真={sim_item}/{sim_wh}")
+            
+            if real_item and sim_item:
+                broadcast_text = (
+                    f"取得{real_item}属于{real_cat}应放置在{real_wh}，"
+                    f"仿真环境中取得{sim_item}属于{sim_cat}应放置在{sim_wh}。"
+                )
                 
-                if real_item and sim_item:
-                    broadcast_text = f"取得{real_item}放入{real_wh}，仿真环境取得{sim_item}放入{sim_wh}。"
-                    print(f"\n✅ 决策结果: {broadcast_text}\n")
-                    
-                    self.pub_tts.publish(String(data=broadcast_text))
-                    # 确保 self.pub_target 已在 __init__ 初始化
-                    self.pub_target.publish(String(data=json.dumps({"real_warehouse": real_wh, "sim_warehouse": sim_wh})))
-                else:
-                    rospy.logerr("❌ 大模型返回数据异常，请检查 Prompt")
+                rospy.loginfo("📢 [阶段4] 正在发布 TTS 与目标坐标...")
+                self.pub_tts.publish(String(data=broadcast_text))
+                self.pub_target.publish(String(data=json.dumps({"real_warehouse": real_wh, "sim_warehouse": sim_wh})))
+                rospy.loginfo("✅ [阶段4] 全链路闭环完成！")
             else:
-                rospy.logerr("❌ 网络请求失败")
+                rospy.logerr("❌ [阶段4] 解析数据存在空值，请检查 JSON 返回结构！")
+                
         except Exception as e:
-            rospy.logerr(f"决策执行异常: {e}")
+            rospy.logerr(f"💥 [异常] 决策逻辑执行中发生错误: {e}")
         finally:
             self.scanned_items = []
+            rospy.loginfo("🧹 [清理] 已清空扫码池，准备下一次循环。")
 
     def call_by_http(self, target_category, items_list):
         """原封不动保留的核心网络请求函数"""
@@ -148,7 +171,7 @@ class SparkDualEnvPlannerNode:
         }
         
         try:
-            response = requests.post(self.url, headers=headers, json=payload, timeout=30)
+            response = requests.post(self.url, headers=headers, json=payload, timeout=40)
             return response
         except requests.exceptions.Timeout:
             rospy.logerr("❌ 请求超时！星火大模型没有在指定时间内响应。")
@@ -174,7 +197,7 @@ class SparkDualEnvPlannerNode:
         }
         
         try:
-            response = requests.post(self.url, headers=headers, json=payload, timeout=10)
+            response = requests.post(self.url, headers=headers, json=payload, timeout=40)
             res_json = json.loads(response.text)
             content = res_json['choices'][0]['message']['content']
             clean_str = content.replace("```json", "").replace("```", "").strip()
