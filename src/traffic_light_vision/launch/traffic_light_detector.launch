@@ -1,0 +1,94 @@
+<launch>
+  <arg name="image_topic" default="/ucar_camera/image_raw" />
+  <arg name="state_topic" default="/traffic_light/state" />
+  <arg name="command_topic" default="/follow_begin" />
+  <arg name="debug_topic" default="/traffic_light/debug_image" />
+
+  <arg name="execute_command" default="Middle" />
+  <arg name="left_command" default="Left" />
+  <arg name="right_command" default="Right" />
+  <arg name="red_command" default="Stop" />
+
+  <arg name="confirm_frames" default="3" />
+  <arg name="publish_cooldown" default="2.0" />
+  <arg name="repeat_same_state" default="false" />
+  <arg name="publish_debug" default="true" />
+
+  <!-- Search ROI. Values are image-relative ratios. -->
+  <arg name="roi_x_min" default="0.0" />
+  <arg name="roi_x_max" default="1.0" />
+  <arg name="roi_y_min" default="0.20" />
+  <arg name="roi_y_max" default="1.0" />
+
+  <!-- HSV thresholds. Red spans both ends of the hue ring. -->
+  <arg name="red_h1_min" default="0" />
+  <arg name="red_h1_max" default="12" />
+  <arg name="red_h2_min" default="165" />
+  <arg name="red_h2_max" default="179" />
+  <arg name="red_s_min" default="45" />
+  <arg name="red_v_min" default="70" />
+  <arg name="green_h_min" default="35" />
+  <arg name="green_h_max" default="95" />
+  <arg name="green_s_min" default="35" />
+  <arg name="green_v_min" default="70" />
+
+  <!-- Overexposed tube cores become white; colored halo is still used for classification. -->
+  <arg name="bright_v_min" default="225" />
+  <arg name="morph_kernel_size" default="5" />
+  <arg name="candidate_halo_kernel" default="17" />
+
+  <!-- Contour filters. -->
+  <arg name="min_area" default="80" />
+  <arg name="max_area_ratio" default="0.20" />
+  <arg name="min_circularity" default="0.12" />
+  <arg name="min_aspect_ratio" default="0.20" />
+  <arg name="max_aspect_ratio" default="5.0" />
+  <arg name="execute_circularity_min" default="0.58" />
+  <arg name="execute_aspect_min" default="0.65" />
+  <arg name="execute_aspect_max" default="1.55" />
+  <arg name="arrow_direction_bias_min" default="0.08" />
+
+  <node pkg="traffic_light_vision"
+        type="traffic_light_detector.py"
+        name="traffic_light_detector"
+        output="screen">
+    <param name="image_topic" type="string" value="$(arg image_topic)" />
+    <param name="state_topic" type="string" value="$(arg state_topic)" />
+    <param name="command_topic" type="string" value="$(arg command_topic)" />
+    <param name="debug_topic" type="string" value="$(arg debug_topic)" />
+    <param name="execute_command" type="string" value="$(arg execute_command)" />
+    <param name="left_command" type="string" value="$(arg left_command)" />
+    <param name="right_command" type="string" value="$(arg right_command)" />
+    <param name="red_command" type="string" value="$(arg red_command)" />
+    <param name="confirm_frames" type="int" value="$(arg confirm_frames)" />
+    <param name="publish_cooldown" type="double" value="$(arg publish_cooldown)" />
+    <param name="repeat_same_state" type="bool" value="$(arg repeat_same_state)" />
+    <param name="publish_debug" type="bool" value="$(arg publish_debug)" />
+    <param name="roi_x_min" type="double" value="$(arg roi_x_min)" />
+    <param name="roi_x_max" type="double" value="$(arg roi_x_max)" />
+    <param name="roi_y_min" type="double" value="$(arg roi_y_min)" />
+    <param name="roi_y_max" type="double" value="$(arg roi_y_max)" />
+    <param name="red_h1_min" type="int" value="$(arg red_h1_min)" />
+    <param name="red_h1_max" type="int" value="$(arg red_h1_max)" />
+    <param name="red_h2_min" type="int" value="$(arg red_h2_min)" />
+    <param name="red_h2_max" type="int" value="$(arg red_h2_max)" />
+    <param name="red_s_min" type="int" value="$(arg red_s_min)" />
+    <param name="red_v_min" type="int" value="$(arg red_v_min)" />
+    <param name="green_h_min" type="int" value="$(arg green_h_min)" />
+    <param name="green_h_max" type="int" value="$(arg green_h_max)" />
+    <param name="green_s_min" type="int" value="$(arg green_s_min)" />
+    <param name="green_v_min" type="int" value="$(arg green_v_min)" />
+    <param name="bright_v_min" type="int" value="$(arg bright_v_min)" />
+    <param name="morph_kernel_size" type="int" value="$(arg morph_kernel_size)" />
+    <param name="candidate_halo_kernel" type="int" value="$(arg candidate_halo_kernel)" />
+    <param name="min_area" type="double" value="$(arg min_area)" />
+    <param name="max_area_ratio" type="double" value="$(arg max_area_ratio)" />
+    <param name="min_circularity" type="double" value="$(arg min_circularity)" />
+    <param name="min_aspect_ratio" type="double" value="$(arg min_aspect_ratio)" />
+    <param name="max_aspect_ratio" type="double" value="$(arg max_aspect_ratio)" />
+    <param name="execute_circularity_min" type="double" value="$(arg execute_circularity_min)" />
+    <param name="execute_aspect_min" type="double" value="$(arg execute_aspect_min)" />
+    <param name="execute_aspect_max" type="double" value="$(arg execute_aspect_max)" />
+    <param name="arrow_direction_bias_min" type="double" value="$(arg arrow_direction_bias_min)" />
+  </node>
+</launch>
