@@ -12,7 +12,7 @@ class ImageSaver:
         rospy.init_node('image_saver', anonymous=True)
         
         # 设置保存路径（默认home目录下的calibration_images文件夹）
-        self.save_dir = os.path.expanduser('/home/ucar/ucar_ws/src/ucar_camera/calibration_images')
+        self.save_dir = os.path.expanduser('/home/ucar/instant_ws/src/ucar_camera/calibration_images')
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
         

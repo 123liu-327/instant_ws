@@ -1085,6 +1085,8 @@ void AIUITester::test()
 {
 	cout << ">>>>>创建AIUI代理Agent\n"<< endl;
 	createAgent();
+	cout << ">>>>>启动AIUI识别服务\n" << endl;
+	start();
 
 	cout << ">>>>>正在准备开启麦克风" << endl;
 	cout << ">>>>>开启录音" << endl;

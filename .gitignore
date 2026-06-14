@@ -7,3 +7,5 @@ __pycache__/
 .idea/
 *.bag
 *.log
+
+src/ucar_camera/calibration_images/*.jpg

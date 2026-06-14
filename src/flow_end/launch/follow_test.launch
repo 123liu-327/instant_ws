@@ -123,7 +123,7 @@
   <arg name="initial_turn_angular_speed" default="0.35" />
 
   <!-- 目标线点数阈值。预转过程中如果目标线点数达到该值，会提前结束预转。 -->
-  <arg name="initial_turn_rpts_threshold" default="500" />
+  <arg name="initial_turn_rpts_threshold" default="278" />
 
   <!-- 预转结束后的停顿时间，单位：秒。停顿期间持续发布零速度，再进入正常巡线。 -->
   <arg name="initial_turn_pause_sec" default="10" />
