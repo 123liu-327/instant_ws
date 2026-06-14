@@ -153,6 +153,8 @@ add_executable(${PROJECT_NAME}_node src/aiuiMain.cpp
 ## 云端ASR链路独立测试工具（绕过唤醒/串口，直接测试云端识别）
 add_executable(cloud_asr_test src/cloud_asr_test.cpp src/FileUtil.cpp
 )
+add_executable(cloud_asr_test2 src/cloud_asr_test2.cpp src/FileUtil.cpp
+)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -174,6 +176,11 @@ AIUITester hid_lib rt dl pthread stdc++
 target_link_libraries(cloud_asr_test
 ${catkin_LIBRARIES}
 aiui msc asound jsoncpp rt dl pthread stdc++
+)
+
+target_link_libraries(cloud_asr_test2
+  ${catkin_LIBRARIES}
+  aiui msc asound jsoncpp rt dl pthread stdc++
 )
 
 # audio_player     
