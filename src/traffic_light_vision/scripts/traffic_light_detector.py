@@ -67,8 +67,11 @@ class TrafficLightDetector:
         self.execute_aspect_min = float(rospy.get_param("~execute_aspect_min", 0.65))
         self.execute_aspect_max = float(rospy.get_param("~execute_aspect_max", 1.55))
         self.arrow_direction_bias_min = float(rospy.get_param("~arrow_direction_bias_min", 0.08))
+        self.reflection_y_penalty_start = float(rospy.get_param("~reflection_y_penalty_start", 0.62))
 
         self.publish_debug = self.get_bool_param("~publish_debug", True)
+        self.show_search_roi = self.get_bool_param("~show_search_roi", True)
+        self.show_candidate_boxes = self.get_bool_param("~show_candidate_boxes", True)
         self.bridge = CvBridge()
 
         self.state_pub = rospy.Publisher(self.state_topic, String, queue_size=1)
@@ -144,10 +147,11 @@ class TrafficLightDetector:
         x1, y1, x2, y2 = self.search_rect(width, height)
         search_roi = frame[y1:y2, x1:x2]
 
-        # 先在大范围 ROI 内做粗分割，缩小后续查找区域，减少反光和背景噪声。
+        # Core: coarse segmentation in the search ROI first, then classify only compact candidates.
         candidate_mask = self.build_candidate_mask(search_roi)
         contours = self.find_contours(candidate_mask)
-        cv2.rectangle(debug, (x1, y1), (x2 - 1, y2 - 1), (255, 255, 0), 2)
+        if self.show_search_roi:
+            self.draw_corner_rect(debug, (x1, y1, x2 - x1, y2 - y1), (255, 255, 0), 2)
 
         best = None
         for contour in contours:
@@ -168,7 +172,9 @@ class TrafficLightDetector:
             if result is None:
                 continue
 
-            cv2.rectangle(debug, (x1 + rx, y1 + ry), (x1 + rx + rw, y1 + ry + rh), (180, 180, 180), 1)
+            self.apply_vertical_score_penalty(result, search_roi.shape[0], y1)
+            if self.show_candidate_boxes:
+                self.draw_corner_rect(debug, (x1 + rx, y1 + ry, rw, rh), (160, 160, 160), 1)
             if best is None or result["score"] > best["score"]:
                 best = result
 
@@ -183,13 +189,13 @@ class TrafficLightDetector:
         if roi.size == 0:
             return None
 
-        # 候选 ROI 转 HSV 后分别提取红色和绿色，红色跨 HSV 色环两端。
+        # Core: convert candidate ROI to HSV and split red/green masks.
         hsv = cv2.cvtColor(cv2.GaussianBlur(roi, (5, 5), 0), cv2.COLOR_BGR2HSV)
         red_mask, green_mask, bright_mask = self.color_masks(hsv)
         red_mask = self.clean_mask(red_mask)
         green_mask = self.clean_mask(green_mask)
 
-        # 过曝光灯芯会变白，白色高亮只用来补候选范围，最终颜色仍看周边色晕。
+        # Core: overexposed white cores only expand nearby colored candidates; color still comes from halo.
         color_halo = cv2.dilate(cv2.bitwise_or(red_mask, green_mask), self.halo_kernel(), iterations=1)
         bright_near_color = cv2.bitwise_and(bright_mask, color_halo)
         red_mask = cv2.bitwise_or(red_mask, cv2.bitwise_and(bright_near_color, cv2.dilate(red_mask, self.halo_kernel())))
@@ -218,6 +224,7 @@ class TrafficLightDetector:
                 "state": state,
                 "color": color_name,
                 "score": metrics["area"],
+                "raw_score": metrics["area"],
                 "rect": (
                     offset_x + metrics["x"],
                     offset_y + metrics["y"],
@@ -231,14 +238,7 @@ class TrafficLightDetector:
         return best
 
     def classify_green_shape(self, contour, metrics):
-        circular = (
-            metrics["circularity"] >= self.execute_circularity_min
-            and self.execute_aspect_min <= metrics["aspect"] <= self.execute_aspect_max
-        )
-        if circular:
-            return "execute"
-
-        # 箭头方向用轮廓左右延展和质心偏移综合判断，适合发光箭头的轮廓。
+        # Core: infer arrow direction from horizontal contour extension and centroid offset.
         moments = cv2.moments(contour)
         if abs(moments["m00"]) < 1e-6:
             return "execute"
@@ -256,6 +256,13 @@ class TrafficLightDetector:
             return "right"
         if direction_bias <= -self.arrow_direction_bias_min:
             return "left"
+
+        circular = (
+            metrics["circularity"] >= self.execute_circularity_min
+            and self.execute_aspect_min <= metrics["aspect"] <= self.execute_aspect_max
+        )
+        if circular:
+            return "execute"
         return "execute"
 
     def build_candidate_mask(self, bgr_roi):
@@ -321,6 +328,15 @@ class TrafficLightDetector:
             and self.min_aspect_ratio <= metrics["aspect"] <= self.max_aspect_ratio
         )
 
+    def apply_vertical_score_penalty(self, result, search_height, search_y):
+        x, y, w, h = result["rect"]
+        center_y_in_search = (y + h * 0.5 - search_y) / max(float(search_height), 1.0)
+        if center_y_in_search <= self.reflection_y_penalty_start:
+            return
+        penalty = max(0.25, 1.0 - (center_y_in_search - self.reflection_y_penalty_start) * 1.5)
+        result["score"] *= penalty
+        result["metrics"]["y_weight"] = penalty
+
     def draw_detection(self, debug, result):
         x, y, w, h = result["rect"]
         color = {
@@ -330,14 +346,26 @@ class TrafficLightDetector:
             "right": (0, 255, 0),
         }.get(result["state"], (0, 255, 255))
         metrics = result["metrics"]
-        label = "%s area=%.0f circ=%.2f asp=%.2f" % (
+        label = "%s a=%.0f c=%.2f r=%.2f" % (
             result["state"],
             metrics["area"],
             metrics["circularity"],
             metrics["aspect"],
         )
-        cv2.rectangle(debug, (x, y), (x + w, y + h), color, 2)
+        cv2.rectangle(debug, (x, y), (x + w, y + h), color, 3)
         cv2.putText(debug, label, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+    def draw_corner_rect(self, image, rect, color, thickness):
+        x, y, w, h = rect
+        length = max(10, int(min(w, h) * 0.18))
+        cv2.line(image, (x, y), (x + length, y), color, thickness)
+        cv2.line(image, (x, y), (x, y + length), color, thickness)
+        cv2.line(image, (x + w, y), (x + w - length, y), color, thickness)
+        cv2.line(image, (x + w, y), (x + w, y + length), color, thickness)
+        cv2.line(image, (x, y + h), (x + length, y + h), color, thickness)
+        cv2.line(image, (x, y + h), (x, y + h - length), color, thickness)
+        cv2.line(image, (x + w, y + h), (x + w - length, y + h), color, thickness)
+        cv2.line(image, (x + w, y + h), (x + w, y + h - length), color, thickness)
 
     def search_rect(self, width, height):
         x1 = self.clamp_int(self.roi_x_min * width, 0, width - 1)

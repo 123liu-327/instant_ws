@@ -13,6 +13,8 @@
   <arg name="publish_cooldown" default="2.0" />
   <arg name="repeat_same_state" default="false" />
   <arg name="publish_debug" default="true" />
+  <arg name="show_search_roi" default="true" />
+  <arg name="show_candidate_boxes" default="true" />
 
   <!-- Search ROI. Values are image-relative ratios. -->
   <arg name="roi_x_min" default="0.0" />
@@ -47,6 +49,7 @@
   <arg name="execute_aspect_min" default="0.65" />
   <arg name="execute_aspect_max" default="1.55" />
   <arg name="arrow_direction_bias_min" default="0.08" />
+  <arg name="reflection_y_penalty_start" default="0.62" />
 
   <node pkg="traffic_light_vision"
         type="traffic_light_detector.py"
@@ -64,6 +67,8 @@
     <param name="publish_cooldown" type="double" value="$(arg publish_cooldown)" />
     <param name="repeat_same_state" type="bool" value="$(arg repeat_same_state)" />
     <param name="publish_debug" type="bool" value="$(arg publish_debug)" />
+    <param name="show_search_roi" type="bool" value="$(arg show_search_roi)" />
+    <param name="show_candidate_boxes" type="bool" value="$(arg show_candidate_boxes)" />
     <param name="roi_x_min" type="double" value="$(arg roi_x_min)" />
     <param name="roi_x_max" type="double" value="$(arg roi_x_max)" />
     <param name="roi_y_min" type="double" value="$(arg roi_y_min)" />
@@ -90,5 +95,6 @@
     <param name="execute_aspect_min" type="double" value="$(arg execute_aspect_min)" />
     <param name="execute_aspect_max" type="double" value="$(arg execute_aspect_max)" />
     <param name="arrow_direction_bias_min" type="double" value="$(arg arrow_direction_bias_min)" />
+    <param name="reflection_y_penalty_start" type="double" value="$(arg reflection_y_penalty_start)" />
   </node>
 </launch>
