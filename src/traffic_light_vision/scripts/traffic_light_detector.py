@@ -57,17 +57,24 @@ class TrafficLightDetector:
         self.bright_v_min = int(rospy.get_param("~bright_v_min", 225))
         self.morph_kernel_size = max(1, int(rospy.get_param("~morph_kernel_size", 5)))
         self.candidate_halo_kernel = max(3, int(rospy.get_param("~candidate_halo_kernel", 17)))
+        self.canny_low = int(rospy.get_param("~canny_low", 40))
+        self.canny_high = int(rospy.get_param("~canny_high", 120))
 
         self.min_area = float(rospy.get_param("~min_area", 80.0))
         self.max_area_ratio = float(rospy.get_param("~max_area_ratio", 0.20))
-        self.min_circularity = float(rospy.get_param("~min_circularity", 0.12))
+        self.min_circularity = float(rospy.get_param("~min_circularity", 0.08))
         self.min_aspect_ratio = float(rospy.get_param("~min_aspect_ratio", 0.20))
         self.max_aspect_ratio = float(rospy.get_param("~max_aspect_ratio", 5.0))
-        self.execute_circularity_min = float(rospy.get_param("~execute_circularity_min", 0.58))
-        self.execute_aspect_min = float(rospy.get_param("~execute_aspect_min", 0.65))
-        self.execute_aspect_max = float(rospy.get_param("~execute_aspect_max", 1.55))
-        self.arrow_direction_bias_min = float(rospy.get_param("~arrow_direction_bias_min", 0.08))
+        self.min_fill_ratio = float(rospy.get_param("~min_fill_ratio", 0.08))
+        self.max_fill_ratio = float(rospy.get_param("~max_fill_ratio", 0.95))
+        self.min_color_ratio = float(rospy.get_param("~min_color_ratio", 0.12))
         self.reflection_y_penalty_start = float(rospy.get_param("~reflection_y_penalty_start", 0.62))
+
+        self.poly_epsilon_ratio = float(rospy.get_param("~poly_epsilon_ratio", 0.035))
+        self.arrow_tip_min_distance_ratio = float(rospy.get_param("~arrow_tip_min_distance_ratio", 0.28))
+        self.arrow_horizontal_min_cos = float(rospy.get_param("~arrow_horizontal_min_cos", 0.45))
+        self.arrow_vertical_min_cos = float(rospy.get_param("~arrow_vertical_min_cos", 0.50))
+        self.arrow_fallback_bias_min = float(rospy.get_param("~arrow_fallback_bias_min", 0.08))
 
         self.publish_debug = self.get_bool_param("~publish_debug", True)
         self.show_search_roi = self.get_bool_param("~show_search_roi", True)
@@ -146,37 +153,25 @@ class TrafficLightDetector:
         height, width = frame.shape[:2]
         x1, y1, x2, y2 = self.search_rect(width, height)
         search_roi = frame[y1:y2, x1:x2]
+        roi_area = float(search_roi.shape[0] * search_roi.shape[1])
 
-        # Core: coarse segmentation in the search ROI first, then classify only compact candidates.
-        candidate_mask = self.build_candidate_mask(search_roi)
-        contours = self.find_contours(candidate_mask)
         if self.show_search_roi:
             self.draw_corner_rect(debug, (x1, y1, x2 - x1, y2 - y1), (255, 255, 0), 2)
 
+        # 核心流程：HSV 先锁定红/绿灯体，再用 Canny 边缘补外形轮廓。
+        hsv = cv2.cvtColor(cv2.GaussianBlur(search_roi, (5, 5), 0), cv2.COLOR_BGR2HSV)
+        red_mask, green_mask, bright_mask = self.color_masks(hsv)
+        candidates = []
+        candidates.extend(self.collect_color_candidates(search_roi, red_mask, bright_mask, "red", x1, y1, roi_area))
+        candidates.extend(self.collect_color_candidates(search_roi, green_mask, bright_mask, "green", x1, y1, roi_area))
+
         best = None
-        for contour in contours:
-            contour_area = cv2.contourArea(contour)
-            max_area = self.max_area_ratio * search_roi.shape[0] * search_roi.shape[1]
-            if contour_area < self.min_area or contour_area > max_area:
-                continue
-
-            rx, ry, rw, rh = cv2.boundingRect(contour)
-            pad = max(8, int(max(rw, rh) * 0.45))
-            cx1 = max(0, rx - pad)
-            cy1 = max(0, ry - pad)
-            cx2 = min(search_roi.shape[1], rx + rw + pad)
-            cy2 = min(search_roi.shape[0], ry + rh + pad)
-            candidate_roi = search_roi[cy1:cy2, cx1:cx2]
-
-            result = self.classify_candidate(candidate_roi, x1 + cx1, y1 + cy1)
-            if result is None:
-                continue
-
-            self.apply_vertical_score_penalty(result, search_roi.shape[0], y1)
+        for candidate in candidates:
             if self.show_candidate_boxes:
-                self.draw_corner_rect(debug, (x1 + rx, y1 + ry, rw, rh), (160, 160, 160), 1)
-            if best is None or result["score"] > best["score"]:
-                best = result
+                x, y, w, h = candidate["rect"]
+                self.draw_corner_rect(debug, (x, y, w, h), (160, 160, 160), 1)
+            if best is None or candidate["score"] > best["score"]:
+                best = candidate
 
         if best is None:
             cv2.putText(debug, "traffic: unknown", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
@@ -185,63 +180,80 @@ class TrafficLightDetector:
         self.draw_detection(debug, best)
         return best["state"], debug
 
-    def classify_candidate(self, roi, offset_x, offset_y):
-        if roi.size == 0:
-            return None
+    def collect_color_candidates(self, bgr_roi, raw_color_mask, bright_mask, color_name, offset_x, offset_y, roi_area):
+        color_mask = self.clean_mask(raw_color_mask)
+        halo = cv2.dilate(color_mask, self.halo_kernel(), iterations=1)
+        bright_near_color = cv2.bitwise_and(bright_mask, halo)
+        color_mask = self.clean_mask(cv2.bitwise_or(color_mask, bright_near_color))
 
-        # Core: convert candidate ROI to HSV and split red/green masks.
-        hsv = cv2.cvtColor(cv2.GaussianBlur(roi, (5, 5), 0), cv2.COLOR_BGR2HSV)
-        red_mask, green_mask, bright_mask = self.color_masks(hsv)
-        red_mask = self.clean_mask(red_mask)
-        green_mask = self.clean_mask(green_mask)
+        gray = cv2.cvtColor(bgr_roi, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, self.canny_low, self.canny_high)
+        edge_near_color = cv2.bitwise_and(edges, cv2.dilate(color_mask, self.halo_kernel(), iterations=1))
+        fused_mask = self.clean_mask(cv2.bitwise_or(color_mask, edge_near_color))
 
-        # Core: overexposed white cores only expand nearby colored candidates; color still comes from halo.
-        color_halo = cv2.dilate(cv2.bitwise_or(red_mask, green_mask), self.halo_kernel(), iterations=1)
-        bright_near_color = cv2.bitwise_and(bright_mask, color_halo)
-        red_mask = cv2.bitwise_or(red_mask, cv2.bitwise_and(bright_near_color, cv2.dilate(red_mask, self.halo_kernel())))
-        green_mask = cv2.bitwise_or(green_mask, cv2.bitwise_and(bright_near_color, cv2.dilate(green_mask, self.halo_kernel())))
-
-        red_result = self.best_color_result(red_mask, "red", offset_x, offset_y)
-        green_result = self.best_color_result(green_mask, "green", offset_x, offset_y)
-
-        if red_result is not None and green_result is not None:
-            return red_result if red_result["score"] >= green_result["score"] else green_result
-        return red_result or green_result
-
-    def best_color_result(self, mask, color_name, offset_x, offset_y):
-        best = None
-        for contour in self.find_contours(mask):
-            metrics = self.contour_metrics(contour, mask.shape)
+        candidates = []
+        max_area = self.max_area_ratio * roi_area
+        contours = self.find_contours(fused_mask)
+        for contour in contours:
+            metrics = self.contour_metrics(contour, fused_mask.shape, color_mask, edge_near_color, max_area)
             if not self.accept_metrics(metrics):
                 continue
 
-            if color_name == "red":
-                state = "red"
-            else:
-                state = self.classify_green_shape(contour, metrics)
-
-            result = {
+            state = "red" if color_name == "red" else self.classify_arrow(contour, metrics)
+            score = self.score_candidate(metrics, state)
+            x, y, w, h = metrics["x"], metrics["y"], metrics["w"], metrics["h"]
+            candidates.append({
                 "state": state,
                 "color": color_name,
-                "score": metrics["area"],
-                "raw_score": metrics["area"],
-                "rect": (
-                    offset_x + metrics["x"],
-                    offset_y + metrics["y"],
-                    metrics["w"],
-                    metrics["h"],
-                ),
+                "score": score,
+                "rect": (offset_x + x, offset_y + y, w, h),
                 "metrics": metrics,
-            }
-            if best is None or result["score"] > best["score"]:
-                best = result
-        return best
+            })
+        return candidates
 
-    def classify_green_shape(self, contour, metrics):
-        # Core: infer arrow direction from horizontal contour extension and centroid offset.
+    def classify_arrow(self, contour, metrics):
+        direction = self.arrow_direction_from_tip(contour, metrics)
+        if direction is None:
+            direction = self.arrow_direction_fallback(contour, metrics)
+        return direction or "execute"
+
+    def arrow_direction_from_tip(self, contour, metrics):
+        moments = cv2.moments(contour)
+        if abs(moments["m00"]) < 1e-6 or metrics["perimeter"] <= 1e-6:
+            return None
+
+        centroid = np.array([moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]], dtype=np.float32)
+        epsilon = self.poly_epsilon_ratio * metrics["perimeter"]
+        approx = cv2.approxPolyDP(contour, epsilon, True)
+        hull = cv2.convexHull(approx if len(approx) >= 3 else contour)
+        points = hull.reshape(-1, 2).astype(np.float32)
+        if len(points) == 0:
+            return None
+
+        vectors = points - centroid
+        distances = np.linalg.norm(vectors, axis=1)
+        tip_index = int(np.argmax(distances))
+        tip_distance = float(distances[tip_index])
+        min_tip_distance = self.arrow_tip_min_distance_ratio * max(float(metrics["w"]), float(metrics["h"]), 1.0)
+        if tip_distance < min_tip_distance:
+            return None
+
+        vx, vy = vectors[tip_index] / max(tip_distance, 1e-6)
+        metrics["direction_angle"] = math.degrees(math.atan2(-vy, vx))
+        metrics["tip_distance"] = tip_distance
+
+        if vx <= -self.arrow_horizontal_min_cos:
+            return "left"
+        if vx >= self.arrow_horizontal_min_cos:
+            return "right"
+        if vy <= -self.arrow_vertical_min_cos:
+            return "execute"
+        return None
+
+    def arrow_direction_fallback(self, contour, metrics):
         moments = cv2.moments(contour)
         if abs(moments["m00"]) < 1e-6:
-            return "execute"
+            return None
 
         centroid_x = moments["m10"] / moments["m00"]
         bbox_center_x = metrics["x"] + metrics["w"] * 0.5
@@ -251,28 +263,30 @@ class TrafficLightDetector:
         extent_bias = (right_extent - left_extent) / max(float(metrics["w"]), 1.0)
         mass_bias = (bbox_center_x - centroid_x) / max(float(metrics["w"]), 1.0)
         direction_bias = 0.6 * extent_bias + 0.4 * mass_bias
+        metrics["direction_bias"] = direction_bias
 
-        if direction_bias >= self.arrow_direction_bias_min:
+        if direction_bias >= self.arrow_fallback_bias_min:
             return "right"
-        if direction_bias <= -self.arrow_direction_bias_min:
+        if direction_bias <= -self.arrow_fallback_bias_min:
             return "left"
 
-        circular = (
-            metrics["circularity"] >= self.execute_circularity_min
-            and self.execute_aspect_min <= metrics["aspect"] <= self.execute_aspect_max
-        )
-        if circular:
-            return "execute"
+        rect = cv2.minAreaRect(contour)
+        rw, rh = rect[1]
+        if rw > 1e-6 and rh > 1e-6 and max(rw, rh) / min(rw, rh) >= 1.35:
+            angle = rect[2]
+            metrics["direction_angle"] = angle
         return "execute"
 
-    def build_candidate_mask(self, bgr_roi):
-        hsv = cv2.cvtColor(cv2.GaussianBlur(bgr_roi, (5, 5), 0), cv2.COLOR_BGR2HSV)
-        red_mask, green_mask, bright_mask = self.color_masks(hsv)
-        color_mask = self.clean_mask(cv2.bitwise_or(red_mask, green_mask))
-        color_halo = cv2.dilate(color_mask, self.halo_kernel(), iterations=1)
-        bright_near_color = cv2.bitwise_and(bright_mask, color_halo)
-        candidate_mask = cv2.bitwise_or(color_mask, bright_near_color)
-        return self.clean_mask(candidate_mask)
+    def score_candidate(self, metrics, state):
+        area_norm = min(1.0, metrics["area"] / max(self.min_area * 6.0, 1.0))
+        color_term = min(1.0, metrics["color_ratio"] * 2.0)
+        edge_term = min(1.0, metrics["edge_ratio"] * 4.0)
+        fill_term = 1.0 - min(1.0, abs(metrics["fill_ratio"] - 0.42) / 0.42)
+        shape_term = min(1.0, metrics["circularity"] * 1.6)
+        y_weight = metrics.get("y_weight", 1.0)
+        arrow_bonus = 0.12 if state in ("left", "right", "execute") and metrics.get("tip_distance", 0.0) > 0 else 0.0
+        red_bonus = 0.10 if state == "red" else 0.0
+        return y_weight * (0.34 * area_norm + 0.28 * color_term + 0.14 * edge_term + 0.14 * fill_term + 0.10 * shape_term + arrow_bonus + red_bonus)
 
     def color_masks(self, hsv):
         red_mask1 = cv2.inRange(
@@ -301,23 +315,36 @@ class TrafficLightDetector:
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
         return mask
 
-    def contour_metrics(self, contour, mask_shape):
+    def contour_metrics(self, contour, mask_shape, color_mask, edge_mask, max_area):
         area = float(cv2.contourArea(contour))
         perimeter = float(cv2.arcLength(contour, True))
         x, y, w, h = cv2.boundingRect(contour)
+        bbox_area = max(float(w * h), 1.0)
+        contour_mask = np.zeros(mask_shape, dtype=np.uint8)
+        cv2.drawContours(contour_mask, [contour], -1, 255, -1)
+        color_pixels = float(cv2.countNonZero(cv2.bitwise_and(color_mask, contour_mask)))
+        edge_pixels = float(cv2.countNonZero(cv2.bitwise_and(edge_mask, contour_mask)))
         circularity = 0.0 if perimeter <= 1e-6 else 4.0 * math.pi * area / (perimeter * perimeter)
         aspect = float(w) / max(float(h), 1.0)
-        max_area = self.max_area_ratio * float(mask_shape[0] * mask_shape[1])
+        center_y_ratio = (float(y) + 0.5 * float(h)) / max(float(mask_shape[0]), 1.0)
+        y_weight = 1.0
+        if center_y_ratio > self.reflection_y_penalty_start:
+            y_weight = max(0.25, 1.0 - (center_y_ratio - self.reflection_y_penalty_start) * 1.5)
         return {
             "area": area,
             "perimeter": perimeter,
             "circularity": circularity,
             "aspect": aspect,
+            "fill_ratio": area / bbox_area,
+            "color_ratio": color_pixels / bbox_area,
+            "edge_ratio": edge_pixels / max(perimeter, 1.0),
             "x": x,
             "y": y,
             "w": w,
             "h": h,
             "max_area": max_area,
+            "y_weight": y_weight,
+            "direction_angle": 0.0,
         }
 
     def accept_metrics(self, metrics):
@@ -326,16 +353,9 @@ class TrafficLightDetector:
             and metrics["area"] <= metrics["max_area"]
             and metrics["circularity"] >= self.min_circularity
             and self.min_aspect_ratio <= metrics["aspect"] <= self.max_aspect_ratio
+            and self.min_fill_ratio <= metrics["fill_ratio"] <= self.max_fill_ratio
+            and metrics["color_ratio"] >= self.min_color_ratio
         )
-
-    def apply_vertical_score_penalty(self, result, search_height, search_y):
-        x, y, w, h = result["rect"]
-        center_y_in_search = (y + h * 0.5 - search_y) / max(float(search_height), 1.0)
-        if center_y_in_search <= self.reflection_y_penalty_start:
-            return
-        penalty = max(0.25, 1.0 - (center_y_in_search - self.reflection_y_penalty_start) * 1.5)
-        result["score"] *= penalty
-        result["metrics"]["y_weight"] = penalty
 
     def draw_detection(self, debug, result):
         x, y, w, h = result["rect"]
@@ -346,14 +366,16 @@ class TrafficLightDetector:
             "right": (0, 255, 0),
         }.get(result["state"], (0, 255, 255))
         metrics = result["metrics"]
-        label = "%s a=%.0f c=%.2f r=%.2f" % (
+        label = "%s s=%.2f a=%.0f ar=%.2f c=%.2f ang=%.0f" % (
             result["state"],
+            result["score"],
             metrics["area"],
-            metrics["circularity"],
             metrics["aspect"],
+            metrics["circularity"],
+            metrics.get("direction_angle", 0.0),
         )
         cv2.rectangle(debug, (x, y), (x + w, y + h), color, 3)
-        cv2.putText(debug, label, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+        cv2.putText(debug, label, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, color, 2)
 
     def draw_corner_rect(self, image, rect, color, thickness):
         x, y, w, h = rect

@@ -38,18 +38,26 @@
   <arg name="bright_v_min" default="225" />
   <arg name="morph_kernel_size" default="5" />
   <arg name="candidate_halo_kernel" default="17" />
+  <arg name="canny_low" default="40" />
+  <arg name="canny_high" default="120" />
 
   <!-- Contour filters. -->
   <arg name="min_area" default="80" />
   <arg name="max_area_ratio" default="0.20" />
-  <arg name="min_circularity" default="0.12" />
+  <arg name="min_circularity" default="0.08" />
   <arg name="min_aspect_ratio" default="0.20" />
   <arg name="max_aspect_ratio" default="5.0" />
-  <arg name="execute_circularity_min" default="0.58" />
-  <arg name="execute_aspect_min" default="0.65" />
-  <arg name="execute_aspect_max" default="1.55" />
-  <arg name="arrow_direction_bias_min" default="0.08" />
+  <arg name="min_fill_ratio" default="0.08" />
+  <arg name="max_fill_ratio" default="0.95" />
+  <arg name="min_color_ratio" default="0.12" />
   <arg name="reflection_y_penalty_start" default="0.62" />
+
+  <!-- Arrow direction from approxPolyDP + convexHull tip vector. -->
+  <arg name="poly_epsilon_ratio" default="0.035" />
+  <arg name="arrow_tip_min_distance_ratio" default="0.28" />
+  <arg name="arrow_horizontal_min_cos" default="0.45" />
+  <arg name="arrow_vertical_min_cos" default="0.50" />
+  <arg name="arrow_fallback_bias_min" default="0.08" />
 
   <node pkg="traffic_light_vision"
         type="traffic_light_detector.py"
@@ -86,15 +94,21 @@
     <param name="bright_v_min" type="int" value="$(arg bright_v_min)" />
     <param name="morph_kernel_size" type="int" value="$(arg morph_kernel_size)" />
     <param name="candidate_halo_kernel" type="int" value="$(arg candidate_halo_kernel)" />
+    <param name="canny_low" type="int" value="$(arg canny_low)" />
+    <param name="canny_high" type="int" value="$(arg canny_high)" />
     <param name="min_area" type="double" value="$(arg min_area)" />
     <param name="max_area_ratio" type="double" value="$(arg max_area_ratio)" />
     <param name="min_circularity" type="double" value="$(arg min_circularity)" />
     <param name="min_aspect_ratio" type="double" value="$(arg min_aspect_ratio)" />
     <param name="max_aspect_ratio" type="double" value="$(arg max_aspect_ratio)" />
-    <param name="execute_circularity_min" type="double" value="$(arg execute_circularity_min)" />
-    <param name="execute_aspect_min" type="double" value="$(arg execute_aspect_min)" />
-    <param name="execute_aspect_max" type="double" value="$(arg execute_aspect_max)" />
-    <param name="arrow_direction_bias_min" type="double" value="$(arg arrow_direction_bias_min)" />
+    <param name="min_fill_ratio" type="double" value="$(arg min_fill_ratio)" />
+    <param name="max_fill_ratio" type="double" value="$(arg max_fill_ratio)" />
+    <param name="min_color_ratio" type="double" value="$(arg min_color_ratio)" />
     <param name="reflection_y_penalty_start" type="double" value="$(arg reflection_y_penalty_start)" />
+    <param name="poly_epsilon_ratio" type="double" value="$(arg poly_epsilon_ratio)" />
+    <param name="arrow_tip_min_distance_ratio" type="double" value="$(arg arrow_tip_min_distance_ratio)" />
+    <param name="arrow_horizontal_min_cos" type="double" value="$(arg arrow_horizontal_min_cos)" />
+    <param name="arrow_vertical_min_cos" type="double" value="$(arg arrow_vertical_min_cos)" />
+    <param name="arrow_fallback_bias_min" type="double" value="$(arg arrow_fallback_bias_min)" />
   </node>
 </launch>
