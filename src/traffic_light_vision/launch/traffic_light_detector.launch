@@ -40,9 +40,11 @@
   <arg name="candidate_halo_kernel" default="17" />
   <arg name="canny_low" default="40" />
   <arg name="canny_high" default="120" />
+  <arg name="core_erode_kernel_size" default="3" />
+  <arg name="refine_contour_with_edges" default="false" />
 
   <!-- Contour filters. -->
-  <arg name="min_area" default="80" />
+  <arg name="min_area" default="200" />
   <arg name="max_area_ratio" default="0.20" />
   <arg name="min_circularity" default="0.08" />
   <arg name="min_aspect_ratio" default="0.20" />
@@ -96,6 +98,8 @@
     <param name="candidate_halo_kernel" type="int" value="$(arg candidate_halo_kernel)" />
     <param name="canny_low" type="int" value="$(arg canny_low)" />
     <param name="canny_high" type="int" value="$(arg canny_high)" />
+    <param name="core_erode_kernel_size" type="int" value="$(arg core_erode_kernel_size)" />
+    <param name="refine_contour_with_edges" type="bool" value="$(arg refine_contour_with_edges)" />
     <param name="min_area" type="double" value="$(arg min_area)" />
     <param name="max_area_ratio" type="double" value="$(arg max_area_ratio)" />
     <param name="min_circularity" type="double" value="$(arg min_circularity)" />

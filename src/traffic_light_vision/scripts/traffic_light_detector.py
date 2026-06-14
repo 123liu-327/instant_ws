@@ -59,6 +59,8 @@ class TrafficLightDetector:
         self.candidate_halo_kernel = max(3, int(rospy.get_param("~candidate_halo_kernel", 17)))
         self.canny_low = int(rospy.get_param("~canny_low", 40))
         self.canny_high = int(rospy.get_param("~canny_high", 120))
+        self.core_erode_kernel_size = max(1, int(rospy.get_param("~core_erode_kernel_size", 3)))
+        self.refine_contour_with_edges = self.get_bool_param("~refine_contour_with_edges", False)
 
         self.min_area = float(rospy.get_param("~min_area", 80.0))
         self.max_area_ratio = float(rospy.get_param("~max_area_ratio", 0.20))
@@ -158,7 +160,7 @@ class TrafficLightDetector:
         if self.show_search_roi:
             self.draw_corner_rect(debug, (x1, y1, x2 - x1, y2 - y1), (255, 255, 0), 2)
 
-        # 核心流程：HSV 先锁定红/绿灯体，再用 Canny 边缘补外形轮廓。
+        # HSV locks lamp color first. Canny is used for scoring/direction, not for box size.
         hsv = cv2.cvtColor(cv2.GaussianBlur(search_roi, (5, 5), 0), cv2.COLOR_BGR2HSV)
         red_mask, green_mask, bright_mask = self.color_masks(hsv)
         candidates = []
@@ -182,20 +184,30 @@ class TrafficLightDetector:
 
     def collect_color_candidates(self, bgr_roi, raw_color_mask, bright_mask, color_name, offset_x, offset_y, roi_area):
         color_mask = self.clean_mask(raw_color_mask)
-        halo = cv2.dilate(color_mask, self.halo_kernel(), iterations=1)
+
+        # Build contour boxes from a tight color core. This prevents floor reflections from
+        # merging with the lamp into one large connected component.
+        contour_mask = cv2.erode(color_mask, self.core_kernel(), iterations=1)
+        contour_mask = self.clean_mask(contour_mask)
+
+        halo = cv2.dilate(contour_mask, self.halo_kernel(), iterations=1)
         bright_near_color = cv2.bitwise_and(bright_mask, halo)
-        color_mask = self.clean_mask(cv2.bitwise_or(color_mask, bright_near_color))
+        score_mask = self.clean_mask(cv2.bitwise_or(color_mask, bright_near_color))
 
         gray = cv2.cvtColor(bgr_roi, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, self.canny_low, self.canny_high)
-        edge_near_color = cv2.bitwise_and(edges, cv2.dilate(color_mask, self.halo_kernel(), iterations=1))
-        fused_mask = self.clean_mask(cv2.bitwise_or(color_mask, edge_near_color))
+        edge_near_color = cv2.bitwise_and(edges, cv2.dilate(contour_mask, self.halo_kernel(), iterations=1))
+
+        contour_source = contour_mask
+        if self.refine_contour_with_edges:
+            edge_inside_core = cv2.bitwise_and(edge_near_color, cv2.dilate(contour_mask, self.core_kernel(), iterations=1))
+            contour_source = self.clean_mask(cv2.bitwise_or(contour_mask, edge_inside_core))
 
         candidates = []
         max_area = self.max_area_ratio * roi_area
-        contours = self.find_contours(fused_mask)
+        contours = self.find_contours(contour_source)
         for contour in contours:
-            metrics = self.contour_metrics(contour, fused_mask.shape, color_mask, edge_near_color, max_area)
+            metrics = self.contour_metrics(contour, contour_source.shape, score_mask, edge_near_color, max_area)
             if not self.accept_metrics(metrics):
                 continue
 
@@ -273,8 +285,7 @@ class TrafficLightDetector:
         rect = cv2.minAreaRect(contour)
         rw, rh = rect[1]
         if rw > 1e-6 and rh > 1e-6 and max(rw, rh) / min(rw, rh) >= 1.35:
-            angle = rect[2]
-            metrics["direction_angle"] = angle
+            metrics["direction_angle"] = rect[2]
         return "execute"
 
     def score_candidate(self, metrics, state):
@@ -404,6 +415,12 @@ class TrafficLightDetector:
 
     def halo_kernel(self):
         size = self.candidate_halo_kernel
+        if size % 2 == 0:
+            size += 1
+        return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+
+    def core_kernel(self):
+        size = self.core_erode_kernel_size
         if size % 2 == 0:
             size += 1
         return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
