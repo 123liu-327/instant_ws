@@ -36,6 +36,9 @@ using namespace std;
 static volatile bool g_running = true;
 static IAIUIAgent* g_agent = nullptr;
 
+// 当前是否正在播放TTS
+static bool g_tts_playing = false;
+
 // ─── 信号处理 ───
 void sig_handler(int sig) {
     cout << "\n>>>>> 收到退出信号，正在停止..." << endl;

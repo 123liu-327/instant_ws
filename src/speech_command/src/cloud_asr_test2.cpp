@@ -20,6 +20,19 @@ using namespace aiui;
 static volatile bool g_running = true;
 static IAIUIAgent* g_agent = nullptr;
 
+static bool g_asr_enable = true;
+
+// 是否进入等待关闭状态
+static bool g_need_destroy = false;
+
+static std::string g_final_text;
+
+// 是否已经发布过任务（防止重复publish）
+static bool g_task_sent = false;
+
+// 最近一次收到EVENT_RESULT的时间
+static ros::Time g_last_result_time;
+
 // 全局发布者
 ros::Publisher pub_voice_raw_text;
 ros::Publisher pub_task_state;
@@ -32,28 +45,32 @@ const string XF_API_SECRET = "btlLJzACqGeZKYFoYQeF";
 void sig_handler(int sig) { g_running = false; }
 
 void speakText(const string& text) {
+    cout << "speakText初始化" << endl;
     if (text.empty()) return;
     string pkg_path = ros::package::getPath("speech_command");
     string py_path = pkg_path + "/xf_tts_stable.py";
     string pcm_path = pkg_path + "/tmp/tts_result.pcm";
+    remove(pcm_path.c_str());
     string cmd = "python3 " + py_path + " \"" + XF_APPID + "\" \"" + XF_API_KEY + "\" \"" + XF_API_SECRET + "\" \"" + text + "\"";
     system(cmd.c_str());
-    string play_cmd = "aplay -D default -r 16000 -f S16_LE -c 1 " + pcm_path + " > /dev/null 2>&1 &";
+    string play_cmd ="aplay -D default -r 16000 -f S16_LE -c 1 "+ pcm_path;
+    
     system(play_cmd.c_str());
 }
 
-void ttsCallback(
-    const std_msgs::String::ConstPtr& msg)
+void ttsCallback(const std_msgs::String::ConstPtr& msg)
 {
     if(msg->data.empty())
         return;
 
-    cout
-        << "🔊 收到TTS文本: "
-        << msg->data
-        << endl;
+    cout << endl;
+    cout << "==============================" << endl;
+    cout << "🔊 收到TTS：" << msg->data << endl;
+    cout << "==============================" << endl;
 
     speakText(msg->data);
+
+    cout << "🔈 播放完成" << endl;
 }
 
 class CloudTestListener : public IAIUIListener {
@@ -75,18 +92,36 @@ public:
                 Json::Value resultJson;
                 Json::Reader resultReader;
                 if (resultReader.parse(string(buffer, dataLen), resultJson)) {
+                    cout << resultJson.toStyledString() << endl;
                     string text = "";
                     Json::Value wsNode = resultJson.isMember("text") ? resultJson["text"]["ws"] : resultJson["ws"];
                     for (int i = 0; i < wsNode.size(); i++) text += wsNode[i]["cw"][0]["w"].asString();
                     
-                    if (!text.empty()) {
-                        cout << "🎯 [识别到指令] ➔ " << text << endl;
-                        std_msgs::String msg; msg.data = text;
-                        pub_voice_raw_text.publish(msg);
-                        std_msgs::Int32 state_msg; state_msg.data = 1; 
-                        //pub_task_state.publish(state_msg);
-                        //speakText("指令收到，小车前往分拣区");
+                    if (!text.empty())
+                    {
+                        // 每收到一次识别结果，都更新时间
+                        g_last_result_time = ros::Time::now();
+
+                        // 第一次收到结果
+                        if(!g_task_sent)
+                        {
+                            // 更新时间
+                            g_last_result_time = ros::Time::now();
+
+                            // 始终保存最新识别结果
+                            g_final_text = text;
+
+                            cout << "📝 更新识别结果：" << g_final_text << endl;
+
+                            // 进入等待关闭
+                            g_need_destroy = true;
+                        }
+
+                        // 进入等待关闭状态
+                        g_need_destroy = true;
                     }
+
+                    
                 }
             }
         }
@@ -104,6 +139,8 @@ public:
 int main(int argc, char** argv) {
     ros::init(argc, argv, "cloud_asr_test");
     ros::NodeHandle nh;
+    g_last_result_time = ros::Time::now();
+    g_task_sent = false;
     signal(SIGINT, sig_handler);
 
     pub_voice_raw_text = nh.advertise<std_msgs::String>("/factory/voice_raw_text", 10);
@@ -184,6 +221,83 @@ cout<<"🚀 已发送CMD_WAKEUP"<<endl;
     //cout << "✅ 核心逻辑就绪，等待语音触发..." << endl;
 
     while (g_running && ros::ok()) {
+        ros::spinOnce();
+
+    if(g_need_destroy && g_agent)
+    {
+        double idle_time =
+            (ros::Time::now() - g_last_result_time).toSec();
+
+        // 连续1秒没有新的识别结果
+        if(!g_final_text.empty())
+        {
+            cout << endl;
+            cout << "==============================" << endl;
+            cout << "🎯 最终识别结果：" << g_final_text << endl;
+            cout << "==============================" << endl;
+
+            std_msgs::String msg;
+            msg.data = g_final_text;
+            pub_voice_raw_text.publish(msg);
+
+
+            g_final_text.clear();
+        }
+
+        if(idle_time > 2.0)
+        {
+            cout << "🛑 已连续 "
+                << idle_time
+                << " 秒没有新的识别结果，关闭AIUI..."
+                << endl;
+            
+
+            // pub_voice_raw_text.publish(msg);
+
+            g_asr_enable = false;
+
+
+            IAIUIMessage* stopRecord =
+                IAIUIMessage::create(
+                    AIUIConstant::CMD_STOP_RECORD,
+                    0,
+                    0,
+                    "data_type=audio",
+                    nullptr);
+
+            g_agent->sendMessage(stopRecord);
+            stopRecord->destroy();
+
+            IAIUIMessage* stop =
+                IAIUIMessage::create(
+                    AIUIConstant::CMD_STOP,
+                    0,
+                    0,
+                    "",
+                    nullptr);
+
+            g_agent->sendMessage(stop);
+            stop->destroy();
+
+            usleep(300000);
+
+            g_agent->destroy();
+            g_agent = nullptr;
+
+            g_need_destroy = false;
+
+            cout << "✅ AIUI 已彻底关闭（比赛模式）" << endl;
+
+        }
+    }
+
+
+        if(!g_asr_enable)
+        {
+        usleep(10000);
+        continue;
+        }
+
         // 1. 读取真实音频数据
         int err = snd_pcm_readi(capture_handle, audio_buf, buffer_frames);
         if (err < 0) { 
@@ -201,10 +315,13 @@ cout<<"🚀 已发送CMD_WAKEUP"<<endl;
         0,
         "data_type=audio,sample_rate=16000",
         buffer);
-        g_agent->sendMessage(writeMsg); 
+        if(g_agent)
+        {
+            g_agent->sendMessage(writeMsg);
+        }
         writeMsg->destroy();
         
-        ros::spinOnce();
+        
     }
     
 

@@ -1,3 +1,21 @@
 <launch>
-    <node pkg="speech_command" type="speech_command_node" name="speech_command_node" output="screen"/>
+
+    <!-- ========================= -->
+    <!--      语音识别节点(C++)      -->
+    <!-- ========================= -->
+    <node
+        pkg="speech_command"
+        type="cloud_asr_test2"
+        name="cloud_asr_test2"
+        output="screen" />
+
+    <!-- ========================= -->
+    <!--      大模型决策(Python)     -->
+    <!-- ========================= -->
+    <node
+        pkg="speech_command"
+        type="spark_llm_node.py"
+        name="spark_llm_node"
+        output="screen" />
+
 </launch>

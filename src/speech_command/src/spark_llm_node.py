@@ -63,7 +63,7 @@ class SparkDualEnvPlannerNode:
             rospy.loginfo("✅ [唤醒] 系统已激活，等待具体指令...")
             self.raw_voice_text = raw_text
             rospy.loginfo(f"👂 [接收任务] 存入指令: {self.raw_voice_text}")
-            self.pub_tts.publish(String(data="收到任务，正在准备分拣。"))
+            #self.pub_tts.publish(String(data="收到任务，正在准备分拣。"))
             return # 唤醒后直接返回，等待下一次语音输入真正的任务
 
         # 2. 如果未处于唤醒状态，直接无视所有输入
