@@ -1,118 +1,63 @@
 <launch>
+  <!-- Four-state YOLOv5s/RKNN traffic-light detector for RK3588. -->
   <arg name="image_topic" default="/ucar_camera/image_raw" />
+  <arg name="enable_topic" default="/traffic_light/enable" />
   <arg name="state_topic" default="/traffic_light/state" />
   <arg name="command_topic" default="/follow_begin" />
   <arg name="debug_topic" default="/traffic_light/debug_image" />
 
-  <arg name="execute_command" default="Middle" />
-  <arg name="left_command" default="Left" />
-  <arg name="right_command" default="Right" />
-  <arg name="red_command" default="Stop" />
+  <arg name="model_path"
+       default="$(find traffic_light_vision)/models/traffic_light_yolov5s_fp16.rknn" />
+  <arg name="input_size" default="640" />
+  <arg name="confidence_threshold" default="0.55" />
+  <arg name="nms_threshold" default="0.45" />
+  <arg name="apply_sigmoid" default="false" />
+  <arg name="use_all_npu_cores" default="true" />
 
-  <arg name="confirm_frames" default="3" />
-  <arg name="publish_cooldown" default="2.0" />
-  <arg name="repeat_same_state" default="false" />
+  <arg name="vote_window" default="7" />
+  <arg name="direction_min_votes" default="5" />
+  <arg name="direction_min_avg_confidence" default="0.65" />
+  <arg name="red_confirm_frames" default="2" />
+
+  <!-- Production default is gated: arm with /traffic_light/enable=true at the stop line. -->
+  <arg name="enabled_at_start" default="false" />
+  <arg name="publish_commands" default="true" />
   <arg name="publish_debug" default="true" />
-  <arg name="show_search_roi" default="true" />
-  <arg name="show_candidate_boxes" default="true" />
-
-  <!-- Search ROI. Values are image-relative ratios. -->
-  <arg name="roi_x_min" default="0.0" />
-  <arg name="roi_x_max" default="1.0" />
-  <arg name="roi_y_min" default="0.20" />
-  <arg name="roi_y_max" default="1.0" />
-
-  <!-- HSV thresholds. Red spans both ends of the hue ring. -->
-  <arg name="red_h1_min" default="0" />
-  <arg name="red_h1_max" default="12" />
-  <arg name="red_h2_min" default="165" />
-  <arg name="red_h2_max" default="179" />
-  <arg name="red_s_min" default="45" />
-  <arg name="red_v_min" default="70" />
-  <arg name="green_h_min" default="35" />
-  <arg name="green_h_max" default="95" />
-  <arg name="green_s_min" default="35" />
-  <arg name="green_v_min" default="70" />
-
-  <!-- Overexposed tube cores become white; colored halo is still used for classification. -->
-  <arg name="bright_v_min" default="225" />
-  <arg name="morph_kernel_size" default="5" />
-  <arg name="candidate_halo_kernel" default="17" />
-  <arg name="canny_low" default="40" />
-  <arg name="canny_high" default="120" />
-  <arg name="core_erode_kernel_size" default="3" />
-  <arg name="refine_contour_with_edges" default="false" />
-
-  <!-- Contour filters. -->
-  <arg name="min_area" default="200" />
-  <arg name="max_area_ratio" default="0.20" />
-  <arg name="min_circularity" default="0.08" />
-  <arg name="min_aspect_ratio" default="0.20" />
-  <arg name="max_aspect_ratio" default="5.0" />
-  <arg name="min_fill_ratio" default="0.08" />
-  <arg name="max_fill_ratio" default="0.95" />
-  <arg name="min_color_ratio" default="0.12" />
-  <arg name="reflection_y_penalty_start" default="0.62" />
-
-  <!-- Arrow direction from approxPolyDP + convexHull tip vector. -->
-  <arg name="poly_epsilon_ratio" default="0.035" />
-  <arg name="arrow_tip_min_distance_ratio" default="0.28" />
-  <arg name="arrow_horizontal_min_cos" default="0.45" />
-  <arg name="arrow_vertical_min_cos" default="0.50" />
-  <arg name="arrow_fallback_bias_min" default="0.08" />
 
   <node pkg="traffic_light_vision"
         type="traffic_light_detector.py"
         name="traffic_light_detector"
-        output="screen">
+        output="screen"
+        required="true">
     <param name="image_topic" type="string" value="$(arg image_topic)" />
+    <param name="enable_topic" type="string" value="$(arg enable_topic)" />
     <param name="state_topic" type="string" value="$(arg state_topic)" />
     <param name="command_topic" type="string" value="$(arg command_topic)" />
     <param name="debug_topic" type="string" value="$(arg debug_topic)" />
-    <param name="execute_command" type="string" value="$(arg execute_command)" />
-    <param name="left_command" type="string" value="$(arg left_command)" />
-    <param name="right_command" type="string" value="$(arg right_command)" />
-    <param name="red_command" type="string" value="$(arg red_command)" />
-    <param name="confirm_frames" type="int" value="$(arg confirm_frames)" />
-    <param name="publish_cooldown" type="double" value="$(arg publish_cooldown)" />
-    <param name="repeat_same_state" type="bool" value="$(arg repeat_same_state)" />
+
+    <param name="model_path" type="string" value="$(arg model_path)" />
+    <param name="input_size" type="int" value="$(arg input_size)" />
+    <param name="confidence_threshold" type="double" value="$(arg confidence_threshold)" />
+    <param name="nms_threshold" type="double" value="$(arg nms_threshold)" />
+    <param name="apply_sigmoid" type="bool" value="$(arg apply_sigmoid)" />
+    <param name="use_all_npu_cores" type="bool" value="$(arg use_all_npu_cores)" />
+
+    <param name="vote_window" type="int" value="$(arg vote_window)" />
+    <param name="direction_min_votes" type="int" value="$(arg direction_min_votes)" />
+    <param name="direction_min_avg_confidence"
+           type="double"
+           value="$(arg direction_min_avg_confidence)" />
+    <param name="red_confirm_frames" type="int" value="$(arg red_confirm_frames)" />
+    <param name="enabled_at_start" type="bool" value="$(arg enabled_at_start)" />
+    <param name="publish_commands" type="bool" value="$(arg publish_commands)" />
     <param name="publish_debug" type="bool" value="$(arg publish_debug)" />
-    <param name="show_search_roi" type="bool" value="$(arg show_search_roi)" />
-    <param name="show_candidate_boxes" type="bool" value="$(arg show_candidate_boxes)" />
-    <param name="roi_x_min" type="double" value="$(arg roi_x_min)" />
-    <param name="roi_x_max" type="double" value="$(arg roi_x_max)" />
-    <param name="roi_y_min" type="double" value="$(arg roi_y_min)" />
-    <param name="roi_y_max" type="double" value="$(arg roi_y_max)" />
-    <param name="red_h1_min" type="int" value="$(arg red_h1_min)" />
-    <param name="red_h1_max" type="int" value="$(arg red_h1_max)" />
-    <param name="red_h2_min" type="int" value="$(arg red_h2_min)" />
-    <param name="red_h2_max" type="int" value="$(arg red_h2_max)" />
-    <param name="red_s_min" type="int" value="$(arg red_s_min)" />
-    <param name="red_v_min" type="int" value="$(arg red_v_min)" />
-    <param name="green_h_min" type="int" value="$(arg green_h_min)" />
-    <param name="green_h_max" type="int" value="$(arg green_h_max)" />
-    <param name="green_s_min" type="int" value="$(arg green_s_min)" />
-    <param name="green_v_min" type="int" value="$(arg green_v_min)" />
-    <param name="bright_v_min" type="int" value="$(arg bright_v_min)" />
-    <param name="morph_kernel_size" type="int" value="$(arg morph_kernel_size)" />
-    <param name="candidate_halo_kernel" type="int" value="$(arg candidate_halo_kernel)" />
-    <param name="canny_low" type="int" value="$(arg canny_low)" />
-    <param name="canny_high" type="int" value="$(arg canny_high)" />
-    <param name="core_erode_kernel_size" type="int" value="$(arg core_erode_kernel_size)" />
-    <param name="refine_contour_with_edges" type="bool" value="$(arg refine_contour_with_edges)" />
-    <param name="min_area" type="double" value="$(arg min_area)" />
-    <param name="max_area_ratio" type="double" value="$(arg max_area_ratio)" />
-    <param name="min_circularity" type="double" value="$(arg min_circularity)" />
-    <param name="min_aspect_ratio" type="double" value="$(arg min_aspect_ratio)" />
-    <param name="max_aspect_ratio" type="double" value="$(arg max_aspect_ratio)" />
-    <param name="min_fill_ratio" type="double" value="$(arg min_fill_ratio)" />
-    <param name="max_fill_ratio" type="double" value="$(arg max_fill_ratio)" />
-    <param name="min_color_ratio" type="double" value="$(arg min_color_ratio)" />
-    <param name="reflection_y_penalty_start" type="double" value="$(arg reflection_y_penalty_start)" />
-    <param name="poly_epsilon_ratio" type="double" value="$(arg poly_epsilon_ratio)" />
-    <param name="arrow_tip_min_distance_ratio" type="double" value="$(arg arrow_tip_min_distance_ratio)" />
-    <param name="arrow_horizontal_min_cos" type="double" value="$(arg arrow_horizontal_min_cos)" />
-    <param name="arrow_vertical_min_cos" type="double" value="$(arg arrow_vertical_min_cos)" />
-    <param name="arrow_fallback_bias_min" type="double" value="$(arg arrow_fallback_bias_min)" />
+
+    <!-- This order is part of the model contract and must not be changed. -->
+    <rosparam param="class_names">[red, straight, left, right]</rosparam>
+    <rosparam param="anchors">
+      [[10, 13], [16, 30], [33, 23],
+       [30, 61], [62, 45], [59, 119],
+       [116, 90], [156, 198], [373, 326]]
+    </rosparam>
   </node>
 </launch>

@@ -1,0 +1,12 @@
+# Update `path` for the training machine. Keep the class order unchanged.
+path: /data/traffic_light_yolo
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: red
+  1: straight
+  2: left
+  3: right
+
