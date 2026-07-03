@@ -11,8 +11,12 @@ class ImageSaver:
         # 初始化ROS节点
         rospy.init_node('image_saver', anonymous=True)
         
-        # 设置保存路径（默认home目录下的calibration_images文件夹）
-        self.save_dir = os.path.expanduser('/home/ucar/instant_ws/src/ucar_camera/calibration_images')
+        # 保存路径可通过私有参数 ~save_dir 配置。
+        default_save_dir = '/home/ucar/instant_ws/src/ucar_camera/calibration_images'
+        configured_save_dir = rospy.get_param('~save_dir', default_save_dir)
+        self.save_dir = os.path.abspath(
+            os.path.expandvars(os.path.expanduser(configured_save_dir))
+        )
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
         
@@ -26,7 +30,7 @@ class ImageSaver:
         self.last_save_time = time.time()
         self.save_interval = 2.0  # 单位：秒
         
-        rospy.loginfo("Image saver started. Press Ctrl+C to stop.")
+        rospy.loginfo("Image saver started. save_dir=%s. Press Ctrl+C to stop.", self.save_dir)
 
     def image_callback(self, msg):
         try:
