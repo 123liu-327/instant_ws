@@ -1,0 +1,49 @@
+<launch>
+  <!-- One-command stack for visual line following with speech feedback.
+       It intentionally starts only the base driver, camera, line follower,
+       speech node, and follow/TTS bridge. It does not start navigation. -->
+
+  <arg name="start_base_driver" default="true" />
+  <arg name="start_camera" default="true" />
+  <arg name="start_speech" default="true" />
+  <arg name="start_follow_tts_bridge" default="true" />
+
+  <arg name="image_topic" default="/ucar_camera/image_raw" />
+  <arg name="cmd_vel_topic" default="/cmd_vel" />
+  <arg name="begin_topic" default="/follow_begin" />
+  <arg name="end_topic" default="/follow_end" />
+  <arg name="tts_topic" default="/factory/tts_text" />
+  <arg name="path_select" default="right" />
+  <arg name="enable_video_record" default="false" />
+
+  <include if="$(arg start_base_driver)" file="$(find ucar_controller)/launch/base_driver.launch" />
+
+  <node if="$(arg start_camera)"
+        pkg="ucar_camera"
+        type="ucar_camera.py"
+        name="ucar_camera"
+        output="screen">
+    <param name="cam_topic_name" value="$(arg image_topic)" />
+  </node>
+
+  <include file="$(find flow_end)/launch/follow_test.launch">
+    <arg name="image_topic" value="$(arg image_topic)" />
+    <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)" />
+    <arg name="begin_topic" value="$(arg begin_topic)" />
+    <arg name="end_topic" value="$(arg end_topic)" />
+    <arg name="path_select" value="$(arg path_select)" />
+    <arg name="enable_video_record" value="$(arg enable_video_record)" />
+  </include>
+
+  <include if="$(arg start_speech)" file="$(find speech_command)/launch/speech_command.launch" />
+
+  <node if="$(arg start_follow_tts_bridge)"
+        pkg="speech_command"
+        type="follow_tts_bridge.py"
+        name="follow_tts_bridge"
+        output="screen">
+    <param name="begin_topic" value="$(arg begin_topic)" />
+    <param name="end_topic" value="$(arg end_topic)" />
+    <param name="tts_topic" value="$(arg tts_topic)" />
+  </node>
+</launch>

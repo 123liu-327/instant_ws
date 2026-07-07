@@ -1,7 +1,10 @@
 # 红绿灯视觉包 YOLOv5s-RKNN 重制与迁移
 
 ## 当前状态
-
+python3 ~/instant_ws/src/ucar_camera/calibration_images/save_images.py \
+  _save_dir:=/home/ucar/traffic_dataset/right \
+  _save_interval:=0.5 \
+  _record_duration:=30
 生产视觉路径已经从HSV/轮廓法改为四状态YOLOv5s-RKNN：
 
 ```text
