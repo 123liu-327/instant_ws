@@ -3,6 +3,7 @@
 """ROS wrapper for the four-state YOLOv5s/RKNN traffic-light detector."""
 
 import os
+import logging
 import sys
 import time
 
@@ -20,6 +21,15 @@ from rknn_backend import (  # noqa: E402
     YoloV5RknnBackend,
     select_primary_detection,
 )
+
+
+def restore_logging_level_names():
+    """Undo RKNN/third-party logging aliases that break rosgraph logging."""
+    logging.addLevelName(logging.DEBUG, "DEBUG")
+    logging.addLevelName(logging.INFO, "INFO")
+    logging.addLevelName(logging.WARNING, "WARNING")
+    logging.addLevelName(logging.ERROR, "ERROR")
+    logging.addLevelName(logging.CRITICAL, "CRITICAL")
 
 
 class TrafficLightDetectorNode:
@@ -84,6 +94,7 @@ class TrafficLightDetectorNode:
             apply_sigmoid=self.get_bool_param("~apply_sigmoid", False),
             use_all_npu_cores=self.get_bool_param("~use_all_npu_cores", True),
         )
+        restore_logging_level_names()
 
         self.state_pub = rospy.Publisher(self.state_topic, String, queue_size=1, latch=True)
         self.command_pub = rospy.Publisher(self.command_topic, String, queue_size=1)
@@ -259,4 +270,5 @@ if __name__ == "__main__":
         TrafficLightDetectorNode()
         rospy.spin()
     except (rospy.ROSInterruptException, RuntimeError, ValueError) as exc:
+        restore_logging_level_names()
         rospy.logfatal("traffic_light_detector startup failed: %s", exc)
