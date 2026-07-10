@@ -1,0 +1,73 @@
+<launch>
+  <!-- Traffic-light detector plus one-shot spoken decision feedback. -->
+  <arg name="image_topic" default="/ucar_camera/image_raw" />
+  <arg name="enable_topic" default="/traffic_light/enable" />
+  <arg name="state_topic" default="/traffic_light/state" />
+  <arg name="command_topic" default="/follow_begin" />
+  <arg name="decision_topic" default="/traffic_light/decision" />
+  <arg name="debug_topic" default="/traffic_light/debug_image" />
+  <arg name="tts_topic" default="/factory/tts_text" />
+  <arg name="start_speech" default="true" />
+  <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
+  <arg name="require_camera_profile" default="true" />
+  <arg name="camera_profile_timeout_seconds" default="2.0" />
+
+  <arg name="model_path"
+       default="$(find traffic_light_vision)/models/traffic_light_yolov5s_fp16.rknn" />
+  <arg name="input_size" default="640" />
+  <arg name="confidence_threshold" default="0.55" />
+  <arg name="nms_threshold" default="0.45" />
+  <arg name="apply_sigmoid" default="false" />
+  <arg name="use_all_npu_cores" default="true" />
+  <arg name="vote_window" default="7" />
+  <arg name="direction_min_votes" default="5" />
+  <arg name="direction_min_avg_confidence" default="0.65" />
+  <arg name="red_confirm_frames" default="2" />
+  <arg name="enabled_at_start" default="false" />
+  <arg name="publish_commands" default="true" />
+  <arg name="publish_decisions" default="true" />
+  <arg name="publish_debug" default="true" />
+  <arg name="tts_debounce_seconds" default="2.0" />
+
+  <!-- Start the existing ASR/TTS runtime unless it is already running. -->
+  <include if="$(arg start_speech)" file="$(find speech_command)/launch/speech_command.launch">
+    <arg name="tts_topic" value="$(arg tts_topic)" />
+  </include>
+
+  <include file="$(find traffic_light_vision)/launch/traffic_light_detector.launch">
+    <arg name="image_topic" value="$(arg image_topic)" />
+    <arg name="enable_topic" value="$(arg enable_topic)" />
+    <arg name="state_topic" value="$(arg state_topic)" />
+    <arg name="command_topic" value="$(arg command_topic)" />
+    <arg name="decision_topic" value="$(arg decision_topic)" />
+    <arg name="debug_topic" value="$(arg debug_topic)" />
+    <arg name="camera_profile_service" value="$(arg camera_profile_service)" />
+    <arg name="require_camera_profile" value="$(arg require_camera_profile)" />
+    <arg name="camera_profile_timeout_seconds" value="$(arg camera_profile_timeout_seconds)" />
+    <arg name="model_path" value="$(arg model_path)" />
+    <arg name="input_size" value="$(arg input_size)" />
+    <arg name="confidence_threshold" value="$(arg confidence_threshold)" />
+    <arg name="nms_threshold" value="$(arg nms_threshold)" />
+    <arg name="apply_sigmoid" value="$(arg apply_sigmoid)" />
+    <arg name="use_all_npu_cores" value="$(arg use_all_npu_cores)" />
+    <arg name="vote_window" value="$(arg vote_window)" />
+    <arg name="direction_min_votes" value="$(arg direction_min_votes)" />
+    <arg name="direction_min_avg_confidence" value="$(arg direction_min_avg_confidence)" />
+    <arg name="red_confirm_frames" value="$(arg red_confirm_frames)" />
+    <arg name="enabled_at_start" value="$(arg enabled_at_start)" />
+    <arg name="publish_commands" value="$(arg publish_commands)" />
+    <arg name="publish_decisions" value="$(arg publish_decisions)" />
+    <arg name="publish_debug" value="$(arg publish_debug)" />
+  </include>
+
+  <node pkg="speech_command"
+        type="follow_tts_bridge.py"
+        name="traffic_light_tts_bridge"
+        output="screen">
+    <!-- The detector owns decision speech; do not repeat /follow_begin speech. -->
+    <param name="traffic_decision_topic" value="$(arg decision_topic)" />
+    <param name="tts_topic" value="$(arg tts_topic)" />
+    <param name="speak_begin_commands" value="false" />
+    <param name="debounce_seconds" value="$(arg tts_debounce_seconds)" />
+  </node>
+</launch>

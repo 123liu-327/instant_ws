@@ -1,5 +1,7 @@
 <launch>
 
+    <arg name="tts_topic" default="/factory/tts_text" />
+
     <!-- ========================= -->
     <!--      语音识别节点(C++)      -->
     <!-- ========================= -->
@@ -7,7 +9,9 @@
         pkg="speech_command"
         type="cloud_asr_test2"
         name="cloud_asr_test2"
-        output="screen" />
+        output="screen">
+        <param name="tts_topic" value="$(arg tts_topic)" />
+    </node>
 
     <!-- ========================= -->
     <!--      大模型决策(Python)     -->

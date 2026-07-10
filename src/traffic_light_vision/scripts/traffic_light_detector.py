@@ -12,6 +12,7 @@ import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, String
+from std_srvs.srv import SetBool
 
 # catkin relay scripts and direct source execution both need to find this module.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -53,13 +54,23 @@ class TrafficLightDetectorNode:
         self.enable_topic = rospy.get_param("~enable_topic", "/traffic_light/enable")
         self.state_topic = rospy.get_param("~state_topic", "/traffic_light/state")
         self.command_topic = rospy.get_param("~command_topic", "/follow_begin")
+        self.decision_topic = rospy.get_param("~decision_topic")
         self.debug_topic = rospy.get_param("~debug_topic", "/traffic_light/debug_image")
+        self.camera_profile_service = rospy.get_param(
+            "~camera_profile_service", "/ucar_camera/set_exposure_profile"
+        )
+        self.require_camera_profile = self.get_bool_param("~require_camera_profile", True)
+        self.camera_profile_timeout_seconds = float(
+            rospy.get_param("~camera_profile_timeout_seconds", 2.0)
+        )
         self.model_path = os.path.abspath(os.path.expanduser(rospy.get_param("~model_path")))
 
         self.publish_debug = self.get_bool_param("~publish_debug", True)
         self.publish_commands = self.get_bool_param("~publish_commands", True)
+        self.publish_decisions = self.get_bool_param("~publish_decisions", True)
         self.armed = False
         self.command_sent = False
+        self.camera_profile_active = False
         self.last_state = "unknown"
         self.bridge = CvBridge()
 
@@ -98,6 +109,10 @@ class TrafficLightDetectorNode:
 
         self.state_pub = rospy.Publisher(self.state_topic, String, queue_size=1, latch=True)
         self.command_pub = rospy.Publisher(self.command_topic, String, queue_size=1)
+        self.decision_pub = rospy.Publisher(self.decision_topic, String, queue_size=1)
+        self.camera_profile_client = rospy.ServiceProxy(
+            self.camera_profile_service, SetBool, persistent=False
+        )
         self.debug_pub = rospy.Publisher(self.debug_topic, Image, queue_size=1)
         self.enable_sub = rospy.Subscriber(
             self.enable_topic, Bool, self.enable_callback, queue_size=1
@@ -116,12 +131,14 @@ class TrafficLightDetectorNode:
             self.arm()
 
         rospy.loginfo(
-            "traffic_light_detector ready: model=%s image=%s enable=%s state=%s command=%s",
+            "traffic_light_detector ready: model=%s image=%s enable=%s state=%s command=%s decision=%s camera_profile=%s",
             self.model_path,
             self.image_topic,
             self.enable_topic,
             self.state_topic,
             self.command_topic,
+            self.decision_topic,
+            self.camera_profile_service,
         )
 
     def enable_callback(self, message):
@@ -133,16 +150,23 @@ class TrafficLightDetectorNode:
 
     def arm(self):
         self.voter.reset()
-        self.armed = True
+        self.armed = False
         self.command_sent = False
         self.publish_state("unknown")
         self.publish_command("Stop")
+        if not self.set_camera_profile(True):
+            rospy.logerr(
+                "traffic-light detection remains disarmed because low-exposure camera profile failed"
+            )
+            return
+        self.armed = True
         rospy.logwarn("traffic-light detection armed; vehicle held at Stop")
 
     def disarm(self, publish_unknown=False):
         self.armed = False
         self.command_sent = False
         self.voter.reset()
+        self.set_camera_profile(False)
         if publish_unknown:
             self.publish_state("unknown")
         rospy.loginfo("traffic-light detection disarmed")
@@ -163,6 +187,7 @@ class TrafficLightDetectorNode:
         except Exception as exc:
             rospy.logfatal("RKNN inference failed: %s", exc)
             self.publish_command("Stop")
+            self.set_camera_profile(False)
             rospy.signal_shutdown("RKNN inference failure")
             return
 
@@ -177,8 +202,12 @@ class TrafficLightDetectorNode:
             # Stop was already sent when armed; repeat only on the red transition.
             if previous_state != "red":
                 self.publish_command("Stop")
+                self.publish_decision("red")
+                self.set_camera_profile(False)
         elif stable_state in ("straight", "left", "right") and not self.command_sent:
             self.publish_command(self.COMMANDS[stable_state])
+            self.publish_decision(stable_state)
+            self.set_camera_profile(False)
             self.command_sent = True
             self.armed = False
             self.voter.reset()
@@ -214,6 +243,40 @@ class TrafficLightDetectorNode:
             return
         self.command_pub.publish(String(data=command))
         rospy.logwarn("published traffic command %s to %s", command, self.command_topic)
+
+    def publish_decision(self, decision):
+        """Publish one confirmed traffic-light decision for presentation layers."""
+        if not self.publish_decisions:
+            rospy.loginfo("decision publishing disabled; would publish %s", decision)
+            return
+        self.decision_pub.publish(String(data=decision))
+        rospy.loginfo("published traffic decision %s to %s", decision, self.decision_topic)
+
+    def set_camera_profile(self, enable_low_exposure):
+        """Switch camera exposure through its parameterized SetBool service."""
+        if not self.require_camera_profile:
+            return True
+        try:
+            rospy.wait_for_service(
+                self.camera_profile_service, timeout=self.camera_profile_timeout_seconds
+            )
+            response = self.camera_profile_client(bool(enable_low_exposure))
+        except (rospy.ROSException, rospy.ServiceException) as exc:
+            rospy.logerr(
+                "camera exposure service %s unavailable: %s", self.camera_profile_service, exc
+            )
+            return False
+
+        if not response.success:
+            rospy.logerr("camera exposure service rejected request: %s", response.message)
+            return False
+        self.camera_profile_active = bool(enable_low_exposure)
+        rospy.loginfo(
+            "camera exposure profile %s via %s",
+            "enabled" if enable_low_exposure else "restored",
+            self.camera_profile_service,
+        )
+        return True
 
     def publish_debug_image(
         self, source_message, frame, detections, raw_state, stable_state, elapsed_ms
@@ -251,6 +314,8 @@ class TrafficLightDetectorNode:
             rospy.logwarn_throttle(1.0, "debug image publish failed: %s", exc)
 
     def shutdown(self):
+        if getattr(self, "camera_profile_active", False):
+            self.set_camera_profile(False)
         if getattr(self, "backend", None) is not None:
             self.backend.release()
             self.backend = None

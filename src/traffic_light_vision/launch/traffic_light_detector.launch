@@ -4,7 +4,11 @@
   <arg name="enable_topic" default="/traffic_light/enable" />
   <arg name="state_topic" default="/traffic_light/state" />
   <arg name="command_topic" default="/follow_begin" />
+  <arg name="decision_topic" default="/traffic_light/decision" />
   <arg name="debug_topic" default="/traffic_light/debug_image" />
+  <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
+  <arg name="require_camera_profile" default="true" />
+  <arg name="camera_profile_timeout_seconds" default="2.0" />
 
   <arg name="model_path"
        default="$(find traffic_light_vision)/models/traffic_light_yolov5s_fp16.rknn" />
@@ -22,6 +26,7 @@
   <!-- Production default is gated: arm with /traffic_light/enable=true at the stop line. -->
   <arg name="enabled_at_start" default="false" />
   <arg name="publish_commands" default="true" />
+  <arg name="publish_decisions" default="true" />
   <arg name="publish_debug" default="true" />
 
   <node pkg="traffic_light_vision"
@@ -33,7 +38,13 @@
     <param name="enable_topic" type="string" value="$(arg enable_topic)" />
     <param name="state_topic" type="string" value="$(arg state_topic)" />
     <param name="command_topic" type="string" value="$(arg command_topic)" />
+    <param name="decision_topic" type="string" value="$(arg decision_topic)" />
     <param name="debug_topic" type="string" value="$(arg debug_topic)" />
+    <param name="camera_profile_service" type="string" value="$(arg camera_profile_service)" />
+    <param name="require_camera_profile" type="bool" value="$(arg require_camera_profile)" />
+    <param name="camera_profile_timeout_seconds"
+           type="double"
+           value="$(arg camera_profile_timeout_seconds)" />
 
     <param name="model_path" type="string" value="$(arg model_path)" />
     <param name="input_size" type="int" value="$(arg input_size)" />
@@ -50,6 +61,7 @@
     <param name="red_confirm_frames" type="int" value="$(arg red_confirm_frames)" />
     <param name="enabled_at_start" type="bool" value="$(arg enabled_at_start)" />
     <param name="publish_commands" type="bool" value="$(arg publish_commands)" />
+    <param name="publish_decisions" type="bool" value="$(arg publish_decisions)" />
     <param name="publish_debug" type="bool" value="$(arg publish_debug)" />
 
     <!-- Model class IDs: 0=red, 1=straight, 2=right, 3=left. -->

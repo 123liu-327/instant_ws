@@ -1,0 +1,23 @@
+<launch>
+  <arg name="device_path" default="/dev/video0" />
+  <arg name="image_topic" default="/ucar_camera/image_raw" />
+  <arg name="image_width" default="1280" />
+  <arg name="image_height" default="720" />
+  <arg name="rate" default="15" />
+  <arg name="v4l2_ctl_command" default="v4l2-ctl" />
+  <arg name="low_exposure_absolute" default="150" />
+  <arg name="manual_exposure_auto" default="1" />
+  <arg name="low_exposure_auto_priority" default="0" />
+
+  <node pkg="ucar_camera" type="ucar_camera.py" name="ucar_camera" output="screen">
+    <param name="device_path" value="$(arg device_path)" />
+    <param name="cam_topic_name" value="$(arg image_topic)" />
+    <param name="image_width" value="$(arg image_width)" />
+    <param name="image_height" value="$(arg image_height)" />
+    <param name="rate" value="$(arg rate)" />
+    <param name="v4l2_ctl_command" value="$(arg v4l2_ctl_command)" />
+    <param name="low_exposure_absolute" value="$(arg low_exposure_absolute)" />
+    <param name="manual_exposure_auto" value="$(arg manual_exposure_auto)" />
+    <param name="low_exposure_auto_priority" value="$(arg low_exposure_auto_priority)" />
+  </node>
+</launch>

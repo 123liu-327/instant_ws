@@ -139,6 +139,9 @@ public:
 int main(int argc, char** argv) {
     ros::init(argc, argv, "cloud_asr_test");
     ros::NodeHandle nh;
+    ros::NodeHandle private_nh("~");
+    std::string tts_topic;
+    private_nh.param<std::string>("tts_topic", tts_topic, "/factory/tts_text");
     g_last_result_time = ros::Time::now();
     g_task_sent = false;
     signal(SIGINT, sig_handler);
@@ -148,9 +151,10 @@ int main(int argc, char** argv) {
 
     sub_tts =
     nh.subscribe(
-        "/factory/tts_text",
+        tts_topic,
         10,
         ttsCallback);
+    ROS_INFO_STREAM("TTS subscriber listening on " << tts_topic);
 
     string pkg_path = ros::package::getPath("speech_command");
     string cfg_path = pkg_path + "/config/AIUI/cfg/aiui.cfg";
