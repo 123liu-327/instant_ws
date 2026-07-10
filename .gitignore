@@ -10,4 +10,5 @@ __pycache__/
 
 src/ucar_camera/calibration_images/*.jpg
 traffic_light_yolo/data
-traffic_light_yolo_data/
+traffic_light_vision/models
+*.rknn
