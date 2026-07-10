@@ -11,6 +11,7 @@ SCRIPT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scri
 sys.path.insert(0, SCRIPT_DIR)
 
 from rknn_backend import (  # noqa: E402
+    CLASS_NAMES,
     Detection,
     TemporalVoter,
     class_aware_nms,
@@ -21,6 +22,11 @@ from rknn_backend import (  # noqa: E402
 )
 
 
+class ClassContractTest(unittest.TestCase):
+    def test_dataset_class_order_keeps_right_before_left(self):
+        self.assertEqual(CLASS_NAMES, ("red", "straight", "right", "left"))
+
+
 class LetterboxTest(unittest.TestCase):
     def test_letterbox_and_scale_restore_original_coordinates(self):
         image = np.zeros((360, 640, 3), dtype=np.uint8)
@@ -29,7 +35,7 @@ class LetterboxTest(unittest.TestCase):
         self.assertAlmostEqual(ratio, 1.0)
         self.assertEqual(padding, (0.0, 140.0))
 
-        detection = Detection(2, "left", 0.9, (100.0, 190.0, 200.0, 290.0))
+        detection = Detection(2, "right", 0.9, (100.0, 190.0, 200.0, 290.0))
         restored = scale_detections([detection], ratio, padding, image.shape[:2])[0]
         self.assertEqual(restored.box, (100.0, 50.0, 200.0, 150.0))
 
@@ -41,14 +47,14 @@ class DecodeTest(unittest.TestCase):
             np.zeros((1, 27, 40, 40), dtype=np.float32),
             np.zeros((1, 27, 20, 20), dtype=np.float32),
         ]
-        # Anchor 0, grid y=10/x=20, class 2 (left).
+        # Anchor 0, grid y=10/x=20, class 2 (right).
         attributes = [0.5, 0.5, 0.5, 0.5, 0.9, 0.01, 0.01, 0.9, 0.01]
         for channel, value in enumerate(attributes):
             outputs[0][0, channel, 10, 20] = value
 
         detections = decode_yolov5_heads(outputs, 640, 0.55, 0.45)
         self.assertEqual(len(detections), 1)
-        self.assertEqual(detections[0].state, "left")
+        self.assertEqual(detections[0].state, "right")
         self.assertAlmostEqual(detections[0].confidence, 0.81, places=5)
 
     def test_rejects_wrong_head_count(self):
@@ -92,4 +98,3 @@ class TemporalVoterTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

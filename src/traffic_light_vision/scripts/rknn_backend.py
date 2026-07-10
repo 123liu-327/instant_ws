@@ -17,7 +17,9 @@ import cv2
 import numpy as np
 
 
-CLASS_NAMES = ("red", "straight", "left", "right")
+# This is the class-index contract embedded in the trained ONNX/RKNN model.
+# Keep it synchronized with traffic_light_yolo_dataset/traffic_light.yaml.
+CLASS_NAMES = ("red", "straight", "right", "left")
 DEFAULT_ANCHORS = (
     (10.0, 13.0),
     (16.0, 30.0),
@@ -259,7 +261,7 @@ def select_primary_detection(detections: Sequence[Detection]) -> Optional[Detect
 class TemporalVoter:
     """Confidence-aware temporal confirmation for traffic-light states."""
 
-    DIRECTIONS = ("straight", "left", "right")
+    DIRECTIONS = ("straight", "right", "left")
 
     def __init__(
         self,

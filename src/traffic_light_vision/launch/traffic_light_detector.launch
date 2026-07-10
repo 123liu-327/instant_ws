@@ -52,8 +52,8 @@
     <param name="publish_commands" type="bool" value="$(arg publish_commands)" />
     <param name="publish_debug" type="bool" value="$(arg publish_debug)" />
 
-    <!-- This order is part of the model contract and must not be changed. -->
-    <rosparam param="class_names">[red, straight, left, right]</rosparam>
+    <!-- Model class IDs: 0=red, 1=straight, 2=right, 3=left. -->
+    <rosparam param="class_names">[red, straight, right, left]</rosparam>
     <rosparam param="anchors">
       [[10, 13], [16, 30], [33, 23],
        [30, 61], [62, 45], [59, 119],
