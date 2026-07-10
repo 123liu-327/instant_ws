@@ -350,7 +350,14 @@ class YoloV5RknnBackend:
     def infer(self, bgr_image: np.ndarray) -> List[Detection]:
         prepared, ratio, padding = letterbox(bgr_image, self.input_size)
         rgb_image = cv2.cvtColor(prepared, cv2.COLOR_BGR2RGB)
-        outputs = self.rknn.inference(inputs=[rgb_image])
+        # The converted RKNN model declares an NCHW, batched input.  OpenCV
+        # images are HWC and the RKNN runtime will reject that three-dimensional
+        # buffer ("need 4dims input").  Keep uint8 pixels, but make both the
+        # channel order and batch dimension explicit: [1, 3, H, W].
+        input_tensor = np.ascontiguousarray(
+            rgb_image.transpose(2, 0, 1)[np.newaxis, ...]
+        )
+        outputs = self.rknn.inference(inputs=[input_tensor], data_format=["nchw"])
         if outputs is None:
             raise RuntimeError("RKNN inference returned no outputs")
         detections = decode_yolov5_heads(
