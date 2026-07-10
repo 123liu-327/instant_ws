@@ -158,7 +158,12 @@ class UcarCamera:
         output = self.run_v4l2("--get-ctrl=" + ",".join(self.CONTROL_NAMES))
         values = {}
         for line in output.splitlines():
-            match = re.match(r"\s*([a-z_]+).*?\bvalue=(-?\d+)", line)
+            # --get-ctrl output differs by v4l2-ctl version.  Some drivers
+            # return "exposure_auto: 3" while --list-ctrls returns a longer
+            # line containing "value=3".  Accept both representations.
+            match = re.match(r"\s*([a-z_]+)\s*:\s*(-?\d+)\s*$", line)
+            if match is None:
+                match = re.match(r"\s*([a-z_]+).*?\bvalue=(-?\d+)", line)
             if match and match.group(1) in self.CONTROL_NAMES:
                 values[match.group(1)] = int(match.group(2))
         missing = [name for name in self.CONTROL_NAMES if name not in values]
