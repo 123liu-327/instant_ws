@@ -33,6 +33,8 @@ class UcarCamera:
         self.img_height = int(rospy.get_param("~image_height", 720))
         self.camera_topic_name = rospy.get_param("~cam_topic_name", "/ucar_camera/image_raw")
         self.device_path = rospy.get_param("~device_path", "/dev/video0")
+        self.pixel_format = str(rospy.get_param("~pixel_format", "MJPG")).upper()
+        self.capture_fps = float(rospy.get_param("~capture_fps", 30.0))
         self.v4l2_ctl_command = rospy.get_param("~v4l2_ctl_command", "v4l2-ctl")
         self.low_exposure_absolute = int(rospy.get_param("~low_exposure_absolute", 150))
         self.manual_exposure_auto = int(rospy.get_param("~manual_exposure_auto", 1))
@@ -51,30 +53,95 @@ class UcarCamera:
             "~set_exposure_profile", SetBool, self.set_exposure_profile_callback
         )
 
+        if len(self.pixel_format) != 4:
+            raise RuntimeError("pixel_format must be a four-character FOURCC code")
+
         self.cap = cv2.VideoCapture(self.device_path)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.img_width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.img_height)
-        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc("I", "4", "2", "0"))
         if not self.cap.isOpened():
             raise RuntimeError("failed to open camera device {}".format(self.device_path))
 
+        # Format must be selected before the size.  This camera only exposes
+        # native 1280x720 through MJPG; selecting the size while still in YUYV
+        # makes V4L2 fall back to 800x600.
+        set_results = {
+            "pixel_format": self.cap.set(
+                cv2.CAP_PROP_FOURCC,
+                cv2.VideoWriter_fourcc(*self.pixel_format)
+            ),
+            "image_width": self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.img_width),
+            "image_height": self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.img_height),
+            "capture_fps": self.cap.set(cv2.CAP_PROP_FPS, self.capture_fps),
+        }
+        rejected = [name for name, accepted in set_results.items() if not accepted]
+        if rejected:
+            rospy.logwarn("camera property request rejected: %s", ", ".join(rejected))
+
+        ret, probe_frame = self.cap.read()
+        if not ret or probe_frame is None:
+            raise RuntimeError("failed to read verification frame from {}".format(self.device_path))
+
+        actual_height, actual_width = probe_frame.shape[:2]
+        actual_fourcc = self.fourcc_to_string(self.cap.get(cv2.CAP_PROP_FOURCC))
+        actual_fps = self.cap.get(cv2.CAP_PROP_FPS)
+        if actual_width != self.img_width or actual_height != self.img_height:
+            raise RuntimeError(
+                "native resolution negotiation failed: requested {}x{}, got {}x{}".format(
+                    self.img_width, self.img_height, actual_width, actual_height
+                )
+            )
+        if actual_fourcc != self.pixel_format:
+            raise RuntimeError(
+                "native pixel-format negotiation failed: requested {}, got {}".format(
+                    self.pixel_format, actual_fourcc or "UNKNOWN"
+                )
+            )
+        self.pending_frame = probe_frame
+
         rospy.on_shutdown(self.shutdown)
         rospy.loginfo(
-            "ucar_camera ready: device=%s image=%s exposure_service=%s low_exposure=%d",
+            "ucar_camera ready: device=%s image=%s native=%dx%d@%.1f format=%s "
+            "exposure_service=%s low_exposure=%d",
             self.device_path,
             self.camera_topic_name,
+            actual_width,
+            actual_height,
+            actual_fps,
+            actual_fourcc,
             rospy.resolve_name("~set_exposure_profile"),
             self.low_exposure_absolute,
         )
         self.publish_loop()
 
+    @staticmethod
+    def fourcc_to_string(value):
+        code = int(value)
+        return "".join(chr((code >> (8 * index)) & 0xFF) for index in range(4)).rstrip("\x00")
+
     def publish_loop(self):
         rate = rospy.Rate(self.cam_pub_rate)
         while not rospy.is_shutdown():
-            with self.control_lock:
-                ret, frame = self.cap.read()
+            if self.pending_frame is not None:
+                frame = self.pending_frame
+                self.pending_frame = None
+                ret = True
+            else:
+                with self.control_lock:
+                    ret, frame = self.cap.read()
             if not ret or frame is None:
                 rospy.logwarn_throttle(1.0, "camera read failed: %s", self.device_path)
+                rate.sleep()
+                continue
+
+            frame_height, frame_width = frame.shape[:2]
+            if frame_width != self.img_width or frame_height != self.img_height:
+                rospy.logerr_throttle(
+                    1.0,
+                    "dropping non-native frame: expected %dx%d, got %dx%d",
+                    self.img_width,
+                    self.img_height,
+                    frame_width,
+                    frame_height,
+                )
                 rate.sleep()
                 continue
 
