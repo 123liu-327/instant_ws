@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/src3/devel_pure
+
+Name: amcl
+Description: Description of amcl
+Version: 1.17.3
+Cflags: -I/home/ucar/instant_ws/src3/devel_pure/include -I/home/ucar/instant_ws/src3/ucar_2026_nav/3rd/navigation/amcl/include
+Libs: -L${prefix}/lib -lamcl_sensors -lamcl_map -lamcl_pf
+Requires: diagnostic_updater dynamic_reconfigure geometry_msgs nav_msgs rosbag roscpp sensor_msgs std_srvs tf2 tf2_msgs tf2_ros

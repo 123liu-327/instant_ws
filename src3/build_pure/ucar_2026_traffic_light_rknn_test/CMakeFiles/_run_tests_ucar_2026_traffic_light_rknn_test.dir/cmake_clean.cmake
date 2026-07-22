@@ -1,0 +1,5 @@
+
+# Per-language clean rules from dependency scanning.
+foreach(lang )
+  include(CMakeFiles/_run_tests_ucar_2026_traffic_light_rknn_test.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

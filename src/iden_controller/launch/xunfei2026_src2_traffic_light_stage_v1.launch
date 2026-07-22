@@ -1,0 +1,19 @@
+<launch>
+  <!-- Native src2 traffic recognizer, isolated from camera ownership, speech
+       and cmd_vel.  Start it only when the traffic-light stage is active. -->
+  <node pkg="ucar_2026_traffic_light_rknn_test"
+        type="traffic_light_rknn_test_node.py"
+        name="traffic_light_rknn_test_node"
+        output="screen" required="true"
+        launch-prefix="bash -c 'export PYTHONDONTWRITEBYTECODE=1; exec /home/ucar/venv3.9/bin/python &quot;$@&quot;' dummy">
+    <rosparam command="load"
+              file="$(find ucar_2026_traffic_light_rknn_test)/config/traffic_light_rknn_test.yaml" />
+    <param name="image_topic" value="/ucar_camera/image_raw" />
+    <param name="debug_image_topic" value="/traffic_light_rknn_test/debug_image" />
+    <param name="model_path"
+           value="$(find yolo)/models/traffic_resnet18_rk3588_int8.rknn" />
+    <param name="model_quantization" value="int8" />
+    <param name="flip" value="false" />
+    <param name="enable_speech" value="false" />
+  </node>
+</launch>

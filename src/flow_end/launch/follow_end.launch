@@ -31,8 +31,8 @@
   <arg name="default_dis_bias_right" default="0.0" />
   <arg name="left_dis_bias_left" default="6.0" />
   <arg name="left_dis_bias_right" default="0.0" />
-  <arg name="right_dis_bias_left" default="0.0" />
-  <arg name="right_dis_bias_right" default="-15.0" />
+  <arg name="right_dis_bias_left" default="-10.0" />
+  <arg name="right_dis_bias_right" default="-14.0" />
   <arg name="middle_dis_bias_left" default="0.0" />
   <arg name="middle_dis_bias_right" default="0.0" />
   <arg name="time_local" default="0.5" />

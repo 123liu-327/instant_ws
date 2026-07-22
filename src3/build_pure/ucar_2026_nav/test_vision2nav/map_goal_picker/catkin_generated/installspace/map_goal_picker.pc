@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/src3/install
+
+Name: map_goal_picker
+Description: Description of map_goal_picker
+Version: 0.1.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: roscpp geometry_msgs tf

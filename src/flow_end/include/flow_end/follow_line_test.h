@@ -47,6 +47,7 @@ extern std::string video_save_path;
 bool setPathSelect(const std::string &raw_value);
 std::string currentPathName();
 std::string pathToString(PathSelect path);
+void applyPathBiasParams(PathSelect path);
 
 void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
                double speed, double distance, double y_bias_m,

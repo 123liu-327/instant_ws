@@ -191,6 +191,45 @@ std::string pathToString(PathSelect path) {
     return "unknown";
 }
 
+void applyPathBiasParams(PathSelect path) {
+    ros::NodeHandle private_nh("~");
+    const std::string prefix = pathToString(path);
+
+    double default_left_bias = 0.0;
+    double default_right_bias = 0.0;
+    double time_local = Time_local;
+    private_nh.param<double>("default_dis_bias_left", default_left_bias, default_left_bias);
+    private_nh.param<double>("default_dis_bias_right", default_right_bias, default_right_bias);
+    private_nh.param<double>("time_local", time_local, time_local);
+
+    double left_bias = default_left_bias;
+    double right_bias = default_right_bias;
+    private_nh.param<double>(prefix + "_dis_bias_left", left_bias, left_bias);
+    private_nh.param<double>(prefix + "_dis_bias_right", right_bias, right_bias);
+    private_nh.param<double>(prefix + "_time_local", time_local, time_local);
+
+    Dis_Bias_Left = static_cast<float>(left_bias);
+    Dis_Bias_Right = static_cast<float>(right_bias);
+    Time_local = time_local;
+}
+
+std::string motionStateToString(MotionState state) {
+    switch (state) {
+        case MotionState::IDLE: return "IDLE";
+        case MotionState::ALIGNING_LEFT: return "ALIGNING_LEFT";
+        case MotionState::ALIGNING_RIGHT: return "ALIGNING_RIGHT";
+        case MotionState::ALIGN_PAUSE: return "ALIGN_PAUSE";
+        case MotionState::FOLLOWING: return "FOLLOWING";
+        case MotionState::FOLLOWING_STRAIGHT: return "FOLLOWING_STRAIGHT";
+        case MotionState::Y_CENTER_APPROACH: return "Y_CENTER_APPROACH";
+        case MotionState::Y_CROSSBAR_SEEK: return "Y_CROSSBAR_SEEK";
+        case MotionState::Y_ALIGNING_LEFT: return "Y_ALIGNING_LEFT";
+        case MotionState::Y_ALIGNING_RIGHT: return "Y_ALIGNING_RIGHT";
+        case MotionState::Y_ALIGN_PAUSE: return "Y_ALIGN_PAUSE";
+    }
+    return "UNKNOWN";
+}
+
 void publishStatus(const std::string &state);
 void publishDebugImage(const sensor_msgs::ImageConstPtr &source_msg = sensor_msgs::ImageConstPtr());
 
@@ -322,6 +361,252 @@ void detectCorners() {
         }
         if (Ypt1_found && Lpt1_found && !is_straight1) break;
     }
+}
+
+bool handleYBranchFlow() {
+    if (motion_state == MotionState::FOLLOWING_STRAIGHT) {
+        const bool y_seen = Ypt0_found || Ypt1_found;
+        const bool lost_all_lines =
+            (rpts_num == 0 && rptsc0e_num == 0 && rptsc1e_num == 0);
+
+        if (y_seen) {
+            ++y_detect_confirm_count;
+            y_crossbar_lost_count = 0;
+        } else {
+            y_detect_confirm_count = 0;
+            y_crossbar_lost_count = lost_all_lines ? y_crossbar_lost_count + 1 : 0;
+        }
+
+        ROS_WARN_THROTTLE(
+            0.5,
+            "[Y_BRANCH] Searching | next_path=%s | Y0=%d(id=%d) | Y1=%d(id=%d) | y_seen=%d | y_confirm=%d/%d | lost=%d/%d",
+            pathToString(pending_branch_path).c_str(),
+            Ypt0_found, Ypt0_rpts0s_id,
+            Ypt1_found, Ypt1_rpts1s_id,
+            y_seen,
+            y_detect_confirm_count, y_detect_confirm_frames,
+            y_crossbar_lost_count, y_crossbar_lost_confirm_frames);
+
+        if (y_detect_confirm_count >= y_detect_confirm_frames) {
+            resetMotionController();
+            motion_state = MotionState::Y_CENTER_APPROACH;
+            y_approach_start_odom = odom_dist;
+            y_approach_start_time = ros::Time::now();
+            y_entry_lost_count = 0;
+            y_crossbar_lost_count = 0;
+            y_crossbar_confirm_count = 0;
+            publishStatus("Y_CENTER_APPROACH_" + pathToString(pending_branch_path));
+            ROS_WARN(
+                "[Y_BRANCH] Center approach started | next_path=%s | Y0=%d(id=%d) | Y1=%d(id=%d) | confirm=%d/%d | odom=%.3fm",
+                pathToString(pending_branch_path).c_str(),
+                Ypt0_found, Ypt0_rpts0s_id,
+                Ypt1_found, Ypt1_rpts1s_id,
+                y_detect_confirm_count, y_detect_confirm_frames,
+                odom_dist);
+            return true;
+        }
+
+        if (y_crossbar_lost_count >= y_crossbar_lost_confirm_frames) {
+            resetMotionController();
+            motion_state = MotionState::Y_CROSSBAR_SEEK;
+            y_crossbar_seek_start_odom = odom_dist;
+            y_crossbar_confirm_count = 0;
+            pid.reset();
+            publishStatus("Y_CROSSBAR_SEEK_" + pathToString(pending_branch_path));
+            ROS_WARN(
+                "[Y_BRANCH] Lost Y and lines, seeking crossbar | next_path=%s | lost=%d/%d | odom=%.3fm",
+                pathToString(pending_branch_path).c_str(),
+                y_crossbar_lost_count, y_crossbar_lost_confirm_frames,
+                odom_dist);
+            return true;
+        }
+        return false;
+    }
+
+    if (motion_state == MotionState::Y_CROSSBAR_SEEK) {
+        const float moved = std::abs(odom_dist - y_crossbar_seek_start_odom);
+        const bool found = detect_forward_crossbar();
+        const bool long_ok = found &&
+            std::abs(forward_crossbar_result.long_m -
+                     static_cast<float>(y_crossbar_target_long_m)) <=
+                static_cast<float>(y_crossbar_long_tolerance_m);
+        const bool lat_ok = found &&
+            std::abs(forward_crossbar_result.lat_m) <=
+                static_cast<float>(y_crossbar_max_abs_lat_m);
+
+        if (found && long_ok && lat_ok) {
+            ++y_crossbar_confirm_count;
+        } else {
+            y_crossbar_confirm_count = 0;
+        }
+
+        const bool reached_by_crossbar =
+            y_crossbar_confirm_count >= y_crossbar_confirm_frames;
+        const bool reached_by_max_odom =
+            moved >= static_cast<float>(y_crossbar_seek_max_odom);
+        if (reached_by_crossbar || reached_by_max_odom) {
+            resetMotionController();
+            motion_state = pending_branch_path == PathSelect::LEFT
+                ? MotionState::Y_ALIGNING_LEFT
+                : MotionState::Y_ALIGNING_RIGHT;
+            y_turn_integrated_angle_deg = 0.0;
+            y_turn_last_time = ros::Time::now();
+            y_turn_has_last_time = true;
+            pid.reset();
+            publishStatus("Y_TURN_" + pathToString(pending_branch_path));
+            ROS_WARN(
+                "[Y_CROSSBAR] Trigger turn | reason=%s | next_path=%s | found=%d | center=(%d,%d) | long=%.3fm | lat=%.3fm | confirm=%d/%d | moved=%.3fm",
+                reached_by_crossbar ? "crossbar" : "max_odom",
+                pathToString(pending_branch_path).c_str(),
+                found,
+                forward_crossbar_result.center_x,
+                forward_crossbar_result.center_y,
+                forward_crossbar_result.long_m,
+                forward_crossbar_result.lat_m,
+                y_crossbar_confirm_count, y_crossbar_confirm_frames,
+                moved);
+            forward_crossbar_result.found = false;
+            return true;
+        }
+
+        geometry_msgs::Twist msg;
+        msg.linear.x = y_crossbar_seek_speed;
+        msg.angular.z = 0.0;
+        pub.publish(msg);
+        publishDebugImage();
+        ROS_WARN_THROTTLE(
+            0.5,
+            "[Y_CROSSBAR] Seeking | found=%d | center=(%d,%d) | long=%.3fm | lat=%.3fm | confirm=%d/%d | moved=%.3fm | v=%.2f",
+            found,
+            forward_crossbar_result.center_x,
+            forward_crossbar_result.center_y,
+            forward_crossbar_result.long_m,
+            forward_crossbar_result.lat_m,
+            y_crossbar_confirm_count, y_crossbar_confirm_frames,
+            moved, msg.linear.x);
+        return true;
+    }
+
+    if (motion_state == MotionState::Y_CENTER_APPROACH) {
+        const float moved = std::abs(odom_dist - y_approach_start_odom);
+        const bool lost_entry =
+            (rpts_num == 0 && rptsc0e_num == 0 && rptsc1e_num == 0);
+        y_entry_lost_count = lost_entry ? y_entry_lost_count + 1 : 0;
+
+        const bool reached_by_lost_lines =
+            moved >= static_cast<float>(y_entry_min_odom) &&
+            y_entry_lost_count >= y_lost_confirm_frames;
+        const bool reached_by_max_odom =
+            moved >= static_cast<float>(y_entry_max_odom);
+        if (reached_by_lost_lines || reached_by_max_odom) {
+            resetMotionController();
+            motion_state = pending_branch_path == PathSelect::LEFT
+                ? MotionState::Y_ALIGNING_LEFT
+                : MotionState::Y_ALIGNING_RIGHT;
+            y_turn_integrated_angle_deg = 0.0;
+            y_turn_last_time = ros::Time::now();
+            y_turn_has_last_time = true;
+            pid.reset();
+            publishStatus("Y_TURN_" + pathToString(pending_branch_path));
+            ROS_WARN(
+                "[Y_BRANCH] Entry reached by %s | next_path=%s | moved=%.3fm | lost=%d/%d",
+                reached_by_lost_lines ? "lost_lines" : "max_odom",
+                pathToString(pending_branch_path).c_str(),
+                moved, y_entry_lost_count, y_lost_confirm_frames);
+            return true;
+        }
+
+        MotionControlInput control_input;
+        control_input.path = rpts;
+        control_input.path_num = rpts_num;
+        control_input.path_key = static_cast<int>(PathSelect::MIDDLE);
+        control_input.path_name = "middle";
+        control_input.degraded = is_degraded_mode;
+        control_input.base_speed = y_approach_speed;
+        control_input.aim_distance = y_center_aim_dist;
+        control_input.aim_y_bias_m = 0.0;
+        control_input.sample_dist = sample_dist;
+        control_input.pixel_per_meter = pixel_per_meter;
+        control_input.image_width = RESULT_COL;
+        control_input.image_height = RESULT_ROW;
+        control_input.allow_lost_coast = false;
+        control_input.max_wz_override = y_center_max_wz;
+        const MotionControlOutput output = motion_controller.compute(control_input);
+        pub.publish(output.cmd);
+        publishDebugImage();
+
+        ROS_WARN_THROTTLE(
+            0.5,
+            "[Y_BRANCH] Center approaching | next_path=%s | rpts=%d | error=%.3f | moved=%.3fm | lost=%d/%d | v=%.2f | wz=%.2f",
+            pathToString(pending_branch_path).c_str(),
+            rpts_num, output.filtered_error, moved,
+            y_entry_lost_count, y_lost_confirm_frames,
+            output.cmd.linear.x, output.cmd.angular.z);
+        return true;
+    }
+
+    if (motion_state == MotionState::Y_ALIGNING_LEFT ||
+        motion_state == MotionState::Y_ALIGNING_RIGHT) {
+        const ros::Time now = ros::Time::now();
+        double dt = y_turn_has_last_time ? (now - y_turn_last_time).toSec() : 0.0;
+        y_turn_last_time = now;
+        y_turn_has_last_time = true;
+        if (dt > 0.0 && dt < 0.2) {
+            y_turn_integrated_angle_deg +=
+                std::abs(curent_wz) * dt * 180.0 / static_cast<double>(PI);
+        }
+
+        if (y_turn_integrated_angle_deg >= y_turn_angle_deg) {
+            publishStop();
+            motion_state = MotionState::Y_ALIGN_PAUSE;
+            y_turn_pause_start = ros::Time::now();
+            publishStatus("Y_TURN_PAUSE_" + pathToString(pending_branch_path));
+            ROS_WARN(
+                "[Y_TURN] Finished | next_path=%s | integrated_angle=%.2fdeg/%.2fdeg | wz=%.3f",
+                pathToString(pending_branch_path).c_str(),
+                y_turn_integrated_angle_deg, y_turn_angle_deg, curent_wz);
+            return true;
+        }
+
+        geometry_msgs::Twist msg;
+        msg.angular.z = motion_state == MotionState::Y_ALIGNING_LEFT
+            ? std::abs(y_turn_angular_speed)
+            : -std::abs(y_turn_angular_speed);
+        pub.publish(msg);
+        publishDebugImage();
+        ROS_WARN_THROTTLE(
+            0.5,
+            "[Y_TURN] Turning | next_path=%s | integrated_angle=%.2fdeg/%.2fdeg | wz=%.3f | dt=%.3fs | direction=%s",
+            pathToString(pending_branch_path).c_str(),
+            y_turn_integrated_angle_deg, y_turn_angle_deg,
+            curent_wz, dt,
+            motion_state == MotionState::Y_ALIGNING_LEFT ? "LEFT" : "RIGHT");
+        return true;
+    }
+
+    if (motion_state == MotionState::Y_ALIGN_PAUSE) {
+        geometry_msgs::Twist stop_msg;
+        pub.publish(stop_msg);
+        publishDebugImage();
+        const double elapsed = (ros::Time::now() - y_turn_pause_start).toSec();
+        if (elapsed >= y_turn_pause_sec) {
+            const PathSelect completed_branch = pending_branch_path;
+            path_select = completed_branch;
+            track_type = completed_branch == PathSelect::LEFT ? TRACK_LEFT : TRACK_RIGHT;
+            applyPathBiasParams(completed_branch);
+            resetYBranchState();
+            motion_state = MotionState::FOLLOWING;
+            resetParkingCornerState();
+            publishStatus("RUNNING_" + pathToString(completed_branch));
+            ROS_WARN(
+                "[Y_BRANCH] Switched to branch follow | path=%s | pause=%.2fs | bias_left=%.1f | bias_right=%.1f | Time_local=%.2f",
+                pathToString(completed_branch).c_str(), elapsed,
+                Dis_Bias_Left, Dis_Bias_Right, Time_local);
+        }
+        return true;
+    }
+
+    return false;
 }
 
 bool handleParkingCorner() {

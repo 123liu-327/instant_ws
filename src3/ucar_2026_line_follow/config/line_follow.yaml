@@ -1,0 +1,103 @@
+# ROS topics
+image_topic: /usb_cam/image_raw
+cmd_vel_topic: /cmd_vel
+status_topic: /line_follow/status
+debug_image_topic: /line_follow/debug_image
+start_topic: /line_follow/start
+
+# Startup and route
+auto_start: true
+turn_direction: left
+publish_debug: true
+
+# Track geometry. lane_width_m is documented for field tuning; lane_width_px is
+# used when only one white border is visible and no camera calibration is loaded.
+lane_width_m: 0.42
+lane_width_px: 230
+single_line_hold_frames: 12
+
+# Image region and white-line extraction
+roi_y_start_ratio: 0.45
+roi_y_end_ratio: 1.0
+white_s_max: 85
+white_v_min: 150
+gray_white_threshold: 185
+morph_kernel_size: 5
+min_line_width_px: 6
+min_segment_gap_px: 12
+min_contour_area: 60
+
+# Horizontal scan rows inside ROI, top to bottom.
+scan_row_ratios: [0.20, 0.35, 0.50, 0.65, 0.80, 0.92]
+target_row_weight_bottom: 1.5
+
+# PID control
+base_linear_speed: 0.16
+min_linear_speed: 0.06
+search_linear_speed: 0.035
+kp: 0.0045
+ki: 0.0
+kd: 0.0015
+max_integral: 80.0
+max_angular_speed: 0.8
+error_slowdown_px: 160.0
+
+# Lost-line handling
+search_angular_speed: 0.25
+lost_timeout: 1.0
+stop_on_lost: false
+
+# Fork handling. When three or more candidate borders are visible, the node
+# chooses the left corridor by default and adds a short left-turn bias.
+fork_candidate_count: 3
+turn_bias_px: -55
+turn_hold_time: 1.2
+turn_linear_speed: 0.08
+startup_left_bias_duration: 1.6
+startup_force_left_until_dual_frames: 8
+startup_force_left_clear_nonfork_frames: 18
+startup_force_left_min_duration: 3.4
+startup_force_left_bias_px: -120
+finish_enable_delay: 6.0
+
+# Finish detection for the P1 50 cm x 50 cm white parking square.
+finish_confirm_frames: 9
+finish_release_frames: 1
+finish_stop_time: 1.0
+finish_use_odom_approach: true
+odom_topic: /odom
+finish_odom_approach_distance_m: 0.50
+finish_odom_approach_speed: 0.08
+finish_odom_min_trigger_frames: 2
+finish_odom_timeout_sec: 8.0
+finish_parking_target_bottom_y_ratio: 0.955
+finish_parking_slow_bottom_y_ratio: 0.90
+finish_parking_confirm_frames: 2
+finish_parking_min_horizontal_width_ratio: 0.70
+finish_parking_min_vertical_side_height_ratio: 0.30
+finish_parking_min_box_width_ratio: 0.70
+finish_parking_min_box_height_ratio: 0.09
+finish_bottom_ratio: 0.72
+finish_horizontal_min_width_ratio: 0.45
+finish_horizontal_min_rows: 4
+finish_vertical_side_min_height_ratio: 0.18
+finish_box_min_fill_ratio: 0.03
+finish_box_max_components: 4
+finish_box_min_area_ratio: 0.08
+finish_box_bottom_touch_ratio: 0.96
+finish_box_min_height_ratio: 0.22
+finish_box_center_tolerance_ratio: 0.28
+finish_approach_center_alpha: 0.75
+finish_approach_max_angular_speed: 0.45
+finish_approach_linear_speed_scale: 0.78
+finish_center_jump_reject_px: 90
+finish_final_approach_frames: 2
+finish_final_linear_speed: 0.03
+
+# Scenario profile selector for finish detection thresholds.
+finish_profile: track_a
+finish_profiles:
+  track_a:
+    finish_confirm_frames: 9
+    finish_horizontal_min_width_ratio: 0.45
+    finish_vertical_side_min_height_ratio: 0.18

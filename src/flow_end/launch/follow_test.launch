@@ -1,6 +1,29 @@
 <launch>
   <!-- follow_test: 基础视觉巡线 + 角点停车，不包含原 follow_end 的环岛/雷达复杂流程。 -->
 
+  <!--
+    ======================== 快速调参入口 ========================
+    所有 <arg> 都可以在 roslaunch 命令行用 “参数名:=值” 临时覆盖，不必修改本文件。
+
+    示例：低速测试 YRight，并把横线搜索最大里程改为 0.50 m：
+      roslaunch flow_end follow_test.launch \
+        base_speed:=0.20 y_approach_speed:=0.12 \
+        y_crossbar_seek_max_odom:=0.50 y_turn_angular_speed:=0.25
+
+    最关键的实车参数：
+      普通巡线：base_speed、aim_distance
+      Y 中线接近：y_approach_speed、y_entry_min_odom、y_entry_max_odom
+      横线触发：y_crossbar_target_long_m、y_crossbar_long_tolerance_m、
+                y_crossbar_confirm_frames、y_crossbar_seek_max_odom
+      Y 转向：y_turn_angle_deg、y_turn_angular_speed、y_turn_pause_sec
+      停车：parking_extra_dist、parking_forward_speed、parking_lateral_speed
+      普通丢线：lost_corner_search_timeout、lost_corner_search_angular_speed
+
+    安全原则：先降低速度，再逐步增加里程或角度；不要把 *_max_odom 设置为 0，
+    因为 moved >= 0 会立即满足里程兜底条件。
+    ==============================================================
+  -->
+
   <!-- 输入图像话题。根据实际相机修改，例如 /ucar_image/image_raw 或 /ucar_camera/image_raw。 -->
   <arg name="image_topic" default="/ucar_camera/image_raw" />
 
@@ -25,13 +48,18 @@
   <arg name="status_topic" default="/flow_end/follow_test_status" />
   <arg name="debug_topic" default="/flow_end/follow_test_debug" />
 
-  <!-- 默认路径选择：left / middle / right。也可以运行中通过 begin_topic 发送指令切换。 -->
+  <!-- 默认路径选择：left / middle / right。Y 岔路请通过 begin_topic 发送 YLeft/YRight。 -->
   <arg name="path_select" default="right" />
+
+  <!--
+    路径像素偏置，单位 px。用于把生成的目标路径向一侧平移。
+    数值绝对值越大，车辆贴线偏移越明显；左右符号沿用当前算法约定，调节时每次建议 2～5 px。
+  -->
   <arg name="default_dis_bias_left" default="0.0" />
   <arg name="default_dis_bias_right" default="0.0" />
   <arg name="left_dis_bias_left" default="6.0" />
   <arg name="left_dis_bias_right" default="0.0" />
-  <arg name="right_dis_bias_left" default="0.0" />
+  <arg name="right_dis_bias_left" default="10.0" />
   <arg name="right_dis_bias_right" default="-32.0" />
   <arg name="middle_dis_bias_left" default="0.0" />
   <arg name="middle_dis_bias_right" default="0.0" />
@@ -40,11 +68,27 @@
   <arg name="right_time_local" default="0.5" />
   <arg name="middle_time_local" default="0.5" />
 
-  <!-- 是否启用 L 型角点停车逻辑。 -->
+  <!-- ======================== L 角停车参数 ======================== -->
+  <!-- 是否启用 L 型角点停车。调试岔路但不希望自动停车时可设为 false。 -->
   <arg name="parking_enabled" default="true" />
+
+  <!--
+    是否允许使用另一侧 L 点停车：
+      true：Left 可接受 Right_L、Right 可接受 Left_L，容错强但可能掩盖目标侧丢线；
+      false：只接受目标侧 L 点，适合验证分支选择是否正确。
+  -->
   <arg name="parking_allow_either_l" default="true" />
+
+  <!-- 【关键】检测到停车角点后额外前进距离，单位 m；增大则停车位置更靠前。建议每次调整 0.02～0.05 m。 -->
   <arg name="parking_extra_dist" default="0.315" />
+
+  <!-- 【关键】停车接近阶段前进速度，单位 m/s；实车初调建议 0.10～0.15。 -->
   <arg name="parking_forward_speed" default="0.15" />
+
+  <!-- 横向停车修正速度、死区与底盘方向符号。这三项也是 follow_voice_stack.launch 的 include 接口。 -->
+  <arg name="parking_lateral_speed" default="0.10" />
+  <arg name="parking_lateral_deadband" default="0.03" />
+  <arg name="parking_lateral_cmd_sign" default="1.0" />
 
   <!-- 是否发布调试图像 /flow_end/follow_test_debug，可用 rqt_image_view 查看。 -->
   <arg name="publish_debug_image" default="true" />
@@ -62,32 +106,86 @@
   <!-- 视频保存路径（留空则使用默认路径 /tmp/follow_test_debug_时间戳.avi） -->
   <arg name="video_save_path" default="" />
 
-  <!-- 正常巡线基础前进速度，转弯误差越大程序会自动降速。 -->
+  <!-- ======================== 普通巡线参数 ======================== -->
+  <!-- 【关键】正常巡线基础前进速度，单位 m/s；转弯误差增大时程序会自动降速。 -->
   <arg name="base_speed" default="0.30" />
+
+  <!-- 【关键】前视距离，单位 m。增大更平稳但转弯响应变慢；减小更灵敏但容易摆动。 -->
   <arg name="aim_distance" default="0.10" />
+
+  <!-- 控制点纵向偏置，单位 m；会参与 dy 计算，通常保持标定值，不作为首选调参项。 -->
   <arg name="aim_y_bias_m" default="0.20" />
- <!-- 最低转角速度，用于初始的巡线。 -->
+
+  <!-- 最低转角控制量，用于普通起步预转阶段。 -->
   <arg name="min_pid_speed" default="0.15" />
+
+  <!-- ======================== Y 型岔路参数 ======================== -->
+  <!-- 历史兼容参数；当前 Y 状态机主要依据里程参数 y_entry_min/max_odom。 -->
   <arg name="y_approach_dist" default="0.20" />
+
+  <!-- 【关键】YLeft/YRight 原地转向目标角度，单位 deg。增大则转得更深；建议从 45° 小步调整。 -->
   <arg name="y_turn_angle_deg" default="45.0" />
+
+  <!-- 【关键】Y 转向角速度上限，单位 rad/s。降低更稳但耗时更长，实车初调建议 0.20～0.35。 -->
   <arg name="y_turn_angular_speed" default="0.35" />
+
+  <!-- Y 转向完成后的零速暂停时间，单位 s；用于等待底盘停稳和图像稳定。 -->
   <arg name="y_turn_pause_sec" default="0.5" />
+
+  <!-- 历史 Y 点索引过滤范围；当前算法日志显示 id_filter=off 时不参与判断。 -->
   <arg name="y_detect_min_id" default="0" />
+
+  <!-- 【关键】Y 中线接近的前视距离，单位 m；增大更平滑，减小转向响应更快。 -->
   <arg name="y_center_aim_dist" default="0.45" />
+
+  <!-- 【关键】检测到 Y 点后的中线接近速度，单位 m/s；建议低于普通 base_speed。 -->
   <arg name="y_approach_speed" default="0.18" />
+
+  <!-- 中线接近阶段最大纠偏角速度，单位 rad/s，防止入口处大幅摆动。 -->
   <arg name="y_center_max_wz" default="0.25" />
+
+  <!-- 中线接近阶段全部线连续丢失多少帧后允许转向；增大可抗抖，但会更晚转向。 -->
   <arg name="y_lost_confirm_frames" default="3" />
+
+  <!-- 【关键】进入 Y_CENTER_APPROACH 后至少前进该距离，才允许按“丢线”触发转向。单位 m。 -->
   <arg name="y_entry_min_odom" default="0.08" />
+
+  <!-- 【关键】中线接近最大里程兜底，单位 m；达到后即使仍有线也会进入 Y 转向。 -->
   <arg name="y_entry_max_odom" default="0.60" />
+
   <arg name="y_detect_max_id" default="100" />
+
+  <!-- Y 点连续确认帧数；2 较灵敏，3 更抗误检。 -->
   <arg name="y_detect_confirm_frames" default="2" />
+
+  <!-- ======================== 前方横线搜索参数 ======================== -->
+  <!-- 横线搜索阶段直行速度，单位 m/s；建议保持低速 0.05～0.10。 -->
   <arg name="y_crossbar_seek_speed" default="0.08" />
+
+  <!-- 在 Y_SEARCH 中全部线连续丢失多少帧后进入横线搜索。 -->
   <arg name="y_crossbar_lost_confirm_frames" default="3" />
+
+  <!-- 【关键】横线触发的目标前向距离，单位 m；增大表示更早转向。 -->
   <arg name="y_crossbar_target_long_m" default="0.25" />
+
+  <!-- 【关键】目标前向距离允许误差，单位 m；当前有效区间为 target ± tolerance。 -->
   <arg name="y_crossbar_long_tolerance_m" default="0.10" />
+
+  <!-- 横线中心允许的最大横向偏差，单位 m；减小更严格，过小可能一直无法确认。 -->
   <arg name="y_crossbar_max_abs_lat_m" default="0.18" />
+
+  <!-- 横线距离和横向条件连续满足的帧数；2 响应快，3 更抗单帧误检。 -->
   <arg name="y_crossbar_confirm_frames" default="2" />
-  <arg name="y_crossbar_seek_max_odom" default="0.40" />
+
+  <!--
+    【关键】横线搜索最大里程兜底，单位 m。
+    达到后会以 reason=max_odom 强制进入 Y 转向；增大可以多找一段，但会更深入岔路。
+    0.08 m/s 下每增加 0.10 m，理论上会多搜索约 1.25 s。
+  -->
+  <arg name="y_crossbar_seek_max_odom" default="0.55" />
+
+  <!-- ======================== 中线接近控制器参数 ======================== -->
+  <!-- 以下 control_* 只用于接入 follow_motion_controller 的特殊阶段；普通巡线仍使用当前控制。 -->
   <arg name="control_path_smooth_window" default="2" />
   <arg name="control_path_ema_alpha" default="0.35" />
   <arg name="control_error_filter_alpha" default="0.65" />
@@ -112,6 +210,12 @@
   <arg name="control_cmd_filter_alpha" default="0.45" />
   <arg name="lost_line_coast_sec" default="0.15" />
   <arg name="lost_line_coast_speed_scale" default="0.60" />
+
+  <!-- 普通 Left/Right 巡线的角点丢线搜索；Y 岔路阶段由 Y 状态机单独接管，不使用这套补偿转角。 -->
+  <arg name="lost_corner_search_enabled" default="true" />
+  <arg name="lost_corner_search_timeout" default="0.6" />
+  <arg name="lost_corner_search_angular_speed" default="0.25" />
+  <arg name="lost_corner_search_linear_speed" default="0.0" />
 
   <!-- 是否启用起步预转角。Left/Right 会先原地转向目标岔路，Middle 不预转。 -->
   <arg name="initial_turn_enabled" default="true" />

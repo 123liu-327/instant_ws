@@ -8,6 +8,7 @@
 #include <ros/package.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
+#include <std_msgs/Bool.h>
 #include "aiui/AIUI.h"
 #include "AIUITester.h"
 #include "FileUtil.h"
@@ -21,6 +22,8 @@ static volatile bool g_running = true;
 static IAIUIAgent* g_agent = nullptr;
 
 static bool g_asr_enable = true;
+static bool g_close_after_command_accepted = true;
+static bool g_command_accepted = false;
 
 // 是否进入等待关闭状态
 static bool g_need_destroy = false;
@@ -37,12 +40,20 @@ static ros::Time g_last_result_time;
 ros::Publisher pub_voice_raw_text;
 ros::Publisher pub_task_state;
 ros::Subscriber sub_tts;
+ros::Subscriber sub_command_accepted;
 
 const string XF_APPID      = "4c8a2ec8";
 const string XF_API_KEY    = "uFtKQJrDyzpKyiVHMAWM";
 const string XF_API_SECRET = "btlLJzACqGeZKYFoYQeF";
 
 void sig_handler(int sig) { g_running = false; }
+
+void commandAcceptedCallback(const std_msgs::Bool::ConstPtr& msg) {
+    if (!msg->data) return;
+    g_command_accepted = true;
+    g_need_destroy = true;
+    ROS_INFO("Competition voice command accepted; ASR may now stop");
+}
 
 void speakText(const string& text) {
     cout << "speakText初始化" << endl;
@@ -141,7 +152,13 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
     ros::NodeHandle private_nh("~");
     std::string tts_topic;
+    std::string command_accepted_topic;
     private_nh.param<std::string>("tts_topic", tts_topic, "/factory/tts_text");
+    private_nh.param<std::string>(
+        "command_accepted_topic", command_accepted_topic,
+        "/factory/voice_command_accepted");
+    private_nh.param<bool>(
+        "close_after_command_accepted", g_close_after_command_accepted, true);
     g_last_result_time = ros::Time::now();
     g_task_sent = false;
     signal(SIGINT, sig_handler);
@@ -154,7 +171,12 @@ int main(int argc, char** argv) {
         tts_topic,
         10,
         ttsCallback);
+    sub_command_accepted = nh.subscribe(
+        command_accepted_topic, 1, commandAcceptedCallback);
     ROS_INFO_STREAM("TTS subscriber listening on " << tts_topic);
+    ROS_INFO_STREAM(
+        "ASR persistent until accepted command on "
+        << command_accepted_topic);
 
     string pkg_path = ros::package::getPath("speech_command");
     string cfg_path = pkg_path + "/config/AIUI/cfg/aiui.cfg";
@@ -250,9 +272,17 @@ cout<<"🚀 已发送CMD_WAKEUP"<<endl;
 
         if(idle_time > 2.0)
         {
+            if(g_close_after_command_accepted && !g_command_accepted)
+            {
+                // Silence after a wake word, an unrelated phrase, or a
+                // partial order must never close the competition listener.
+                g_need_destroy = false;
+                ROS_INFO("ASR remains active; waiting complete competition command");
+                continue;
+            }
             cout << "🛑 已连续 "
                 << idle_time
-                << " 秒没有新的识别结果，关闭AIUI..."
+                << " 秒没有新的识别结果，比赛指令已确认，关闭AIUI..."
                 << endl;
             
 

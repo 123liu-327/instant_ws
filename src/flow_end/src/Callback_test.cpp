@@ -43,41 +43,6 @@ bool isStopCommand(const std::string &value) {
     return commandMatchesParamList(value, "stop_commands", {"stop", "pause"});
 }
 
-std::string pathParamPrefix(follow_test::PathSelect path) {
-    switch (path) {
-        case follow_test::PathSelect::LEFT:
-            return "left";
-        case follow_test::PathSelect::MIDDLE:
-            return "middle";
-        case follow_test::PathSelect::RIGHT:
-            return "right";
-    }
-    return "right";
-}
-
-void applyPathBiasParams() {
-    ros::NodeHandle private_nh("~");
-    const std::string prefix = pathParamPrefix(follow_test::path_select);
-
-    double default_left_bias = 0.0;
-    double default_right_bias = 0.0;
-    double time_local = Time_local;
-
-    private_nh.param<double>("default_dis_bias_left", default_left_bias, default_left_bias);
-    private_nh.param<double>("default_dis_bias_right", default_right_bias, default_right_bias);
-    private_nh.param<double>("time_local", time_local, time_local);
-
-    double left_bias = default_left_bias;
-    double right_bias = default_right_bias;
-    private_nh.param<double>(prefix + "_dis_bias_left", left_bias, left_bias);
-    private_nh.param<double>(prefix + "_dis_bias_right", right_bias, right_bias);
-    private_nh.param<double>(prefix + "_time_local", time_local, time_local);
-
-    Dis_Bias_Left = static_cast<float>(left_bias);
-    Dis_Bias_Right = static_cast<float>(right_bias);
-    Time_local = time_local;
-}
-
 }  // namespace
 
 void refreshRuntimeParams() {
@@ -194,7 +159,7 @@ void beginCallback(const std_msgs::String::ConstPtr &msg) {
         return;
     }
 
-    applyPathBiasParams();
+    follow_test::applyPathBiasParams(follow_test::path_select);
     run_car = true;
     zeroCount = 0;
     zero_flag = false;
