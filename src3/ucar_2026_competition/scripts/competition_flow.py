@@ -1987,7 +1987,7 @@ class CompetitionFlow:
             self._wait_task2_prewarm_ready()
             self.task1_task2_handoff_prepared = True
         wait_for_announcement = bool_param(
-            "~task1_wait_for_announcement_completion", False)
+            "~task1_wait_for_announcement_completion", True)
         self.announce(
             "task1", text=result.announcement_full,
             wait=wait_for_announcement)
@@ -2387,9 +2387,8 @@ class CompetitionFlow:
             simulation_workshop = CATEGORY_LABELS[simulation_category][1]
         if not simulation_major:
             simulation_major = CATEGORY_LABELS[simulation_category][0]
-        simulation_announcement = (
-            "仿真任务已完成，已将{}放入{}。".format(
-                simulation_item, simulation_workshop))
+        # 第二次停车不立即播报；等 task3 仿真真正完成后再播报。
+        simulation_announcement = ""
 
         self.publish_status(
             "task2", "second_parking_start",
@@ -2402,6 +2401,10 @@ class CompetitionFlow:
                 simulation_announcement, 2)
         finally:
             self.category = physical_category
+
+        # 第二次停车完成后立即启动仿真（后台线程），与 task3 等待并行。
+        if self.enable_simulation:
+            self._start_task3_async()
 
         if not self.enable_simulation:
             hold_sec = max(0.0, float(rospy.get_param(
@@ -2437,88 +2440,117 @@ class CompetitionFlow:
             self.task3_thread = worker
         self.publish_status(
             "task3",
-            "starting_from_first_qr",
-            "first QR accepted; starting simulation task in parallel",
+            "starting",
+            "starting simulation task in parallel",
         )
         worker.start()
         return True
 
     def _task3_worker(self):
+        """UDP-based simulation bridge (xunfei2026_virtual_collaboration_v1).
+
+        Sends a start_simulation datagram to the Gazebo side receiver and waits
+        for a matching simulation_complete callback.  The Gazebo workspace ships
+        with virtual_collaboration_receiver_v1.py (UDP 39026) and
+        simulation_completion_bridge_v1.py (callback UDP 39027), so no changes
+        are needed on the simulation side.
+        """
         result_text = ""
         error = ""
-        sock = None
+        send_sock = None
+        recv_sock = None
         host = rospy.get_param("~sim_bridge_host", "").strip()
-        port = int(rospy.get_param("~sim_bridge_port", 26003))
+        send_port = int(rospy.get_param("~sim_udp_send_port", 39026))
+        recv_port = int(rospy.get_param("~sim_udp_recv_port", 39027))
         timeout = float(rospy.get_param("~sim_timeout_sec", 900.0))
         try:
             if not host:
                 raise StageError("SIM_BRIDGE_HOST / sim_bridge_host is missing")
-            self.publish_status(
-                "task3", "connecting", "connecting to {}:{}".format(host, port)
+
+            sim_category = normalize_category(self.sim_category)
+            sim_item = self.task1_result.get("sim_item", "")
+            sim_major = (
+                self.task1_result.get("sim_major")
+                or CATEGORY_LABELS.get(sim_category, ("", ""))[0]
             )
-            sock = socket.create_connection((host, port), timeout=10.0)
-            sock.settimeout(1.0)
-            request = {
-                "command": "start",
-                "target": self.sim_category,
-                "request_id": str(uuid.uuid4()),
+            sim_workshop = (
+                self.task1_result.get("sim_workshop")
+                or CATEGORY_LABELS.get(sim_category, ("", ""))[1]
+            )
+            mission_id = str(uuid.uuid4())
+
+            if sim_category not in CATEGORY_LABELS:
+                raise StageError("invalid simulation category: {}".format(sim_category))
+            if not sim_item:
+                raise StageError("task3 sim_item is missing")
+
+            # Bind local UDP port to receive the simulation completion callback.
+            recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            recv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            recv_sock.bind(("0.0.0.0", recv_port))
+            recv_sock.settimeout(1.0)
+
+            # Send the start command (repeated for UDP reliability).
+            send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            start_payload = {
+                "protocol": "xunfei2026_virtual_collaboration_v1",
+                "type": "start_simulation",
+                "mission_id": mission_id,
+                "sim_target_key": sim_category,
+                "sim_selected_item": sim_item,
+                "sim_target_category": sim_major,
+                "sim_target_warehouse": sim_workshop,
             }
-            sock.sendall(
-                (json.dumps(request, ensure_ascii=False) + "\n").encode("utf-8")
-            )
+            start_bytes = json.dumps(start_payload, ensure_ascii=False).encode("utf-8")
+            for _ in range(3):
+                send_sock.sendto(start_bytes, (host, send_port))
+                time.sleep(0.1)
+
             self.publish_status(
-                "task3", "running_parallel", "simulation task started from first QR"
+                "task3", "running_parallel",
+                "simulation started via UDP: target={} item={} mission={}".format(
+                    sim_category, sim_item, mission_id)
             )
-            decoder = JsonLineBuffer()
+
+            # Wait for the matching simulation_complete callback.
             deadline = time.time() + timeout
-            done_received = False
-            done_received_at = 0.0
+            completed = False
             while time.time() < deadline:
                 if self.aborted.is_set() or rospy.is_shutdown():
                     raise Aborted("competition aborted during simulation")
-                if done_received and time.time() - done_received_at > 3.0:
-                    raise StageError(
-                        "simulation reported done without a success result"
-                    )
                 try:
-                    chunk = sock.recv(4096)
+                    data, _addr = recv_sock.recvfrom(65535)
                 except socket.timeout:
                     continue
-                except OSError as exc:
-                    raise StageError(
-                        "simulation bridge disconnected: {}".format(exc)
-                    )
-                if not chunk:
-                    raise StageError("simulation bridge disconnected")
-                for event in decoder.feed(chunk):
-                    event_type = event.get("type")
-                    value = event.get("data")
-                    if event_type == "state":
-                        state_text = str(value or "")
-                        self.publish_status("task3", "running_parallel", state_text)
-                        if state_text.startswith("FAILED:"):
-                            raise StageError(state_text)
-                    elif event_type == "result":
-                        result_text = str(value or "")
-                        if result_text.startswith("FAILED:"):
-                            raise StageError(result_text)
-                    elif event_type == "done" and bool(value):
-                        done_received = True
-                        done_received_at = time.time()
-                    elif event_type == "error":
-                        raise StageError(str(value or "simulation bridge error"))
-                if done_received and result_text.startswith("SUCCESS:"):
-                    break
-            else:
+                try:
+                    payload = json.loads(data.decode("utf-8"))
+                except Exception:
+                    continue
+                if (payload.get("protocol") != "xunfei2026_virtual_collaboration_v1"
+                        or payload.get("type") != "simulation_complete"):
+                    continue
+                if str(payload.get("mission_id", "")) != mission_id:
+                    continue
+                completed = True
+                result_text = "SUCCESS: simulation completed item={} warehouse={}".format(
+                    payload.get("sim_selected_item", ""),
+                    payload.get("sim_target_warehouse", ""))
+                self.publish_status("task3", "completed", result_text)
+                break
+
+            if not completed:
                 raise StageError("simulation task timed out")
-            if not result_text.startswith("SUCCESS:"):
-                raise StageError("simulation completed without a success result")
         except Exception as exc:
             error = str(exc)
         finally:
-            if sock is not None:
+            if send_sock is not None:
                 try:
-                    sock.close()
+                    send_sock.close()
+                except Exception:
+                    pass
+            if recv_sock is not None:
+                try:
+                    recv_sock.close()
                 except Exception:
                     pass
             with self.lock:
@@ -2536,7 +2568,7 @@ class CompetitionFlow:
             self.publish_status(
                 "task3",
                 "waiting_parallel_result",
-                "simulation was started from the first QR; waiting for completion",
+                "simulation running in parallel; waiting for completion",
             )
         while not self.task3_done.wait(0.1):
             self.check_abort()

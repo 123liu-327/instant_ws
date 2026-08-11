@@ -24,8 +24,8 @@ qr_center_sector_half_deg: 28.0
 qr_center_pair_sum_min_m: 0.65
 qr_center_pair_sum_max_m: 2.8
 qr_center_axis_error_limit_m: 0.32
-qr_scan_angular_speed: 0.22
-qr_scan_min_angular_speed: 0.08
+qr_scan_angular_speed: 0.16
+qr_scan_min_angular_speed: 0.05
 qr_scan_angular_accel: 0.35
 qr_scan_direction: 1.0
 # 0表示不因圈数或时间提前结束，只在3个不同URL齐全后退出扫描。
@@ -121,7 +121,7 @@ target_trigger_service: /vision_triggered_navigator/trigger_target
 trigger_ack_timeout_sec: 2.0
 task1_task2_handoff_timeout_sec: 5.0
 task1_task2_handoff_stable_sec: 0.25
-task1_wait_for_announcement_completion: false
+task1_wait_for_announcement_completion: true
 task1_navigation_release_delay_sec: 0.8
 # 任务2厂牌覆盖扫描：仅传给coverage_search_mode导航节点。
 coverage_scan_step_deg: 20.0
@@ -146,8 +146,10 @@ coverage_no_progress_timeout_sec: 5.5
 coverage_fallback_enabled: true
 coverage_fallback_make_plan_tolerance_m: 0.12
 
-# 仿真独立 ROS Master，通过 TCP 协同。
-sim_bridge_port: 26003
+# 仿真独立 ROS Master，通过 UDP 协同（xunfei2026_virtual_collaboration_v1）。
+# sim_bridge_host 需在启动环境或 launch 中设置为运行 Gazebo 的电脑 IP。
+sim_udp_send_port: 39026
+sim_udp_recv_port: 39027
 sim_timeout_sec: 900.0
 
 # 交通灯坐标必须经实车标定后显式设置。未设置时流程安全暂停。
