@@ -61,6 +61,11 @@ class CenteredStopLineDetector:
         self.white_saturation_max = int(
             params.get("white_saturation_max", 90))
         self.local_contrast_min = int(params.get("local_contrast_min", 8))
+        # 黄色警戒线检测（蓝色地面上的黄色胶带）
+        self.yellow_h_min = int(params.get("yellow_h_min", 15))
+        self.yellow_h_max = int(params.get("yellow_h_max", 38))
+        self.yellow_s_min = int(params.get("yellow_s_min", 100))
+        self.yellow_v_min = int(params.get("yellow_v_min", 100))
         self.min_width_m = float(params.get("line_min_width_m", 0.25))
         self.max_width_m = float(params.get("line_max_width_m", 0.74))
         self.max_angle_deg = float(params.get("line_max_angle_deg", 18.0))
@@ -191,9 +196,16 @@ class CenteredStopLineDetector:
                           & (hsv[:, :, 2] >= self.white_value_min))
         locally_white = contrast >= self.local_contrast_min
         very_white = hsv[:, :, 2] >= min(245, self.white_value_min + 60)
-        mask = np.where(
+        white_mask = np.where(
             absolute_white & (locally_white | very_white),
             255, 0).astype(np.uint8)
+        # 黄色警戒线 mask（与白色取并集，兼容白线和黄线）
+        yellow_mask = cv2.inRange(
+            hsv,
+            (self.yellow_h_min, self.yellow_s_min, self.yellow_v_min),
+            (self.yellow_h_max, 255, 255),
+        )
+        mask = cv2.bitwise_or(white_mask, yellow_mask)
         bird = cv2.warpPerspective(
             mask, self.homography, (self.width, self.height))
         bird = cv2.morphologyEx(
@@ -312,6 +324,10 @@ class StrictMissionNode:
                 "~white_saturation_max", 90),
             "local_contrast_min": rospy.get_param(
                 "~local_contrast_min", 8),
+            "yellow_h_min": rospy.get_param("~yellow_h_min", 15),
+            "yellow_h_max": rospy.get_param("~yellow_h_max", 38),
+            "yellow_s_min": rospy.get_param("~yellow_s_min", 100),
+            "yellow_v_min": rospy.get_param("~yellow_v_min", 100),
             "line_min_width_m": rospy.get_param(
                 "~line_min_width_m", 0.25),
             "line_max_width_m": rospy.get_param(
@@ -341,6 +357,12 @@ class StrictMissionNode:
             "~line_crossing_min_distance_m", 0.025)))
         self.line_crossing_max_distance = abs(float(rospy.get_param(
             "~line_crossing_max_distance_m", 0.42)))
+        self.line_stop_before_enabled = bool(rospy.get_param(
+            "~line_stop_before_enabled", False))
+        self.line_stop_before_distance = abs(float(rospy.get_param(
+            "~line_stop_before_distance_m", 0.10)))
+        self.line_stop_before_confirm_frames = max(1, int(rospy.get_param(
+            "~line_stop_before_confirm_frames", 3)))
         self.line_switch_reject = abs(float(rospy.get_param(
             "~line_switch_reject_m", 0.10)))
         self.line_acquire_max_distance = abs(float(rospy.get_param(
@@ -522,7 +544,20 @@ class StrictMissionNode:
             int(rospy.get_param("~white_s_max", 85)),
             255,
         )
-        mask = cv2.inRange(hsv, lower, upper)
+        white_mask = cv2.inRange(hsv, lower, upper)
+        # 黄色警戒线 mask（与白色取并集）
+        yellow_lower = (
+            int(rospy.get_param("~yellow_h_min", 15)),
+            int(rospy.get_param("~yellow_s_min", 100)),
+            int(rospy.get_param("~yellow_v_min", 100)),
+        )
+        yellow_upper = (
+            int(rospy.get_param("~yellow_h_max", 38)),
+            255,
+            255,
+        )
+        yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
+        mask = cv2.bitwise_or(white_mask, yellow_mask)
         kernel_size = max(3, int(rospy.get_param("~morph_kernel_size", 5)))
         if kernel_size % 2 == 0:
             kernel_size += 1
@@ -661,6 +696,7 @@ class StrictMissionNode:
             self.line_disappeared_frames = 0
             self.line_near_seen = False
             self.line_closest_distance = None
+            self.line_stop_before_frames = 0
             self.line_center_reference_distance = None
             self.line_center_reject_frames = 0
             self.line_search_anchor = self.odom_pose
@@ -854,6 +890,28 @@ class StrictMissionNode:
             else:
                 self.line_closest_distance = min(
                     self.line_closest_distance, distance)
+            # 停在线前模式：距离达到阈值后连续N帧确认，直接停车（不越线）
+            if (self.line_stop_before_enabled
+                    and distance <= self.line_stop_before_distance):
+                self.line_stop_before_frames += 1
+                if (self.line_stop_before_frames
+                        >= self.line_stop_before_confirm_frames):
+                    self.publish_stop()
+                    with self.lock:
+                        if self.state != "APPROACH_LINE":
+                            return
+                        self.line_phase = "DONE"
+                        self.state = "LINE_CROSSED"
+                        self.parked_event.set()
+                    self.publish_status(
+                        "stop line reached; parked before line",
+                        line_distance_m=distance,
+                        stop_before_distance_m=self.line_stop_before_distance,
+                        centered_before_crossing=True,
+                    )
+                    return
+            else:
+                self.line_stop_before_frames = 0
             correction_scale = 0.0 if self.line_near_seen else 0.45
             self._publish_line_command(
                 vx=self.line_crossing_speed,

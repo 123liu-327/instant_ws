@@ -24,7 +24,7 @@ qr_center_sector_half_deg: 28.0
 qr_center_pair_sum_min_m: 0.65
 qr_center_pair_sum_max_m: 2.8
 qr_center_axis_error_limit_m: 0.32
-qr_scan_angular_speed: 0.16
+qr_scan_angular_speed: 0.18
 qr_scan_min_angular_speed: 0.05
 qr_scan_angular_accel: 0.35
 qr_scan_direction: 1.0
