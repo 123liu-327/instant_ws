@@ -1,8 +1,0 @@
-prefix=/home/ucar/instant_ws/src3/devel_pure
-
-Name: yolo
-Description: Description of yolo
-Version: 0.1.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

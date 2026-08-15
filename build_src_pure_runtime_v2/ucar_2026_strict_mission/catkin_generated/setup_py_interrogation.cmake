@@ -1,0 +1,7 @@
+set(ucar_2026_strict_mission_SETUP_PY_SETUP_MODULE "setuptools")
+set(ucar_2026_strict_mission_SETUP_PY_VERSION "0.1.0")
+set(ucar_2026_strict_mission_SETUP_PY_SCRIPTS "")
+set(ucar_2026_strict_mission_SETUP_PY_PACKAGES "ucar_2026_strict_mission")
+set(ucar_2026_strict_mission_SETUP_PY_PACKAGE_DIRS "src/ucar_2026_strict_mission")
+set(ucar_2026_strict_mission_SETUP_PY_MODULES "")
+set(ucar_2026_strict_mission_SETUP_PY_MODULE_DIRS "")

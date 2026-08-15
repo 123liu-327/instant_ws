@@ -21,6 +21,7 @@ catkin_package()
 
 catkin_install_python(PROGRAMS
   scripts/competition_flow.py
+  scripts/competition_flow_flowend_v1.py
   scripts/external_voice_nodes.py
   scripts/fixed_command_iat.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

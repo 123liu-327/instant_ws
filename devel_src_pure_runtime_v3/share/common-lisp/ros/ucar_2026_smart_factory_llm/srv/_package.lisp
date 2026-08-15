@@ -1,0 +1,10 @@
+(cl:defpackage ucar_2026_smart_factory_llm-srv
+  (:use )
+  (:export
+   "REASONPICKUPORDER"
+   "<REASONPICKUPORDER-REQUEST>"
+   "REASONPICKUPORDER-REQUEST"
+   "<REASONPICKUPORDER-RESPONSE>"
+   "REASONPICKUPORDER-RESPONSE"
+  ))
+

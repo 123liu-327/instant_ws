@@ -1,0 +1,9 @@
+# CMake generated Testfile for 
+# Source directory: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/tf2
+# Build directory: /home/ucar/instant_ws/build_src_pure_runtime_v3/tf2
+# 
+# This file includes the relevant testing commands required for 
+# testing this directory and lists subdirectories to be tested as well.
+add_test(_ctest_tf2_gtest_test_cache_unittest "/home/ucar/instant_ws/build_src_pure_runtime_v3/catkin_generated/env_cached.sh" "/usr/bin/python3" "/opt/ros/noetic/share/catkin/cmake/test/run_tests.py" "/home/ucar/instant_ws/build_src_pure_runtime_v3/test_results/tf2/gtest-test_cache_unittest.xml" "--return-code" "/home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/tf2/test_cache_unittest --gtest_output=xml:/home/ucar/instant_ws/build_src_pure_runtime_v3/test_results/tf2/gtest-test_cache_unittest.xml")
+add_test(_ctest_tf2_gtest_test_static_cache_unittest "/home/ucar/instant_ws/build_src_pure_runtime_v3/catkin_generated/env_cached.sh" "/usr/bin/python3" "/opt/ros/noetic/share/catkin/cmake/test/run_tests.py" "/home/ucar/instant_ws/build_src_pure_runtime_v3/test_results/tf2/gtest-test_static_cache_unittest.xml" "--return-code" "/home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/tf2/test_static_cache_unittest --gtest_output=xml:/home/ucar/instant_ws/build_src_pure_runtime_v3/test_results/tf2/gtest-test_static_cache_unittest.xml")
+add_test(_ctest_tf2_gtest_test_simple "/home/ucar/instant_ws/build_src_pure_runtime_v3/catkin_generated/env_cached.sh" "/usr/bin/python3" "/opt/ros/noetic/share/catkin/cmake/test/run_tests.py" "/home/ucar/instant_ws/build_src_pure_runtime_v3/test_results/tf2/gtest-test_simple.xml" "--return-code" "/home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/tf2/test_simple --gtest_output=xml:/home/ucar/instant_ws/build_src_pure_runtime_v3/test_results/tf2/gtest-test_simple.xml")

@@ -20,9 +20,6 @@ find_package(catkin REQUIRED COMPONENTS
   roslib
 )
 
-# add_executable(tts_verify src/tts_verify.cpp)  # 源文件缺失, 暂时禁用
-# target_link_libraries(tts_verify AIKit)
-
 ## Generate messages in the 'msg' folder
 # add_message_files(FILES
 #   # Battery_info.msg
@@ -76,17 +73,9 @@ add_executable(base_driver  src/base_driver.cpp)
 add_dependencies(base_driver ucar_controller_generate_messages_cpp)
 target_link_libraries(base_driver crc_table_fd ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 
+add_executable(my_base_driver  src/my_base_driver.cpp)
+add_dependencies(my_base_driver ucar_controller_generate_messages_cpp)
+target_link_libraries(my_base_driver crc_table_fd ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+
 ## crc_table_fd
 add_library(crc_table_fd src/crc_table.cpp)
-
-## Install Python scripts
-catkin_install_python(PROGRAMS
-  scripts/process_qr.py
-  scripts/sensor_tf_server.py
-  scripts/performance_test.py
-  scripts/process.py
-  scripts/process_5.5.1.py
-  scripts/process_qr_test.py
-  scripts/process_qr_test1.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)

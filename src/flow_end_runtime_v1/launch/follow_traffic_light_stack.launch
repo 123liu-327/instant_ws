@@ -1,0 +1,81 @@
+<launch>
+  <!-- One-command stack: base + camera + traffic-light decision + line following + TTS. -->
+  <arg name="start_base_driver" default="true" />
+  <arg name="start_camera" default="true" />
+  <arg name="start_speech" default="true" />
+  <arg name="start_traffic_light" default="true" />
+  <arg name="start_tts_bridge" default="true" />
+
+  <arg name="camera_device_path" default="/dev/video0" />
+  <arg name="image_topic" default="/ucar_camera/image_raw" />
+  <arg name="cmd_vel_topic" default="/cmd_vel" />
+  <arg name="begin_topic" default="/follow_begin" />
+  <arg name="end_topic" default="/follow_end" />
+  <arg name="tts_topic" default="/factory/tts_text" />
+  <arg name="traffic_enable_topic" default="/traffic_light/enable" />
+  <arg name="traffic_state_topic" default="/traffic_light/state" />
+  <arg name="traffic_decision_topic" default="/traffic_light/decision" />
+  <!-- 直行灯触发 Y 岔路选择；命令行可用 straight_command:=YRight 覆盖。 -->
+  <arg name="straight_command" default="YLeft" />
+  <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
+
+  <arg name="low_exposure_absolute" default="150" />
+  <arg name="traffic_model_path"
+       default="$(find traffic_light_vision)/models/traffic_light_yolov5s_fp16.rknn" />
+  <arg name="traffic_confidence_threshold" default="0.55" />
+  <arg name="traffic_enabled_at_start" default="false" />
+  <arg name="traffic_publish_debug" default="true" />
+  <arg name="follow_publish_debug" default="true" />
+  <arg name="follow_enable_video_record" default="false" />
+
+  <include if="$(arg start_base_driver)" file="$(find ucar_controller)/launch/base_driver.launch" />
+
+  <include if="$(arg start_camera)" file="$(find ucar_camera)/launch/ucar_camera.launch">
+    <arg name="device_path" value="$(arg camera_device_path)" />
+    <arg name="image_topic" value="$(arg image_topic)" />
+    <arg name="low_exposure_absolute" value="$(arg low_exposure_absolute)" />
+  </include>
+
+  <!-- follow_test stays IDLE until the detector publishes Left/Middle/Right. -->
+  <include file="$(find flow_end)/launch/follow_test.launch">
+    <arg name="image_topic" value="$(arg image_topic)" />
+    <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)" />
+    <arg name="begin_topic" value="$(arg begin_topic)" />
+    <arg name="end_topic" value="$(arg end_topic)" />
+    <arg name="publish_debug_image" value="$(arg follow_publish_debug)" />
+    <arg name="enable_video_record" value="$(arg follow_enable_video_record)" />
+  </include>
+
+  <include if="$(arg start_speech)" file="$(find speech_command)/launch/speech_command.launch">
+    <arg name="tts_topic" value="$(arg tts_topic)" />
+  </include>
+
+  <include if="$(arg start_traffic_light)"
+           file="$(find traffic_light_vision)/launch/traffic_light_detector.launch">
+    <arg name="image_topic" value="$(arg image_topic)" />
+    <arg name="enable_topic" value="$(arg traffic_enable_topic)" />
+    <arg name="state_topic" value="$(arg traffic_state_topic)" />
+    <arg name="command_topic" value="$(arg begin_topic)" />
+    <arg name="decision_topic" value="$(arg traffic_decision_topic)" />
+    <arg name="straight_command" value="$(arg straight_command)" />
+    <arg name="model_path" value="$(arg traffic_model_path)" />
+    <arg name="confidence_threshold" value="$(arg traffic_confidence_threshold)" />
+    <arg name="enabled_at_start" value="$(arg traffic_enabled_at_start)" />
+    <arg name="publish_debug" value="$(arg traffic_publish_debug)" />
+    <arg name="camera_profile_service" value="$(arg camera_profile_service)" />
+    <arg name="require_camera_profile" value="true" />
+  </include>
+
+  <node if="$(arg start_tts_bridge)"
+        pkg="speech_command"
+        type="follow_tts_bridge.py"
+        name="follow_tts_bridge"
+        output="screen">
+    <!-- Direction speech comes from traffic decisions; do not also speak /follow_begin. -->
+    <param name="begin_topic" value="$(arg begin_topic)" />
+    <param name="end_topic" value="$(arg end_topic)" />
+    <param name="traffic_decision_topic" value="$(arg traffic_decision_topic)" />
+    <param name="tts_topic" value="$(arg tts_topic)" />
+    <param name="speak_begin_commands" value="false" />
+  </node>
+</launch>

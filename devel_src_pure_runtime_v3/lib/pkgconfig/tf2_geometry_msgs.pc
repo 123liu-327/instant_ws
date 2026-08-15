@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v3
+
+Name: tf2_geometry_msgs
+Description: Description of tf2_geometry_msgs
+Version: 0.6.5
+Cflags: -I/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/tf2_geometry_msgs/include -I/usr/include/eigen3
+Libs: -L${prefix}/lib /usr/lib/liborocos-kdl.so -lorocos-kdl
+Requires: geometry_msgs tf2_ros tf2

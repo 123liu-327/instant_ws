@@ -1,0 +1,12 @@
+﻿<launch>
+  <!-- Minimal debug launch: image processing only, no /cmd_vel publication. -->
+  <arg name="image_topic" default="/ucar_camera/image_raw" />
+  <arg name="show_window" default="true" />
+  <arg name="publish_debug_image" default="true" />
+
+  <node pkg="flow_end" type="image_process_debug" name="flow_end_image_process_debug" output="screen">
+    <param name="image_topic" value="$(arg image_topic)" />
+    <param name="show_window" value="$(arg show_window)" />
+    <param name="publish_debug_image" value="$(arg publish_debug_image)" />
+  </node>
+</launch>

@@ -1,4 +1,0 @@
-green_left
-green_right
-green_straight
-red_light

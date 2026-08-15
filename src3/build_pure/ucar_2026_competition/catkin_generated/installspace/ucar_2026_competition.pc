@@ -1,8 +1,0 @@
-prefix=/home/ucar/instant_ws/src3/install
-
-Name: ucar_2026_competition
-Description: Description of ucar_2026_competition
-Version: 0.1.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

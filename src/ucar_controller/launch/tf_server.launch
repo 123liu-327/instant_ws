@@ -31,3 +31,10 @@
     <param name="~tf_rate"       value="30"/>
   </node>
 </launch> 
+
+<!--camera_pose_x/y/z	相机在base_footprint中的三维坐标（米）	(0.15, 0.0, 0.15)-->
+<!--camera_euler_r/p/y	相机的欧拉角（弧度），分别对应Roll/Pitch/Yaw	(-2.007, 0.0, -1.57)-->
+<!--lidar_pose_x/y/z	激光雷达在base_footprint中的三维坐标	(-0.11, 0.0, 0.165)-->
+<!--lidar_euler_r/p/y	激光雷达的欧拉角	(0.0, 0.0, -0.07)-->
+<!--imu_pose_x/y/z	IMU在base_footprint中的三维坐标	(0.05, -0.05, 0.05)-->
+<!--imu_euler_r/p/y	IMU的欧拉角	(0, 0, 0)-->

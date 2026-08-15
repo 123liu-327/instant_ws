@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/src_pure_runtime_ws/install
+
+Name: ucar_nav
+Description: Description of ucar_nav
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: roscpp move_base_msgs actionlib cv_bridge sensor_msgs

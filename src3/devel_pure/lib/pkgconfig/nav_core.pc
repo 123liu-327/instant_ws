@@ -1,8 +1,0 @@
-prefix=/home/ucar/instant_ws/src3/devel_pure
-
-Name: nav_core
-Description: Description of nav_core
-Version: 1.17.3
-Cflags: -I/home/ucar/instant_ws/src3/ucar_2026_nav/3rd/navigation/nav_core/include
-Libs: -L${prefix}/lib 
-Requires: std_msgs geometry_msgs tf2_ros costmap_2d

@@ -1,0 +1,18 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/include/ucar_controller/crc_table.h
+stdint.h
+-
+
+/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/src/crc_table.cpp
+stdint.h
+-
+ucar_controller/crc_table.h
+-
+

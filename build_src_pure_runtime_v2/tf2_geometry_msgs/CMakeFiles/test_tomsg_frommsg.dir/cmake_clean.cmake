@@ -1,0 +1,10 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/test_tomsg_frommsg.dir/test/test_tomsg_frommsg.cpp.o"
+  "/home/ucar/instant_ws/devel_src_pure_runtime_v2/lib/tf2_geometry_msgs/test_tomsg_frommsg.pdb"
+  "/home/ucar/instant_ws/devel_src_pure_runtime_v2/lib/tf2_geometry_msgs/test_tomsg_frommsg"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/test_tomsg_frommsg.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

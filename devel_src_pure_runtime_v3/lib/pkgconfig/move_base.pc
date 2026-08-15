@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v3
+
+Name: move_base
+Description: Description of move_base
+Version: 1.17.3
+Cflags: -I/home/ucar/instant_ws/devel_src_pure_runtime_v3/include -I/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/move_base/include -I/usr/include/eigen3
+Libs: -L${prefix}/lib -lmove_base
+Requires: dynamic_reconfigure geometry_msgs move_base_msgs nav_msgs roscpp

@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v3
+
+Name: ucar_2026_smart_factory_llm
+Description: Description of ucar_2026_smart_factory_llm
+Version: 0.1.0
+Cflags: -I/home/ucar/instant_ws/devel_src_pure_runtime_v3/include
+Libs: -L${prefix}/lib 
+Requires: actionlib actionlib_msgs geometry_msgs message_runtime move_base_msgs rospy std_msgs ucar_2026_competition_speech

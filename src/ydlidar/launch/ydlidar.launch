@@ -1,5 +1,6 @@
 <launch>
-  <node name="ydlidar_node"  pkg="ydlidar"  type="ydlidar_node" output="screen" respawn="false" >
+  <!-- <node name="ydlidar_node"  pkg="ydlidar"  type="ydlidar_node" output="screen" respawn="false" > -->\
+  <node name="ydlidar_node"  pkg="ydlidar"  type="ydlidar_node" output="screen"  >
     <param name="port"         type="string" value="/dev/ttyS4"/>  
     <param name="frame_id"     type="string" value="laser_frame"/>
     <param name="resolution_fixed"    type="bool"   value="true"/>
@@ -15,5 +16,5 @@
     <remap from="scan" to="scan" />
   </node>
   <node pkg="tf" type="static_transform_publisher" name="base_link_to_laser"
-    args="0.11 0.0 0.13 -0.07 0.0  0.0 /base_link /laser_frame 40" />
+    args="0.08 0.0 0.13 0.0 0.0  0.0 /base_link /laser_frame 40" respawn="true" />
 </launch>

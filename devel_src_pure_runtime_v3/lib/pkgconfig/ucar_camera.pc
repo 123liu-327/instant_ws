@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v3
+
+Name: ucar_camera
+Description: Description of ucar_camera
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

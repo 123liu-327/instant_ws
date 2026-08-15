@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v3
+
+Name: ucar_2026_strict_mission
+Description: Description of ucar_2026_strict_mission
+Version: 0.1.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

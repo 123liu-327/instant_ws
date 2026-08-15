@@ -1,0 +1,2 @@
+ucar_2026_strict_mission:ucar_2026_track_end_stop
+-DCMAKE_BUILD_TYPE=Release -DCATKIN_DEVEL_PREFIX=/home/ucar/instant_ws/runtime_src6_ws/devel -DCMAKE_INSTALL_PREFIX=/home/ucar/instant_ws/runtime_src6_ws/install -G Unix Makefiles

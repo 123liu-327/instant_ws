@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v3
+
+Name: map_server
+Description: Description of map_server
+Version: 1.17.3
+Cflags: -I/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/map_server/include
+Libs: -L${prefix}/lib -lmap_server_image_loader
+Requires: roscpp nav_msgs tf2

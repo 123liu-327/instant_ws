@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/amcl/include/amcl/map/map.h
+stdint.h
+-
+
+/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/amcl/src/amcl/map/map_cspace.cpp
+queue
+-
+math.h
+-
+stdlib.h
+-
+string.h
+-
+amcl/map/map.h
+/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/amcl/src/amcl/map/amcl/map/map.h
+

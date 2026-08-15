@@ -20,7 +20,9 @@ from ucar_2026_competition.logic import (
     normalize_category,
     normalize_angle,
     parse_category,
+    parse_task_categories,
     qr_values_from_payload,
+    split_rotation_steps,
     stage_sequence,
     task4_handoff_required,
     task4_start_action,
@@ -48,6 +50,23 @@ class CompetitionLogicTest(unittest.TestCase):
         self.assertAlmostEqual(tracker.update(0.19), 0.2)
         self.assertAlmostEqual(tracker.update(0.21), 0.21)
 
+    def test_yaw_accumulator_tracks_beyond_half_turn(self):
+        tracker = DirectedYawAccumulator(direction=1.0)
+        tracker.reset(0.0)
+        for yaw in (1.0, 2.0, 3.0, -2.7, -2.2):
+            tracker.update(yaw)
+        self.assertGreater(tracker.progress, 4.0)
+
+    def test_qr_scan_splits_210_degrees_into_seven_30_degree_steps(self):
+        steps = split_rotation_steps(
+            7.0 * 3.141592653589793 / 6.0,
+            3.141592653589793 / 6.0,
+        )
+        self.assertEqual(len(steps), 7)
+        for step in steps:
+            self.assertAlmostEqual(step, 3.141592653589793 / 6.0)
+        self.assertAlmostEqual(sum(steps), 7.0 * 3.141592653589793 / 6.0)
+
     def test_voice_category(self):
         self.assertEqual(parse_category("小飞小飞，请取得食品类"), "food")
         self.assertEqual(parse_category("取得食品"), "food")
@@ -55,6 +74,37 @@ class CompetitionLogicTest(unittest.TestCase):
         self.assertEqual(parse_category("取得日用品"), "daily")
         self.assertEqual(parse_category("请取得电子产品类"), "electronics")
         self.assertEqual(parse_category("取得电子产品"), "electronics")
+
+    def test_parse_two_different_task_categories(self):
+        physical, simulation = parse_task_categories(
+            "小飞小飞，取得食品类放到对应仓库，"
+            "并领取仿真环境中需要的日用品类放到对应仓库"
+        )
+        self.assertEqual(physical, "food")
+        self.assertEqual(simulation, "daily")
+
+    def test_dual_category_command_waits_for_simulation_part(self):
+        physical, simulation = parse_task_categories("请取得电子产品类")
+        self.assertEqual(physical, "electronics")
+        self.assertIsNone(simulation)
+
+    def test_dual_category_parser_handles_all_pairs(self):
+        cases = [
+            ("食品", "日用品", "food", "daily"),
+            ("食品", "电子产品", "food", "electronics"),
+            ("日用品", "食品", "daily", "food"),
+            ("日用品", "电子产品", "daily", "electronics"),
+            ("电子产品", "食品", "electronics", "food"),
+            ("电子产品", "日用品", "electronics", "daily"),
+        ]
+        for physical_name, sim_name, expected_phy, expected_sim in cases:
+            text = "取得{}类，仿真环境取得{}类".format(
+                physical_name, sim_name
+            )
+            self.assertEqual(
+                parse_task_categories(text),
+                (expected_phy, expected_sim),
+            )
 
     def test_ocr_alias(self):
         self.assertEqual(normalize_category("electronic"), "electronics")
@@ -144,13 +194,13 @@ class CompetitionLogicTest(unittest.TestCase):
         self.assertFalse(task4_handoff_required("task2", "task3"))
         self.assertFalse(task4_handoff_required(None, "task4"))
 
-    def test_full_launch_exposes_optional_simulation_parameter(self):
+    def test_full_launch_enables_parallel_simulation_by_default(self):
         launch_path = os.path.abspath(os.path.join(
             os.path.dirname(__file__), "..", "launch", "full_competition.launch"))
         root = ET.parse(launch_path).getroot()
         launch_args = {item.attrib["name"]: item.attrib.get("default")
                        for item in root.findall("arg")}
-        self.assertEqual(launch_args["enable_simulation"], "false")
+        self.assertEqual(launch_args["enable_simulation"], "true")
 
         flow_include = next(
             item for item in root.findall("include")
@@ -164,7 +214,7 @@ class CompetitionLogicTest(unittest.TestCase):
         flow_root = ET.parse(flow_path).getroot()
         flow_launch_args = {item.attrib["name"]: item.attrib.get("default")
                             for item in flow_root.findall("arg")}
-        self.assertEqual(flow_launch_args["enable_simulation"], "false")
+        self.assertEqual(flow_launch_args["enable_simulation"], "true")
         flow_params = {item.attrib["name"]: item.attrib.get("value")
                        for item in flow_root.find("node").findall("param")}
         self.assertEqual(

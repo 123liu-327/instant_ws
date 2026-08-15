@@ -1,0 +1,36 @@
+-- Using CATKIN_DEVEL_PREFIX: /home/ucar/instant_ws/devel
+-- Using CMAKE_PREFIX_PATH: /home/ucar/instant_ws/devel;/opt/ros/noetic
+-- This workspace overlays: /home/ucar/instant_ws/devel;/opt/ros/noetic
+-- Using PYTHON_EXECUTABLE: /home/ucar/miniconda3/bin/python3
+-- Using Debian Python package layout
+-- Using empy: /usr/bin/empy
+-- Using CATKIN_ENABLE_TESTING: OFF
+-- catkin 0.8.10
+-- BUILD_SHARED_LIBS is on
+-- BUILD_SHARED_LIBS is on
+-- Using CATKIN_WHITELIST_PACKAGES: flow_end
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- ~~  traversing 1 packages in topological order:
+-- ~~  - flow_end
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- +++ processing catkin package: 'flow_end'
+-- ==> add_subdirectory(flow_end)
+-- Using these message generators: gencpp;geneus;genlisp;gennodejs;genpy
+-- Sources: src/Laser_linear.cpp;src/follow_line.cpp;src/PID.cpp;src/Callback.cpp;src/corner_move.cpp;src/Findline_Adaptive.cpp;src/follow.cpp;src/generateLookupTable.cpp;src/ImagePerspectiveInit.cpp;src/MatTransform.cpp;src/Point_Process.cpp;src/process_image.cpp;src/Signal.cpp;src/track_line.cpp
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/ucar/instant_ws/build
+[ 37%] Built target follow_test
+[ 81%] Built target image_process_debug
+[100%] Built target follow_end
+Base path: /home/ucar/instant_ws
+Source space: /home/ucar/instant_ws/src
+Build space: /home/ucar/instant_ws/build
+Devel space: /home/ucar/instant_ws/devel
+Install space: /home/ucar/instant_ws/install
+####
+#### Running command: "cmake /home/ucar/instant_ws/src -DCATKIN_DEVEL_PREFIX=/home/ucar/instant_ws/devel -DCMAKE_INSTALL_PREFIX=/home/ucar/instant_ws/install -G Unix Makefiles" in "/home/ucar/instant_ws/build"
+####
+####
+#### Running command: "make -j8 -l8" in "/home/ucar/instant_ws/build"
+####

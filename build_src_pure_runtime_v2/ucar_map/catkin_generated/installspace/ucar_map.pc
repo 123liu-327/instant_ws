@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/src_pure_runtime_ws/install
+
+Name: ucar_map
+Description: Description of ucar_map
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

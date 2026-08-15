@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v3
+
+Name: traffic_light_vision
+Description: Description of traffic_light_vision
+Version: 0.0.1
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

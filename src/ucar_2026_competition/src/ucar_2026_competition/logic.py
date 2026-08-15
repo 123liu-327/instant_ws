@@ -52,11 +52,13 @@ class DirectedYawAccumulator:
         self.direction = 1.0 if float(direction) >= 0.0 else -1.0
         self.start_yaw = None
         self.last_yaw = None
+        self.net_progress = 0.0
         self.progress = 0.0
 
     def reset(self, yaw):
         self.start_yaw = float(yaw)
         self.last_yaw = float(yaw)
+        self.net_progress = 0.0
         self.progress = 0.0
 
     def update(self, yaw):
@@ -64,13 +66,14 @@ class DirectedYawAccumulator:
         if self.last_yaw is None:
             self.reset(yaw)
             return self.progress
+        delta = normalize_angle(yaw - self.last_yaw) * self.direction
         self.last_yaw = yaw
-        # Measure net rotation from this step's starting yaw. Keeping the
-        # maximum suppresses small reverse jitter without counting the same
-        # forward arc twice after the chassis recovers from that jitter.
-        net_progress = normalize_angle(yaw - self.start_yaw) * self.direction
-        if net_progress > self.progress:
-            self.progress = net_progress
+        # Integrating wrapped frame-to-frame deltas preserves rotations beyond
+        # 180 degrees. Keeping the maximum net progress still suppresses small
+        # reverse jitter without counting its recovery twice.
+        self.net_progress += delta
+        if self.net_progress > self.progress:
+            self.progress = self.net_progress
         return self.progress
 
 
@@ -197,9 +200,41 @@ def parse_category(text):
     return None
 
 
+def parse_task_categories(text):
+    """Parse the physical and simulation categories from one task command."""
+    compact = "".join(str(text or "").split()).lower()
+    simulation_markers = ("仿真环境", "仿真", "模拟环境", "虚拟环境")
+    sim_pos = -1
+    for marker in simulation_markers:
+        marker_pos = compact.find(marker)
+        if marker_pos >= 0 and (sim_pos < 0 or marker_pos < sim_pos):
+            sim_pos = marker_pos
+
+    if sim_pos < 0:
+        return parse_category(compact), None
+
+    physical = parse_category(compact[:sim_pos])
+    simulation = parse_category(compact[sim_pos:])
+    return physical, simulation
+
+
 def normalize_category(value):
     text = str(value or "").strip().lower()
     return OCR_CATEGORY_ALIASES.get(text) or parse_category(text)
+
+
+def split_rotation_steps(total_angle, step_angle):
+    """Split a positive rotation into exact bounded steps without overshooting."""
+    remaining = max(0.0, float(total_angle))
+    step_angle = float(step_angle)
+    if step_angle <= 0.0:
+        raise ValueError("step_angle must be positive")
+    steps = []
+    while remaining > 1e-9:
+        current = min(step_angle, remaining)
+        steps.append(current)
+        remaining -= current
+    return tuple(steps)
 
 
 def qr_values_from_payload(payload):

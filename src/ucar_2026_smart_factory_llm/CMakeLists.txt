@@ -27,6 +27,7 @@ catkin_package(
 )
 
 catkin_install_python(PROGRAMS
+  scripts/reason_pickup_existing_spark_v1.py
   scripts/reason_pickup_server.py
   scripts/reason_and_speak_once.py
   scripts/qr_to_llm_speak_once.py

@@ -1,0 +1,262 @@
+# vision_triggered_navigator 参数配置
+# 触发模式：keyboard（键盘回车测试） / vision（视觉话题）
+trigger_mode: "keyboard"
+vision_topic: "/vision/detected"
+trigger_service: "/vision_triggered_navigator/trigger_target"
+parking_diagnostics_topic: "/vision_triggered_navigator/parking_diagnostics"
+
+# 参考坐标系
+# map_frame: AMCL / move_base 使用 "map"
+# base_frame: base_driver.launch + driver_params_ucarV2.yaml 使用 "base_link"
+# camera_frame: tf_server.launch 使用 "camera_frame"；sensor_tf_server.py 默认是 "cam"
+map_frame: "map"
+base_frame: "base_link"
+camera_frame: "camera_frame"
+
+# 视觉区实测四角，顺序固定为：左上、右上、左下、右下。
+# 最终停泊直接使用四条真实墙段；观察点严格使用下方9个标定坐标。
+vision_rect_corners:
+  - [-2.2311, -1.2505]
+  - [ 2.8000, -1.1940]
+  - [-2.2197, -3.2746]
+  - [ 2.7739, -3.2186]
+
+# 安全偏移距离：墙交点沿内法向回退的距离（米）
+vision_offset: 0.4
+
+# costmap 可行性判断
+costmap_topic: "/move_base/local_costmap/costmap"
+cost_threshold: 50          # 代价 >= 阈值认为不可行
+feasibility_check_rate: 1.0  # Hz，导航过程中检查目标可行性的频率
+
+# 任务2覆盖优先模式（launch默认关闭，只有比赛任务2显式开启）。
+coverage_search_mode: false
+coverage_start_nearest: false
+coverage_preferred_anchor: 0
+coverage_entry_enabled: true
+coverage_entry_x: -1.65
+coverage_entry_y: -1.77
+coverage_entry_yaw: 1.04
+coverage_entry_tolerance_m: 0.35
+coverage_entry_retry_count: 1
+coverage_preferred_odom_yaw_enabled: false
+coverage_preferred_odom_yaw: 0.0
+coverage_preferred_confirm_dwell_sec: 1.2
+coverage_preferred_scan_half_angle_deg: 18.0
+coverage_skip_anchors: ""
+coverage_abort_fail_fast_count: 0
+target_topic: "/vision/target"
+non_target_topic: "/vision/non_target_observation"
+coverage_non_target_early_exit: false
+coverage_non_target_min_scan_steps: 2
+# 精确锚点先执行25秒软时限；仍在有效接近时最多延长到40秒。
+coverage_goal_soft_timeout_sec: 7.0
+coverage_goal_hard_timeout_sec: 10.0
+coverage_goal_progress_window_sec: 5.0
+coverage_goal_min_progress: 0.03
+coverage_rotation_watchdog_window_sec: 5.0
+coverage_rotation_min_progress: 0.03
+coverage_rotation_max_yaw_deg: 45.0
+# 0.28m仅用于覆盖搜索的提前降速；硬停止由0.215m车体旋转半径+0.020m余量决定。
+coverage_rotation_min_clearance: 0.28
+coverage_obstacle_required_scans: 2
+coverage_rotation_clearance_tolerance: 0.005
+coverage_rotation_consensus_window_sec: 0.35
+coverage_rotation_consensus_min_samples: 3
+coverage_rotation_resample_timeout_sec: 0.25
+coverage_rotation_consensus_history_size: 9
+# 交由 move_base/costmap 绕障；设为 0 禁用会误取消整个位点的激光平移门槛。
+coverage_translation_min_clearance: 0.00
+coverage_translation_sector_half_angle_deg: 35.0
+coverage_max_vel_x: 0.72
+coverage_max_vel_y: 0.72
+coverage_max_vel_theta: 1.45
+coverage_cruise_vel_x: 0.70
+coverage_cruise_vel_y: 0.70
+coverage_cruise_vel_theta: 1.30
+coverage_caution_vel_x: 0.53
+coverage_caution_vel_y: 0.53
+coverage_caution_vel_theta: 1.12
+coverage_teb_weight_kinematics_nh: 1.0
+coverage_teb_weight_kinematics_forward_drive: 10.0
+coverage_teb_min_turning_radius: 0.0
+coverage_teb_global_plan_overwrite_orientation: false
+coverage_caution_enter_clearance: 0.45
+coverage_caution_exit_clearance: 0.55
+coverage_fast_exit_clearance: 0.75
+coverage_fast_enter_clearance: 0.90
+coverage_speed_update_min_interval_sec: 0.50
+coverage_goal_retry_count: 1
+coverage_anchor_position_tolerance: 0.15
+coverage_anchor_observation_radius: 0.35
+coverage_near_anchor_stall_timeout_sec: 0.8
+coverage_anchor_yaw_tolerance_deg: 3.44
+coverage_anchor_yaw_hold_sec: 0.5
+coverage_anchor_yaw_timeout_sec: 20.0
+max_coverage_anchors: 0
+center_only: false
+coverage_scan_settle_sec: 0.35
+# 仅coverage_search_mode使用：保持原扫描弧度，按20度一档停稳识别。
+coverage_scan_step_deg: 20.0
+coverage_scan_angular_speed: 0.35
+coverage_scan_dwell_sec: 0.65
+coverage_candidate_hold_sec: 1.2
+coverage_scan_max_dwell_sec: 2.0
+coverage_scan_pose_timeout_sec: 0.5
+coverage_scan_step_timeout_margin_sec: 2.0
+coverage_scan_step_max_extra_sec: 3.0
+coverage_scan_step_retry_count: 1
+coverage_scan_step_retry_settle_sec: 0.20
+coverage_scan_progress_fresh_sec: 0.8
+coverage_scan_progress_epsilon_deg: 0.5
+robot_footprint_radius: 0.215
+lethal_cost: 253
+
+# 目标厂牌居中。steering_sign需通过首次低速测试确认，图像右偏时应向右转。
+target_center_tolerance: 0.08
+target_center_required_hits: 2
+target_center_timeout_sec: 12.0
+target_bbox_stale_sec: 0.8
+target_center_min_speed: 0.08
+target_center_max_speed: 0.18
+target_center_steering_sign: -1.0
+target_center_coarse_step_deg: 4.0
+target_center_fine_step_deg: 2.0
+target_center_fine_threshold: 0.20
+target_center_start_speed: 0.28
+target_center_step_max_speed: 0.45
+target_center_speed_increment: 0.05
+target_center_motion_window_sec: 0.6
+target_center_min_progress_deg: 0.5
+target_center_settle_sec: 0.25
+target_center_reverse_threshold: 0.03
+target_center_min_clearance: 0.23
+odom_topic: /odom
+odom_stale_sec: 0.5
+camera_boresight_yaw_offset: 0.292
+arrival_hold_sec: 0.6
+
+# 任务2完整模式覆盖这些参数；独立导航默认维持原0.4m目标且不做50cm框验证。
+validate_parking_box: false
+parking_box_width: 0.50
+parking_box_depth: 0.50
+parking_goal_offset: 0.26
+parking_staging_offset: 0.55
+# 校准光轴命中点过于靠近墙端时只安全停止，不再移动复观测。
+parking_endpoint_min_clearance: 0.16
+parking_docking_timeout_sec: 30.0
+parking_dock_max_x: 0.10
+parking_dock_max_y: 0.06
+parking_dock_max_yaw: 0.15
+parking_dock_min_yaw: 0.15
+parking_dock_normal_tolerance: 0.02
+parking_dock_tangent_tolerance: 0.02
+parking_dock_yaw_tolerance: 0.05
+parking_dock_stable_sec: 0.5
+parking_min_wall_distance: 0.19
+parking_lidar_stop_distance: 0.15
+# 下列固定距离参数仅供旧启动文件兼容；正常停泊使用TF后的扫掠包络。
+parking_lidar_forward_offset: 0.08
+parking_obstacle_min_clearance: 0.24
+parking_obstacle_clearance_tolerance: 0.005
+parking_obstacle_sector_half_angle_deg: 35.0
+parking_obstacle_required_scans: 2
+parking_recovery_retry_count: 1
+parking_recovery_reverse_speed: 0.06
+parking_recovery_timeout_sec: 8.0
+scan_topic: /scan
+scan_stale_sec: 0.5
+scan_front_half_angle_deg: 15.0
+parking_recenter_tolerance: 0.04
+parking_recenter_timeout_sec: 8.0
+parking_recenter_initial_wait_sec: 1.0
+parking_wall_fit_half_angle_deg: 35.0
+parking_wall_fit_min_points: 12
+parking_wall_fit_min_span: 0.25
+parking_wall_fit_near_min_span: 0.18
+parking_wall_fit_max_distance_jump: 0.05
+parking_wall_fit_max_normal_jump_deg: 8.0
+parking_wall_fit_max_residual: 0.015
+parking_wall_fit_max_normal_error_deg: 20.0
+parking_normal_offset: 0.0
+parking_tangent_offset: 0.03
+parking_xy_tolerance: 0.04
+parking_yaw_tolerance: 0.06
+parking_validation_margin: 0.01
+parking_required_margin: 0.02
+footprint_half_length: 0.171
+footprint_half_width: 0.128
+local_planner_reconfigure_ns: /move_base/TebLocalPlannerROS
+
+# 自转参数
+rotation_speed: 0.5   # rad/s，左转为正，所有巡航点共用
+cmd_vel_topic: "/cmd_vel"
+
+# 结束点
+end_goal:
+  x: 0.3195
+  y: -3.2703
+  yaw: -1.5596
+
+# 初始位姿（发布给 AMCL 的 /initialpose）
+publish_initial_pose: true
+initial_pose:
+  x: 0.0
+  y: 0.0
+  yaw: 0.0
+
+# 39ff0ec 实车基准：9 个巡航点，顺序为旧点 4,3,2,1,9,8,7,6,5。
+patrol_points:
+  - x: -0.70
+    y: -2.82
+    yaw: -1.56
+    rotations:
+      - {direction: "right", duration: 3.00}
+
+  - x: -1.68
+    y: -2.79
+    yaw: -3.12
+    rotations:
+      - {direction: "left", duration: 4.50}
+
+  - x: -1.66
+    y: -2.28
+    yaw: -3.14
+    rotations:
+      - {direction: "right", duration: 3.00}
+
+  - x: -1.65
+    y: -1.77
+    yaw: 1.04
+    rotations:
+      - {direction: "left", duration: 4.50}
+
+  - x: 0.30
+    y: -1.65
+    yaw: 0.89
+    rotations:
+      - {direction: "left", duration: 4.00}
+
+  - x: 1.26
+    y: -1.65
+    yaw: 0.85
+    rotations:
+      - {direction: "left", duration: 4.00}
+
+  - x: 2.35
+    y: -1.65
+    yaw: -0.86
+    rotations:
+      - {direction: "left", duration: 4.50}
+
+  - x: 2.34
+    y: -2.74
+    yaw: -2.18
+    rotations:
+      - {direction: "left", duration: 4.50}
+
+  - x: 1.27
+    y: -2.89
+    yaw: -1.54
+    rotations:
+      - {direction: "right", duration: 3.00}

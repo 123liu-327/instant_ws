@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v3
+
+Name: vision_triggered_navigator
+Description: Description of vision_triggered_navigator
+Version: 0.1.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: rospy move_base_msgs geometry_msgs nav_msgs sensor_msgs actionlib tf std_msgs dynamic_reconfigure std_srvs

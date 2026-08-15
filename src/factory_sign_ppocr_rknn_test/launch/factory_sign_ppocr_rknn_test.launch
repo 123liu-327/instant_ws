@@ -30,6 +30,7 @@
   <arg name="result_topic" default="/factory_sign_ppocr_rknn_test/result" />
   <arg name="required" default="false" />
   <arg name="chars_per_second" default="3.0" />
+  <arg name="python_executable" default="/home/ucar/miniconda3/bin/python3" />
 
   <group if="$(arg start_camera)">
     <include file="$(find usb_cam)/launch/usb_cam-test.launch" />
@@ -44,9 +45,9 @@
   <node pkg="factory_sign_ppocr_rknn_test"
         type="factory_sign_ppocr_rknn_node.py"
         name="factory_sign_ppocr_rknn_node"
-        output="screen"
+        output="log"
         required="$(arg required)"
-        launch-prefix="bash -c 'sleep 2; exec &quot;$@&quot;' dummy">
+        launch-prefix="bash -c 'sleep 2; exec $(arg python_executable) &quot;$@&quot;' dummy">
     <rosparam command="load" file="$(arg config_file)" />
     <param name="image_topic" value="$(arg image_topic)" />
     <param name="flip" value="$(arg flip)" />

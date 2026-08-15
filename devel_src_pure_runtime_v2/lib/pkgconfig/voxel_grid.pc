@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/devel_src_pure_runtime_v2
+
+Name: voxel_grid
+Description: Description of voxel_grid
+Version: 1.17.3
+Cflags: -I/home/ucar/instant_ws/src_pure_runtime_ws/src/voxel_grid/include
+Libs: -L${prefix}/lib -lvoxel_grid
+Requires: roscpp

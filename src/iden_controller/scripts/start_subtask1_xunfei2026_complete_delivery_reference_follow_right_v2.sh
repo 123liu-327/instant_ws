@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REFERENCE_FOLLOW_MODE=right exec "$SCRIPT_DIR/start_subtask1_xunfei2026_complete_delivery_reference_follow_v2.sh" "$@"

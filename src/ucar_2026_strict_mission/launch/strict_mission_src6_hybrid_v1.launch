@@ -1,0 +1,17 @@
+<launch>
+  <arg name="start_traffic_detector" default="false" />
+  <arg name="start_viewer" default="false" />
+  <arg name="traffic_pose_configured" default="true" />
+  <arg name="traffic_staging_x" default="0.2395" />
+  <arg name="traffic_staging_y" default="-3.10" />
+  <arg name="traffic_staging_yaw" default="-1.5596" />
+
+  <include file="$(find ucar_2026_strict_mission)/launch/strict_mission.launch">
+    <arg name="start_traffic_detector" value="$(arg start_traffic_detector)" />
+    <arg name="start_viewer" value="$(arg start_viewer)" />
+    <arg name="traffic_pose_configured" value="$(arg traffic_pose_configured)" />
+    <arg name="traffic_staging_x" value="$(arg traffic_staging_x)" />
+    <arg name="traffic_staging_y" value="$(arg traffic_staging_y)" />
+    <arg name="traffic_staging_yaw" value="$(arg traffic_staging_yaw)" />
+  </include>
+</launch>

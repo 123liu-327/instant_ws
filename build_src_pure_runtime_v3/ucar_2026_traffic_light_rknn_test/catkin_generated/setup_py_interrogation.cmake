@@ -1,0 +1,7 @@
+set(ucar_2026_traffic_light_rknn_test_SETUP_PY_SETUP_MODULE "setuptools")
+set(ucar_2026_traffic_light_rknn_test_SETUP_PY_VERSION "0.2.0")
+set(ucar_2026_traffic_light_rknn_test_SETUP_PY_SCRIPTS "")
+set(ucar_2026_traffic_light_rknn_test_SETUP_PY_PACKAGES "ucar_2026_traffic_light_rknn_test")
+set(ucar_2026_traffic_light_rknn_test_SETUP_PY_PACKAGE_DIRS "src/ucar_2026_traffic_light_rknn_test")
+set(ucar_2026_traffic_light_rknn_test_SETUP_PY_MODULES "")
+set(ucar_2026_traffic_light_rknn_test_SETUP_PY_MODULE_DIRS "")
