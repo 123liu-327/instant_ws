@@ -33,7 +33,7 @@ class Task1FullOnce:
         self.service_name = rospy.get_param(
             "~service_name", "/smart_factory_llm/reason_pickup_order"
         )
-        self.speak_topic = rospy.get_param("~speak_topic", "/speak")
+        self.speak_topic = rospy.get_param("~speak_topic", "/factory/tts_text")
         self.announce_service = rospy.get_param(
             "~announce_service", "/competition_speech/announce"
         )

@@ -68,6 +68,74 @@ def bool_param(name, default=False):
     return bool(value)
 
 
+def _bounded_float(value, default=0.0, lower=0.0, upper=1.0):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = float(default)
+    return max(lower, min(upper, number))
+
+
+def ocr_observation_quality(payload):
+    """Return comparable OCR geometry metrics for one camera frame."""
+    image_width = max(1.0, _bounded_float(
+        payload.get("image_width"), 1.0, 1.0, 100000.0))
+    image_height = max(1.0, _bounded_float(
+        payload.get("image_height"), 1.0, 1.0, 100000.0))
+    points = []
+    for point in payload.get("target_bbox") or ():
+        try:
+            points.append((float(point[0]), float(point[1])))
+        except (TypeError, ValueError, IndexError):
+            continue
+    if len(points) < 2:
+        return None
+
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    bbox_width = max(xs) - min(xs)
+    bbox_height = max(ys) - min(ys)
+    if bbox_width <= 0.0 or bbox_height <= 0.0:
+        return None
+    area_ratio = min(1.0, bbox_width * bbox_height /
+                     (image_width * image_height))
+    try:
+        center_x = float(payload.get("target_center_x"))
+    except (TypeError, ValueError):
+        center_x = 0.5 * (min(xs) + max(xs))
+    try:
+        center_y = float(payload.get("target_center_y"))
+    except (TypeError, ValueError):
+        center_y = 0.5 * (min(ys) + max(ys))
+    center_error_x = min(1.0, abs(center_x / image_width - 0.5) * 2.0)
+    center_error_y = min(1.0, abs(center_y / image_height - 0.5) * 2.0)
+    center_error = min(
+        1.0, math.hypot(center_error_x, center_error_y) / math.sqrt(2.0))
+    confidence = _bounded_float(payload.get("confidence"), 0.0)
+    category_score = max(0.0, _bounded_float(
+        payload.get("category_score"), 0.0, 0.0, 100000.0))
+    category_quality = category_score / (category_score + 1.0)
+
+    # Apparent size and horizontal centering are the physical viewpoint cues.
+    # OCR confidence is deliberately a small tie-breaker because its raw scale
+    # varies between model versions.
+    score = (
+        7.0 * math.sqrt(area_ratio)
+        + 1.25 * (1.0 - center_error)
+        + 0.20 * confidence
+        + 0.10 * category_quality
+    )
+    return {
+        "score": score,
+        "area_ratio": area_ratio,
+        "center_error": center_error,
+        "center_error_x": center_error_x,
+        "center_error_y": center_error_y,
+        "confidence": confidence,
+        "category_quality": category_quality,
+    }
+
+
 class CompetitionFlow:
     def __init__(self):
         self.mode = rospy.get_param("~start_stage", "full").strip().lower()
@@ -77,6 +145,7 @@ class CompetitionFlow:
         self.resume_event = threading.Event()
         self.children = {}
         self.child_log_handles = {}
+        self.child_process_groups = {}
         self.lock = threading.RLock()
         self.voice_transition_lock = threading.Lock()
 
@@ -174,6 +243,7 @@ class CompetitionFlow:
         self.last_coverage_anchor_index = 0
         self.first_parking_anchor_index = 0
         self.cached_sim_observation = None
+        self.simulation_anchor_evidence = {}
         self.vision_trigger_latched = False
         self.trigger_request_pending = False
         self.trigger_request_started_at = 0.0
@@ -221,7 +291,7 @@ class CompetitionFlow:
             "/scan", LaserScan, self._handoff_scan_cb,
             queue_size=1, buff_size=1024 * 1024, tcp_nodelay=True)
         rospy.Subscriber(
-            "/move_base/local_costmap/costmap", OccupancyGrid,
+            "/move_base/local_costmap/costmap", rospy.AnyMsg,
             self._handoff_costmap_cb,
             queue_size=1, buff_size=4 * 1024 * 1024, tcp_nodelay=True)
         rospy.Subscriber(
@@ -584,13 +654,11 @@ class CompetitionFlow:
             self.ocr_last_logged_category = category
             self.ocr_last_log_signature = log_signature
 
-        if (self.factory_parking_index == 1 and self.sim_category and
-                self.sim_category != self.ocr_target):
+        if self.factory_parking_index == 1 and self.sim_category:
             sim_confirmed = self.sim_preview_filter.push(
                 self.sim_category, category, now)
-            if (sim_confirmed and category == self.sim_category and
-                    payload.get("target_bbox")):
-                self._remember_simulation_observation(payload)
+            if category == self.sim_category and payload.get("target_bbox"):
+                self._remember_simulation_observation(payload, sim_confirmed)
         if (confirmed and category == self.ocr_target and payload.get("target_bbox") and
                 not self.vision_trigger_latched):
             if self.factory_parking_index == 1:
@@ -647,14 +715,14 @@ class CompetitionFlow:
                     math.degrees(float(payload.get("yaw"))),
                 )
 
-    def _remember_simulation_observation(self, ocr_payload):
+    def _remember_simulation_observation(self, ocr_payload, confirmed):
         with self.lock:
             observation = dict(self.coverage_observation or {})
             observation_age = (
                 time.monotonic() - self.coverage_observation_received_at
             )
         max_age = float(rospy.get_param(
-            "~simulation_cache_observation_max_age_sec", 60.0))
+            "~simulation_cache_observation_max_age_sec", 30.0))
         if not observation or observation_age > max_age:
             return
         # A remembered target must belong to a point where the vehicle has
@@ -664,66 +732,102 @@ class CompetitionFlow:
         if observation_state not in ("scanning", "covered"):
             return
 
-        try:
-            center_x = float(ocr_payload.get("target_center_x"))
-            image_width = max(1.0, float(ocr_payload.get("image_width")))
-        except (TypeError, ValueError):
-            center_x = 0.5
-            image_width = 1.0
-        center_error = abs(center_x / image_width - 0.5) * 2.0
-        score = (
-            float(ocr_payload.get("category_score", 0.0) or 0.0)
-            + float(ocr_payload.get("confidence", 0.0) or 0.0)
-            - center_error
-        )
-        observation.update({
-            "category": self.sim_category,
-            "score": score,
-            "center_error": center_error,
-            "cached_at": time.time(),
+        with self.lock:
+            twist = self.base_twist
+            odom_age = time.monotonic() - self.qr_odom_received_at
+            observed_odom_yaw = self.qr_odom_yaw
+        if (twist is None or odom_age > 0.5 or
+                not base_is_stopped(*twist)):
+            return
+
+        metrics = ocr_observation_quality(ocr_payload)
+        if metrics is None:
+            return
+        current_anchor = int(observation.get("anchor_index", 0))
+        if current_anchor <= 0:
+            return
+        sample = dict(metrics)
+        sample.update({
+            "odom_yaw": observed_odom_yaw,
             "seen_at_monotonic": time.monotonic(),
         })
         with self.lock:
+            evidence = self.simulation_anchor_evidence.setdefault(
+                current_anchor, [])
+            evidence.append(sample)
+            del evidence[:-12]
+            sample_count = len(evidence)
+            if not confirmed or sample_count < 2:
+                return
+            strongest = sorted(
+                evidence, key=lambda item: item["score"], reverse=True)[:3]
+            aggregate_score = sum(
+                item["score"] for item in strongest) / len(strongest)
+            representative = strongest[0]
+            observation.update(representative)
+            observation.update({
+                "category": self.sim_category,
+                "score": aggregate_score,
+                "sample_count": sample_count,
+                "cached_at": time.time(),
+                "seen_at_monotonic": sample["seen_at_monotonic"],
+            })
             previous = self.cached_sim_observation
-            previous_seen_at = (
-                float(previous.get("seen_at_monotonic", -1.0))
-                if previous is not None else -1.0
-            )
-            if observation["seen_at_monotonic"] < previous_seen_at:
+            previous_score = (
+                float(previous.get("score", -1.0))
+                if previous is not None else -1.0)
+            hysteresis = max(0.0, float(rospy.get_param(
+                "~simulation_cache_switch_hysteresis", 0.08)))
+            previous_anchor = (
+                int(previous.get("anchor_index", 0))
+                if previous is not None else 0)
+            required_gain = 0.01 if previous_anchor == current_anchor else hysteresis
+            should_replace = (
+                previous is None or
+                aggregate_score >= previous_score + required_gain)
+            if not should_replace:
                 return
             self.cached_sim_observation = observation
 
-        previous_anchor = (
-            int(previous.get("anchor_index", 0))
-            if previous is not None else 0
-        )
-        current_anchor = int(observation.get("anchor_index", 0))
-        if previous_anchor == current_anchor:
+        anchor_changed = previous_anchor != current_anchor
+        improved = previous is None or observation["score"] > previous_score + 0.02
+        if not anchor_changed and not improved:
             return
         self.publish_status(
             "task2",
             "simulation_anchor_cached",
-            "[CACHE] latest simulation={} anchor={} pose=({:.2f},{:.2f},{:.2f})".format(
+            "[CACHE] best simulation={} anchor={} area={:.3f} center={:.2f} score={:.2f}".format(
                 self.sim_category,
                 current_anchor,
-                float(observation["x"]),
-                float(observation["y"]),
-                float(observation["yaw"]),
+                float(observation["area_ratio"]),
+                float(observation["center_error"]),
+                float(observation["score"]),
             ),
         )
         rospy.logwarn(
-            "[OCR CACHE] latest simulation=%s scan_point=%d "
-            "pose=(%.2f, %.2f, %.1fdeg) previous=%d",
+            "[OCR CACHE] best simulation=%s scan_point=%d "
+            "area=%.3f center_error=%.2f score=%.2f samples=%d previous=%d",
             self.sim_category, current_anchor,
-            float(observation["x"]), float(observation["y"]),
-            math.degrees(float(observation["yaw"])), previous_anchor,
+            float(observation["area_ratio"]),
+            float(observation["center_error"]),
+            float(observation["score"]),
+            int(observation["sample_count"]), previous_anchor,
         )
 
     def _navigator_cb(self, msg):
         status = msg.data.strip().lower()
-        if status.startswith("coverage_anchor_observing:"):
+        observing_prefixes = (
+            "coverage_anchor_observing:",
+            "coverage_remembered_heading_observing:",
+            "coverage_scan_steps:",
+        )
+        observing_prefix = next(
+            (prefix for prefix in observing_prefixes
+             if status.startswith(prefix)), None)
+        if observing_prefix is not None:
             try:
-                anchor_index = int(status.rsplit(":", 1)[1])
+                anchor_text = status[len(observing_prefix):].split(":", 1)[0]
+                anchor_index = int(anchor_text)
             except (TypeError, ValueError):
                 anchor_index = 0
             if anchor_index > 0:
@@ -743,6 +847,17 @@ class CompetitionFlow:
                     self.last_coverage_anchor_index = anchor_index
                     self.coverage_observation = observation
                     self.coverage_observation_received_at = time.monotonic()
+        elif status.startswith("coverage_anchor_transit:"):
+            try:
+                anchor_index = int(status.rsplit(":", 1)[1])
+            except (TypeError, ValueError):
+                anchor_index = 0
+            with self.lock:
+                self.coverage_observation = {
+                    "state": "navigating",
+                    "anchor_index": anchor_index,
+                }
+                self.coverage_observation_received_at = time.monotonic()
         if status != self.navigator_status:
             rospy.logwarn("[ROOM NAV] state=%s", status)
         self.navigator_status = status
@@ -1037,31 +1152,73 @@ class CompetitionFlow:
             log_handle = open(log_path, "ab", buffering=0)
             self.child_log_handles[key] = log_handle
             rospy.loginfo("starting %s (details: %s)", key, log_path)
-            self.children[key] = subprocess.Popen(
+            proc = subprocess.Popen(
                 command, start_new_session=True,
                 stdout=log_handle, stderr=subprocess.STDOUT)
         else:
             rospy.loginfo("starting child: %s", " ".join(command))
-            self.children[key] = subprocess.Popen(
+            proc = subprocess.Popen(
                 command, start_new_session=True)
-        return self.children[key]
+        self.children[key] = proc
+        try:
+            self.child_process_groups[key] = os.getpgid(proc.pid)
+        except OSError:
+            self.child_process_groups[key] = proc.pid
+        return proc
 
     def stop_child(self, key):
         proc = self.children.pop(key, None)
         log_handle = self.child_log_handles.pop(key, None)
-        if proc is None or proc.poll() is not None:
+        pgid = self.child_process_groups.pop(key, None)
+        if proc is None:
             if log_handle is not None:
                 log_handle.close()
             return
         try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGINT)
-            proc.wait(timeout=5.0)
-        except Exception:
-            try:
-                proc.terminate()
-                proc.wait(timeout=2.0)
-            except Exception:
-                proc.kill()
+            if pgid is None:
+                try:
+                    pgid = os.getpgid(proc.pid)
+                except OSError:
+                    pgid = None
+            for sig, timeout in (
+                    (signal.SIGINT, 3.0),
+                    (signal.SIGTERM, 1.0),
+                    (signal.SIGKILL, 0.5)):
+                group_alive = False
+                if pgid is not None and pgid != os.getpgrp():
+                    try:
+                        os.killpg(pgid, sig)
+                        group_alive = True
+                    except ProcessLookupError:
+                        break
+                    except OSError:
+                        pass
+                elif proc.poll() is None:
+                    try:
+                        proc.send_signal(sig)
+                        group_alive = True
+                    except OSError:
+                        break
+                if not group_alive:
+                    break
+                try:
+                    proc.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    pass
+                if pgid is None:
+                    if proc.poll() is not None:
+                        break
+                    continue
+                try:
+                    os.killpg(pgid, 0)
+                except ProcessLookupError:
+                    break
+                except OSError:
+                    break
+                if sig != signal.SIGKILL:
+                    rospy.logwarn(
+                        "child %s left processes after %s; escalating cleanup",
+                        key, signal.Signals(sig).name)
         finally:
             if log_handle is not None:
                 log_handle.close()
@@ -1643,8 +1800,8 @@ class CompetitionFlow:
 
     def _slow_qr_fallback_scan(
             self, expected_count, direction, stale_sec, scan_deadline,
-            status_state):
-        """Use the legacy continuous slow scan after the first fast round."""
+            status_state, initial_scan=False):
+        """Run the continuous slow scan as either primary or fallback mode."""
         speed = abs(float(rospy.get_param(
             "~qr_fallback_angular_speed", 0.22)))
         min_speed = abs(float(rospy.get_param(
@@ -1659,13 +1816,18 @@ class CompetitionFlow:
         tracker.reset(self._fresh_qr_odom_yaw(stale_sec))
         started_at = time.monotonic()
         reported_rounds = 0
-        self.publish_status(
-            "task1",
-            status_state,
-            "[QR] fast round incomplete: count={}/{}; legacy slow fallback started "
-            "at {:.2f}rad/s".format(
-                self._qr_count(), expected_count, speed),
-        )
+        if initial_scan:
+            status_text = (
+                "[QR] continuous slow scan started at {:.2f}rad/s; count={}/{}"
+                .format(speed, self._qr_count(), expected_count)
+            )
+        else:
+            status_text = (
+                "[QR] fast round incomplete: count={}/{}; legacy slow fallback "
+                "started at {:.2f}rad/s".format(
+                    self._qr_count(), expected_count, speed)
+            )
+        self.publish_status("task1", status_state, status_text)
 
         while self._qr_count() < expected_count and not rospy.is_shutdown():
             self.check_abort()
@@ -1683,7 +1845,8 @@ class CompetitionFlow:
                 self.publish_status(
                     "task1",
                     status_state,
-                    "[QR] slow fallback round {} complete: count={}/{}".format(
+                    "[QR] {} round {} complete: count={}/{}".format(
+                        "continuous slow" if initial_scan else "slow fallback",
                         rounds, self._qr_count(), expected_count),
                 )
 
@@ -1701,7 +1864,7 @@ class CompetitionFlow:
             raise Aborted("competition stopped during QR slow fallback scan")
 
     def scan_qr_at_current_pose(self, status_state):
-        """Run one fast 15-degree round, then use legacy continuous slow scan."""
+        """Center once, then scan continuously; stepped scan remains optional."""
         expected_count = int(rospy.get_param("~qr_expected_count", 3))
         speed = abs(float(rospy.get_param("~qr_scan_angular_speed", 0.60)))
         step_angle = abs(float(rospy.get_param(
@@ -1743,6 +1906,34 @@ class CompetitionFlow:
         scan_deadline = (
             time.monotonic() + scan_timeout if scan_timeout > 0.0 else float("inf")
         )
+        if bool_param("~qr_slow_only", True):
+            try:
+                self._settle_for_qr(
+                    warmup_sec,
+                    expected_count,
+                    scan_deadline,
+                    stale_sec,
+                    "QR warmup",
+                )
+                self._slow_qr_fallback_scan(
+                    expected_count,
+                    direction,
+                    stale_sec,
+                    scan_deadline,
+                    status_state,
+                    initial_scan=True,
+                )
+            finally:
+                self.safe_stop()
+            if rospy.is_shutdown():
+                raise Aborted("competition stopped during continuous slow QR scan")
+            self.publish_status(
+                "task1",
+                "qr_step_scan_completed",
+                "[QR] scan complete: {} unique URLs".format(self._qr_count()),
+            )
+            return True
+
         completed_steps = 0
         fast_round_steps = max(1, int(round(2.0 * math.pi / step_angle)))
         self.publish_status(
@@ -1840,8 +2031,10 @@ class CompetitionFlow:
         }
 
     def _factory_navigator_args(self, center_only, start_paused,
-                                preferred_coverage_anchor=0):
-        return {
+                                preferred_coverage_anchor=0,
+                                preferred_odom_yaw=None):
+        args = {
+            "config_profile": "vision_triggered_navigator_src6_clockwise_v1.yaml",
             "trigger_mode": "vision",
             "vision_topic": "/vision/detected",
             "target_topic": "/vision/target",
@@ -1855,6 +2048,11 @@ class CompetitionFlow:
                 "/vision_triggered_navigator/coverage_observation",
             ),
             "preferred_coverage_anchor": int(preferred_coverage_anchor),
+            "coverage_preferred_odom_yaw_enabled": (
+                preferred_odom_yaw is not None),
+            "coverage_preferred_odom_yaw": (
+                float(preferred_odom_yaw)
+                if preferred_odom_yaw is not None else 0.0),
             "publish_initial_pose": (
                 False if self.mode == "task1_task2" else
                 bool_param("~navigator_publish_initial_pose", False)
@@ -1864,7 +2062,7 @@ class CompetitionFlow:
             "target_center_steering_sign": rospy.get_param(
                 "~target_center_steering_sign", -1.0),
             "parking_recenter_lateral_sign": rospy.get_param(
-                "~parking_recenter_lateral_sign", 1.0),
+                "~parking_recenter_lateral_sign", -1.0),
             "camera_boresight_yaw_offset": rospy.get_param(
                 "~camera_boresight_yaw_offset", 0.0),
             "camera_horizontal_fov_deg": rospy.get_param(
@@ -2012,6 +2210,7 @@ class CompetitionFlow:
             "coverage_fallback_make_plan_tolerance_m": rospy.get_param(
                 "~coverage_fallback_make_plan_tolerance_m", 0.12),
         }
+        return args
 
     def _factory_ocr_is_running(self):
         proc = self.children.get("factory_ocr")
@@ -2055,6 +2254,9 @@ class CompetitionFlow:
                 simulation_category not in CATEGORY_LABELS):
             return False
         preferred_anchor, preferred_source = self._second_parking_anchor_choice()
+        preferred_yaw = None
+        if self.cached_sim_observation:
+            preferred_yaw = self.cached_sim_observation.get("odom_yaw")
         physical_category = self.category
         self.ocr_target = None
         self.factory_parking_index = 0
@@ -2075,6 +2277,7 @@ class CompetitionFlow:
                     bool_param("~task2_center_only", False),
                     True,
                     preferred_anchor,
+                    preferred_yaw,
                 ),
                 reuse_running=True,
             )
@@ -2347,6 +2550,7 @@ class CompetitionFlow:
         if parking_index == 1:
             self.sim_preview_filter.reset()
             self.cached_sim_observation = None
+            self.simulation_anchor_evidence = {}
         self.ocr_last_message_at = 0.0
         self.vision_trigger_latched = False
         self.trigger_request_pending = False
@@ -2359,6 +2563,9 @@ class CompetitionFlow:
         if parking_index == 2:
             preferred_anchor, preferred_source = (
                 self._second_parking_anchor_choice())
+        preferred_yaw = None
+        if parking_index == 2 and self.cached_sim_observation:
+            preferred_yaw = self.cached_sim_observation.get("odom_yaw")
         if parking_index == 2 and preferred_anchor > 0:
             self.publish_status(
                 "task2", "simulation_scan_resume",
@@ -2400,6 +2607,7 @@ class CompetitionFlow:
                 "vision_triggered_navigator",
                 "vision_triggered_navigator_src6_points_v1.launch",
                 {
+                    "config_profile": "vision_triggered_navigator_src6_clockwise_v1.yaml",
                     "trigger_mode": "vision",
                     "vision_topic": "/vision/detected",
                     "target_topic": "/vision/target",
@@ -2413,6 +2621,11 @@ class CompetitionFlow:
                         "/vision_triggered_navigator/coverage_observation",
                     ),
                     "preferred_coverage_anchor": preferred_anchor,
+                    "coverage_preferred_odom_yaw_enabled": (
+                        preferred_yaw is not None),
+                    "coverage_preferred_odom_yaw": (
+                        float(preferred_yaw)
+                        if preferred_yaw is not None else 0.0),
                     "publish_initial_pose": (
                         False if self.mode == "task1_task2" else
                         bool_param("~navigator_publish_initial_pose", False)),
@@ -2421,7 +2634,7 @@ class CompetitionFlow:
                     "target_center_steering_sign": rospy.get_param(
                         "~target_center_steering_sign", -1.0),
                     "parking_recenter_lateral_sign": rospy.get_param(
-                        "~parking_recenter_lateral_sign", 1.0),
+                        "~parking_recenter_lateral_sign", -1.0),
                     "camera_boresight_yaw_offset": rospy.get_param(
                         "~camera_boresight_yaw_offset", 0.0),
                     "center_only": center_only,

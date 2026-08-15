@@ -2,10 +2,10 @@
   <!--
     One-command field test sequence:
     1. USB camera
-    2. TTS subscriber on /speak
+    2. TTS subscriber on /factory/tts_text
     3. X11 camera viewer for MobaXterm
     4. QR decoder
-    5. QR -> Spark LLM -> /speak
+    5. QR -> Spark LLM -> /factory/tts_text
   -->
   <arg name="start_camera" default="true" />
   <arg name="start_audio_setup" default="true" />
@@ -14,7 +14,7 @@
   <arg name="start_qr" default="true" />
   <arg name="camera_topic" default="/usb_cam/image_raw" />
   <arg name="qr_topic" default="/qr_code_data" />
-  <arg name="speak_topic" default="/speak" />
+  <arg name="speak_topic" default="/factory/tts_text" />
   <arg name="status_topic" default="/qr_speak_test/status" />
   <arg name="flip" default="false" />
   <arg name="fetch" default="true" />
@@ -51,8 +51,11 @@
   </group>
 
   <group if="$(arg start_tts)">
-    <node pkg="speech_command" type="voice_speak_node" name="voice_speak_node" output="screen"
-          launch-prefix="bash -c 'sleep 1; exec &quot;$@&quot;' dummy" />
+    <node pkg="speech_command" type="speech_command_node" name="qr_test_tts" output="screen"
+          launch-prefix="bash -c 'sleep 1; exec &quot;$@&quot;' dummy">
+      <param name="tts_only" value="true" />
+      <param name="tts_topic" value="$(arg speak_topic)" />
+    </node>
   </group>
 
   <group if="$(arg start_viewer)">

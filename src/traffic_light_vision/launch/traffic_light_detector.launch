@@ -5,6 +5,7 @@
   <arg name="state_topic" default="/traffic_light/state" />
   <arg name="command_topic" default="/follow_begin" />
   <arg name="decision_topic" default="/traffic_light/decision" />
+  <arg name="straight_command" default="Middle" />
   <arg name="debug_topic" default="/traffic_light/debug_image" />
   <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
   <arg name="require_camera_profile" default="true" />
@@ -39,6 +40,7 @@
     <param name="state_topic" type="string" value="$(arg state_topic)" />
     <param name="command_topic" type="string" value="$(arg command_topic)" />
     <param name="decision_topic" type="string" value="$(arg decision_topic)" />
+    <param name="straight_command" type="string" value="$(arg straight_command)" />
     <param name="debug_topic" type="string" value="$(arg debug_topic)" />
     <param name="camera_profile_service" type="string" value="$(arg camera_profile_service)" />
     <param name="require_camera_profile" type="bool" value="$(arg require_camera_profile)" />

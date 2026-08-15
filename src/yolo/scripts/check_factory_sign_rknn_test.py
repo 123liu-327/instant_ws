@@ -267,7 +267,7 @@ def check_ros_topics() -> bool:
     # 检查相关节点
     checks = [
         ("/usb_cam", "USB camera driver"),
-        ("/voice_speak_node", "TTS speech node"),
+        ("/factory_sign_tts", "TTS speech node"),
         ("/factory_sign_rknn_test_node", "Factory sign inference node"),
         ("/traffic_light_rknn_test_node", "Traffic light inference node"),
     ]
@@ -286,7 +286,7 @@ def check_ros_topics() -> bool:
             ("/factory_sign_rknn_test/detections", "Factory sign detections"),
             ("/factory_sign_rknn_test/debug_image", "Factory sign debug image"),
             ("/factory_sign_rknn_test/status", "Factory sign status"),
-            ("/speak", "Speech output"),
+            ("/factory/tts_text", "Speech output"),
         ]
         for topic, desc in topic_checks:
             if topic in topics:

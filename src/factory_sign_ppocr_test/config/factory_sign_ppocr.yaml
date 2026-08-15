@@ -36,6 +36,6 @@ debug_show_image: false
 speech_mode: service
 speech_service: /competition_speech/announce
 speech_service_timeout_sec: 0.5
-speech_topic: /speak
+speech_topic: /factory/tts_text
 fallback_to_speech_topic: true
 speech_wait: false

@@ -87,7 +87,6 @@ class LegacyVoiceBridge:
         rospy.Subscriber(
             "/factory/voice_raw_text", String, self.asr_callback, queue_size=20
         )
-        rospy.Subscriber("/speak", String, self.speak_callback, queue_size=20)
         rospy.Service(
             "/speech_command_node/start_listening", Trigger, self.start_listening
         )
@@ -218,12 +217,6 @@ class LegacyVoiceBridge:
             complete_question,
         )
         self.question_pub.publish(String(data=complete_question))
-
-    def speak_callback(self, msg):
-        text = str(msg.data or "").strip()
-        if text:
-            rospy.loginfo("SRC3_TTS_TO_LEGACY text=%s", text)
-            self.tts_pub.publish(String(data=text))
 
     def start_listening(self, _request):
         complete = None

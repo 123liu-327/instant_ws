@@ -36,7 +36,7 @@ roslaunch ucar_2026_smart_factory_llm reason_pickup.launch
 
 Start the shared competition announcement gateway before running the task-1
 controllers. They will use its blocking service and only fall back to direct
-`/speak` publishing when the gateway is unavailable:
+`/factory/tts_text` publishing when the gateway is unavailable:
 
 ```bash
 roslaunch ucar_2026_competition_speech competition_speech.launch
@@ -60,7 +60,7 @@ rosservice call /smart_factory_llm/reason_pickup_order \
 
 ## 播报联调
 
-车上 TTS 节点订阅 `/speak`（`std_msgs/String`）。先启动语音包：
+车上 TTS 节点订阅 `/factory/tts_text`（`std_msgs/String`）。先启动语音包：
 
 ```bash
 roslaunch speech_command speech_command.launch
@@ -72,7 +72,7 @@ roslaunch speech_command speech_command.launch
 roslaunch ucar_2026_smart_factory_llm reason_pickup.launch
 ```
 
-可以用一次性联调节点测试“大模型推理 → /speak 播报”：
+可以用一次性联调节点测试“大模型推理 → /factory/tts_text 播报”：
 
 ```bash
 roslaunch ucar_2026_smart_factory_llm reason_and_speak_once.launch \

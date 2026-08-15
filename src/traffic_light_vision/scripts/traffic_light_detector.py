@@ -55,6 +55,8 @@ class TrafficLightDetectorNode:
         self.state_topic = rospy.get_param("~state_topic", "/traffic_light/state")
         self.command_topic = rospy.get_param("~command_topic", "/follow_begin")
         self.decision_topic = rospy.get_param("~decision_topic")
+        self.commands = dict(self.COMMANDS)
+        self.commands["straight"] = rospy.get_param("~straight_command", "Middle")
         self.debug_topic = rospy.get_param("~debug_topic", "/traffic_light/debug_image")
         self.camera_profile_service = rospy.get_param(
             "~camera_profile_service", "/ucar_camera/set_exposure_profile"
@@ -205,7 +207,7 @@ class TrafficLightDetectorNode:
                 self.publish_decision("red")
                 self.set_camera_profile(False)
         elif stable_state in ("straight", "left", "right") and not self.command_sent:
-            self.publish_command(self.COMMANDS[stable_state])
+            self.publish_command(self.commands[stable_state])
             self.publish_decision(stable_state)
             self.set_camera_profile(False)
             self.command_sent = True
@@ -214,7 +216,7 @@ class TrafficLightDetectorNode:
             rospy.logwarn(
                 "traffic light confirmed: state=%s command=%s; detector auto-disarmed",
                 stable_state,
-                self.COMMANDS[stable_state],
+                self.commands[stable_state],
             )
 
         elapsed_ms = (time.monotonic() - start_time) * 1000.0

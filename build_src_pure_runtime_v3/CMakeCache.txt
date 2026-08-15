@@ -118,7 +118,7 @@ CATKIN_SKIP_TESTING:BOOL=OFF
 CATKIN_SYMLINK_INSTALL:BOOL=OFF
 
 //List of ';' separated packages to build
-CATKIN_WHITELIST_PACKAGES:STRING=amcl;base_local_planner;clear_costmap_recovery;costmap_2d;cv_bridge;dwa_local_planner;factory_sign_ppocr_rknn_test;flow_end_runtime_v1;global_planner;image_view;map_goal_picker;map_server;move_base;move_slow_and_clear;my_planner;nav_core;navfn;rotate_recovery;simple_navigator;tf;tf2;tf2_geometry_msgs;tf2_msgs;tf2_py;tf2_sensor_msgs;traffic_light_vision;ucar_2026_competition;ucar_2026_competition_speech;ucar_2026_qr_speak_test;ucar_2026_smart_factory_llm;ucar_2026_strict_mission;ucar_2026_track_end_stop;ucar_2026_traffic_light_rknn_test;ucar_camera;ucar_controller;ucar_map;ucar_nav;vision_triggered_navigator;voxel_grid;ydlidar;yolo
+CATKIN_WHITELIST_PACKAGES:STRING=amcl;base_local_planner;clear_costmap_recovery;costmap_2d;cv_bridge;dwa_local_planner;factory_sign_ppocr_rknn_test;flow_end;global_planner;image_view;map_goal_picker;map_server;move_base;move_slow_and_clear;my_planner;nav_core;navfn;rotate_recovery;simple_navigator;tf;tf2;tf2_geometry_msgs;tf2_msgs;tf2_py;tf2_sensor_msgs;traffic_light_vision;ucar_2026_competition;ucar_2026_competition_speech;ucar_2026_qr_speak_test;ucar_2026_smart_factory_llm;ucar_2026_strict_mission;ucar_2026_track_end_stop;ucar_camera;ucar_controller;ucar_map;ucar_nav;vision_triggered_navigator;voxel_grid;ydlidar;yolo
 
 //Path to a program.
 CMAKE_AR:FILEPATH=/usr/bin/ar
@@ -1272,7 +1272,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=49
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=48
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP

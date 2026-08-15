@@ -10,6 +10,7 @@ void gSleep();
 void clearAudioFile(char *fileName);
 static RingBuffer buffer_source(MAX_BUFFER);
 unsigned int rate = AUDIO_RATE_SET;
+static int g_tts_speed = 40;
 /**
  * @brief 使用RingBuff来播放
  * 
@@ -646,6 +647,22 @@ void gSleep()
 	globalAudioPlayer->Clear_Write();
 }
 
+void setTTSSpeed(int speed)
+{
+	if (speed < 0)
+	{
+		g_tts_speed = 0;
+	}
+	else if (speed > 100)
+	{
+		g_tts_speed = 100;
+	}
+	else
+	{
+		g_tts_speed = speed;
+	}
+}
+
 void gTTS(string text)
 {
 	if (NULL != globalAgent)
@@ -653,7 +670,7 @@ void gTTS(string text)
 		Buffer *textData = Buffer::alloc(text.length());
 		text.copy((char *)textData->data(), text.length());
 		string paramStr = "vcn=x2_xiaojuan"; //xiaoyan x2_pengfei x2_qige x2_yifei
-		paramStr += ",speed=40";
+		paramStr += ",speed=" + std::to_string(g_tts_speed);
 		paramStr += ",pitch=50";
 		paramStr += ",volume=80";
 		paramStr += ",aue=speex-wb;7";

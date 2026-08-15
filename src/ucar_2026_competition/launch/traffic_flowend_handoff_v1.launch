@@ -10,7 +10,7 @@
   <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
 
   <!-- Keep the follower alive but IDLE before a confirmed direction arrives. -->
-  <include file="$(find flow_end_runtime_v1)/launch/follow_test.launch">
+  <include file="$(find flow_end)/launch/follow_test.launch">
     <arg name="image_topic" value="$(arg image_topic)" />
     <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)" />
     <arg name="begin_topic" value="$(arg begin_topic)" />

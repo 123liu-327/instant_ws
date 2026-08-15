@@ -28,6 +28,7 @@ rosrun map_server map_saver -f 5.4.1
 ```
 就可以完成保存
 
+/home/ucar/instant_ws/src/ucar_2026_competition/scripts/competition_flow_flowend_v1.py
 
 风扇：
 ```

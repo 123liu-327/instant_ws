@@ -91,4 +91,5 @@ public:
 	void bind(TEST_CALLBACK callback);
 };
 void gTTS(string text);
+void setTTSSpeed(int speed);
 #endif /* AIUIAGENTTESTER_H_ */

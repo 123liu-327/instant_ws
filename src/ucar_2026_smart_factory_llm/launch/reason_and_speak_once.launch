@@ -4,7 +4,7 @@
   <arg name="item_c" />
   <arg name="voice_instruction" />
   <arg name="service_name" default="/smart_factory_llm/reason_pickup_order" />
-  <arg name="speak_topic" default="/speak" />
+  <arg name="speak_topic" default="/factory/tts_text" />
   <arg name="announce_service" default="/competition_speech/announce" />
 
   <node pkg="ucar_2026_smart_factory_llm" type="reason_and_speak_once.py" name="reason_and_speak_once" output="screen">

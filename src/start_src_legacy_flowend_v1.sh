@@ -28,14 +28,13 @@ required_packages=(
   ucar_2026_competition_speech
   ucar_2026_smart_factory_llm
   factory_sign_ppocr_rknn_test
-  flow_end_runtime_v1
+  flow_end
   traffic_light_vision
   ucar_camera
   simple_navigator
   vision_triggered_navigator
   ucar_2026_strict_mission
   ucar_2026_track_end_stop
-  ucar_2026_traffic_light_rknn_test
   ucar_nav
   ucar_map
   ydlidar

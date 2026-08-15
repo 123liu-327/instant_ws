@@ -109,9 +109,22 @@ flow_end/CMakeFiles/follow_test.dir/src/follow_motion_controller.cpp.s: cmake_fo
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/follow_test.dir/src/follow_motion_controller.cpp.s"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/follow_motion_controller.cpp -o CMakeFiles/follow_test.dir/src/follow_motion_controller.cpp.s
 
+flow_end/CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
+flow_end/CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/parking_s_curve.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o"
+	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/parking_s_curve.cpp
+
+flow_end/CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.i"
+	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/parking_s_curve.cpp > CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.i
+
+flow_end/CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.s"
+	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/parking_s_curve.cpp -o CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.s
+
 flow_end/CMakeFiles/follow_test.dir/src/PID.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
 flow_end/CMakeFiles/follow_test.dir/src/PID.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/PID.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/PID.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/PID.cpp.o"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/PID.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/PID.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/PID.cpp.i: cmake_force
@@ -124,7 +137,7 @@ flow_end/CMakeFiles/follow_test.dir/src/PID.cpp.s: cmake_force
 
 flow_end/CMakeFiles/follow_test.dir/src/corner_move.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
 flow_end/CMakeFiles/follow_test.dir/src/corner_move.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/corner_move.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/corner_move.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/corner_move.cpp.o"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/corner_move.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/corner_move.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/corner_move.cpp.i: cmake_force
@@ -137,7 +150,7 @@ flow_end/CMakeFiles/follow_test.dir/src/corner_move.cpp.s: cmake_force
 
 flow_end/CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
 flow_end/CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/Findline_Adaptive.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.o"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/Findline_Adaptive.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.i: cmake_force
@@ -150,7 +163,7 @@ flow_end/CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.s: cmake_force
 
 flow_end/CMakeFiles/follow_test.dir/src/ImagePerspectiveInit.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
 flow_end/CMakeFiles/follow_test.dir/src/ImagePerspectiveInit.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/ImagePerspectiveInit.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/ImagePerspectiveInit.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/ImagePerspectiveInit.cpp.o"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/ImagePerspectiveInit.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/ImagePerspectiveInit.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/ImagePerspectiveInit.cpp.i: cmake_force
@@ -163,7 +176,7 @@ flow_end/CMakeFiles/follow_test.dir/src/ImagePerspectiveInit.cpp.s: cmake_force
 
 flow_end/CMakeFiles/follow_test.dir/src/MatTransform.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
 flow_end/CMakeFiles/follow_test.dir/src/MatTransform.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/MatTransform.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/MatTransform.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/MatTransform.cpp.o"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/MatTransform.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/MatTransform.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/MatTransform.cpp.i: cmake_force
@@ -176,7 +189,7 @@ flow_end/CMakeFiles/follow_test.dir/src/MatTransform.cpp.s: cmake_force
 
 flow_end/CMakeFiles/follow_test.dir/src/Point_Process.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
 flow_end/CMakeFiles/follow_test.dir/src/Point_Process.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/Point_Process.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/Point_Process.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/Point_Process.cpp.o"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/Point_Process.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/Point_Process.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/Point_Process.cpp.i: cmake_force
@@ -189,7 +202,7 @@ flow_end/CMakeFiles/follow_test.dir/src/Point_Process.cpp.s: cmake_force
 
 flow_end/CMakeFiles/follow_test.dir/src/process_image.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
 flow_end/CMakeFiles/follow_test.dir/src/process_image.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/process_image.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/process_image.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/process_image.cpp.o"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/process_image.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/process_image.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/process_image.cpp.i: cmake_force
@@ -202,7 +215,7 @@ flow_end/CMakeFiles/follow_test.dir/src/process_image.cpp.s: cmake_force
 
 flow_end/CMakeFiles/follow_test.dir/src/track_line.cpp.o: flow_end/CMakeFiles/follow_test.dir/flags.make
 flow_end/CMakeFiles/follow_test.dir/src/track_line.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/track_line.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/track_line.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object flow_end/CMakeFiles/follow_test.dir/src/track_line.cpp.o"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && /usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/follow_test.dir/src/track_line.cpp.o -c /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/track_line.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/track_line.cpp.i: cmake_force
@@ -219,6 +232,7 @@ follow_test_OBJECTS = \
 "CMakeFiles/follow_test.dir/src/Callback_test.cpp.o" \
 "CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o" \
 "CMakeFiles/follow_test.dir/src/follow_motion_controller.cpp.o" \
+"CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o" \
 "CMakeFiles/follow_test.dir/src/PID.cpp.o" \
 "CMakeFiles/follow_test.dir/src/corner_move.cpp.o" \
 "CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.o" \
@@ -235,6 +249,7 @@ follow_test_EXTERNAL_OBJECTS =
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: flow_end/CMakeFiles/follow_test.dir/src/Callback_test.cpp.o
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: flow_end/CMakeFiles/follow_test.dir/src/follow_motion_controller.cpp.o
+/home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: flow_end/CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: flow_end/CMakeFiles/follow_test.dir/src/PID.cpp.o
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: flow_end/CMakeFiles/follow_test.dir/src/corner_move.cpp.o
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: flow_end/CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.o
@@ -325,7 +340,7 @@ follow_test_EXTERNAL_OBJECTS =
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: /usr/lib/aarch64-linux-gnu/libopencv_imgproc.so.3.2.0
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: /usr/lib/aarch64-linux-gnu/libopencv_core.so.3.2.0
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test: flow_end/CMakeFiles/follow_test.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Linking CXX executable /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Linking CXX executable /home/ucar/instant_ws/devel_src_pure_runtime_v3/lib/flow_end/follow_test"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/flow_end && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/follow_test.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

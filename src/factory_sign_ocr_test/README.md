@@ -29,7 +29,7 @@ factory_sign_ocr_test/models/factory_sign_cls_rk3588.rknn
 - 推荐 service：`/competition_speech/announce`
 - service 类型：`ucar_2026_competition_speech/Announce`
 - 调用方式：`event="custom"`，`text="识别到食品加工车间"`，`wait=false`
-- 兜底 topic：`/speak`
+- 兜底 topic：`/factory/tts_text`
 - topic 类型：`std_msgs/String`
 - 统一播报节点：`ucar_2026_competition_speech/scripts/competition_announcer.py`
 
@@ -191,8 +191,8 @@ wait: false"
 检查兜底播报 topic：
 
 ```bash
-rostopic info /speak
-rostopic pub -1 /speak std_msgs/String "data: '识别到食品加工车间'"
+rostopic info /factory/tts_text
+rostopic pub -1 /factory/tts_text std_msgs/String "data: '识别到食品加工车间'"
 ```
 
 运行识别节点时，终端会打印：
@@ -269,7 +269,6 @@ roslaunch factory_sign_ocr_test factory_sign_ocr_test.launch classifier_input_la
 ```
 
 注意：`classifier_preprocess_mode:=torch` 已禁用。现场日志已经证明该 float pass-through 路径可能导致 RKNNLite 段错误退出，不能作为一键测试路径。
-
 
 
 

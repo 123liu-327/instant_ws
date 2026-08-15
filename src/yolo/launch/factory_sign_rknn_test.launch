@@ -33,8 +33,11 @@
 
   <!-- TTS 语音合成 -->
   <group if="$(arg start_tts)">
-    <node pkg="speech_command" type="voice_speak_node" name="voice_speak_node" output="screen"
-          launch-prefix="bash -c 'sleep 1; exec &quot;$@&quot;' dummy" />
+    <node pkg="speech_command" type="speech_command_node" name="factory_sign_tts" output="screen"
+          launch-prefix="bash -c 'sleep 1; exec &quot;$@&quot;' dummy">
+      <param name="tts_only" value="true" />
+      <param name="tts_topic" value="/factory/tts_text" />
+    </node>
   </group>
 
   <!-- 竞赛语音播报服务 -->

@@ -1,5 +1,6 @@
 ﻿#include <flow_end/follow.h>
 #include <flow_end/ImagePerspectiveInit.h>
+#include <flow_end/DebugVisionOverlay.h>
 #include <flow_end/MatTransform.h>
 #include <flow_end/process_image.h>
 
@@ -80,9 +81,9 @@ float rptsc0e[POINTS_MAX_LEN][2];
 float rptsc1e[POINTS_MAX_LEN][2];
 int rptsc0e_num = 0, rptsc1e_num = 0;
 
-int Ypt0_rpts0s_id = 0, Ypt1_rpts1s_id = 0;
+int Ypt0_rpts0s_id = -1, Ypt1_rpts1s_id = -1;
 bool Ypt0_found = false, Ypt1_found = false;
-int Lpt0_rpts0s_id = 0, Lpt1_rpts1s_id = 0;
+int Lpt0_rpts0s_id = -1, Lpt1_rpts1s_id = -1;
 bool Lpt0_found = false, Lpt1_found = false;
 const float PI = 3.14159265358979323846f;
 bool is_straight0 = false, is_straight1 = false;
@@ -136,6 +137,10 @@ private:
         Lpt1_found = false;
         Ypt0_found = false;
         Lpt0_found = false;
+        Ypt0_rpts0s_id = -1;
+        Ypt1_rpts1s_id = -1;
+        Lpt0_rpts0s_id = -1;
+        Lpt1_rpts1s_id = -1;
         is_straight0 = rpts0s_num > 1.0 / sample_dist;
         is_straight1 = rpts1s_num > 1.0 / sample_dist;
 
@@ -187,8 +192,116 @@ private:
                           "image_process_debug ipts0=%d ipts1=%d rpts0s=%d rpts1s=%d "
                           "rptsc0e=%d rptsc1e=%d L0=%d L1=%d Y0=%d Y1=%d",
                           ipts0_num, ipts1_num, rpts0s_num, rpts1s_num,
-                          rptsc0e_num, rptsc1e_num,
-                          Lpt0_found, Lpt1_found, Ypt0_found, Ypt1_found);
+                           rptsc0e_num, rptsc1e_num,
+                           Lpt0_found, Lpt1_found, Ypt0_found, Ypt1_found);
+    }
+
+    cv::Mat buildBirdDebugOverlay() {
+        for (int row = 0; row < RESULT_ROW; ++row) {
+            for (int col = 0; col < RESULT_COL; ++col) {
+                // process_image() uses the inverted image; invert only for display
+                // so the bird-view debug image keeps the real black lane color.
+                img_line_data[row][col] = 255 - ImageUsed[row][col];
+            }
+        }
+
+        cv::Mat bird_gray = convert2DArrayToMat(img_line_data);
+        cv::Mat debug_bgr;
+        cv::cvtColor(bird_gray, debug_bgr, cv::COLOR_GRAY2BGR);
+
+        using namespace flow_end::debug_overlay;
+        const std::string pixel_stats =
+            lanePixelStatsLine(bird_gray, rpts0s, rpts0s_num, rpts1s, rpts1s_num);
+        const cv::Scalar left_raw_color(40, 230, 40);
+        const cv::Scalar right_raw_color(230, 40, 230);
+        const cv::Scalar left_target_color(0, 220, 255);
+        const cv::Scalar right_target_color(255, 220, 0);
+
+        drawPointSeries(debug_bgr, rpts0s, rpts0s_num, left_raw_color, 2);
+        drawPointSeries(debug_bgr, rpts1s, rpts1s_num, right_raw_color, 2);
+        drawPointSeries(debug_bgr, rptsc0e, rptsc0e_num, left_target_color, 1, 2);
+        drawPointSeries(debug_bgr, rptsc1e, rptsc1e_num, right_target_color, 1, 2);
+
+        if (Lpt0_found) {
+            drawCornerMarker(debug_bgr, rpts0s, rpts0s_num, Lpt0_rpts0s_id,
+                             "L0", cv::Scalar(0, 80, 255), false,
+                             cornerConfidenceDeg(rpts0a, rpts0s_num, Lpt0_rpts0s_id,
+                                                 angle_dist, sample_dist));
+        }
+        if (Lpt1_found) {
+            drawCornerMarker(debug_bgr, rpts1s, rpts1s_num, Lpt1_rpts1s_id,
+                             "L1", cv::Scalar(255, 80, 30), false,
+                             cornerConfidenceDeg(rpts1a, rpts1s_num, Lpt1_rpts1s_id,
+                                                 angle_dist, sample_dist));
+        }
+        if (Ypt0_found) {
+            drawCornerMarker(debug_bgr, rpts0s, rpts0s_num, Ypt0_rpts0s_id,
+                             "Y0", cv::Scalar(0, 255, 255), true,
+                             cornerConfidenceDeg(rpts0a, rpts0s_num, Ypt0_rpts0s_id,
+                                                 angle_dist, sample_dist));
+        }
+        if (Ypt1_found) {
+            drawCornerMarker(debug_bgr, rpts1s, rpts1s_num, Ypt1_rpts1s_id,
+                             "Y1", cv::Scalar(255, 255, 0), true,
+                             cornerConfidenceDeg(rpts1a, rpts1s_num, Ypt1_rpts1s_id,
+                                                 angle_dist, sample_dist));
+        }
+
+        const CornerCandidate candidate0 = strongestCandidate(
+            rpts0a, rpts0an, rpts0s_num, angle_dist, sample_dist);
+        const CornerCandidate candidate1 = strongestCandidate(
+            rpts1a, rpts1an, rpts1s_num, angle_dist, sample_dist);
+        if (!Lpt0_found && !Ypt0_found) {
+            drawCandidateMarker(debug_bgr, rpts0s, rpts0s_num, candidate0,
+                                "C0", cv::Scalar(190, 190, 190));
+        }
+        if (!Lpt1_found && !Ypt1_found) {
+            drawCandidateMarker(debug_bgr, rpts1s, rpts1s_num, candidate1,
+                                "C1", cv::Scalar(150, 150, 150));
+        }
+
+        std::ostringstream counts;
+        counts << "IPM BIRD 640x480 | input L/R=" << ipts0_num << "/" << ipts1_num
+               << " | mapped=" << rpts0_num << "/" << rpts1_num
+               << " | sampled=" << rpts0s_num << "/" << rpts1s_num;
+        std::ostringstream targets;
+        targets << "target L/R=" << rptsc0e_num << "/" << rptsc1e_num
+                << " | straight=" << is_straight0 << "/" << is_straight1
+                << " | bias=" << std::fixed << std::setprecision(1)
+                << Dis_Bias_Left << "/" << Dis_Bias_Right;
+        std::ostringstream candidates;
+        candidates << "best C0=";
+        if (candidate0.valid) {
+            candidates << candidate0.index << ":" << std::fixed << std::setprecision(1)
+                       << candidate0.confidence_deg << "deg";
+        } else {
+            candidates << "none";
+        }
+        candidates << " | C1=";
+        if (candidate1.valid) {
+            candidates << candidate1.index << ":" << std::fixed << std::setprecision(1)
+                       << candidate1.confidence_deg << "deg";
+        } else {
+            candidates << "none";
+        }
+
+        drawStatusPanel(debug_bgr, {
+            counts.str(),
+            targets.str(),
+            cornerStatus("L0", Lpt0_found, Lpt0_rpts0s_id, rpts0s, rpts0s_num,
+                         rpts0a, angle_dist, sample_dist) + " | " +
+                cornerStatus("L1", Lpt1_found, Lpt1_rpts1s_id, rpts1s, rpts1s_num,
+                             rpts1a, angle_dist, sample_dist),
+            cornerStatus("Y0", Ypt0_found, Ypt0_rpts0s_id, rpts0s, rpts0s_num,
+                         rpts0a, angle_dist, sample_dist) + " | " +
+                cornerStatus("Y1", Ypt1_found, Ypt1_rpts1s_id, rpts1s, rpts1s_num,
+                             rpts1a, angle_dist, sample_dist),
+            pixel_stats,
+            candidates.str(),
+            "THRESH Y=30..65deg L=70..110deg range<0.8m",
+            "LEGEND rawL=green rawR=magenta targetL=yellow targetR=cyan L=circle Y=X C=diamond"
+        });
+        return debug_bgr;
     }
 
     void imageCallback(const sensor_msgs::ImageConstPtr &msg) {
@@ -212,41 +325,17 @@ private:
         detectCorners();
         logDebugMetrics();
 
-        invertImage(PER_IMG);
-        for (int i = 0; i < RESULT_ROW; ++i) {
-            for (int j = 0; j < RESULT_COL; ++j) {
-                img_line_data[i][j] = ImageUsed[i][j];
-            }
-        }
-
-        for (int i = 0; i < rptsc0e_num; ++i) {
-            AT_IMAGE(&img_line, clip(rptsc0e[i][0], 0, img_line.width - 1),
-                     clip(rptsc0e[i][1], 0, img_line.height - 1)) = 0;
-        }
-        for (int i = 0; i < rptsc1e_num; ++i) {
-            AT_IMAGE(&img_line, clip(rptsc1e[i][0], 0, img_line.width - 1),
-                     clip(rptsc1e[i][1], 0, img_line.height - 1)) = 80;
-        }
-        for (int i = 0; i < rpts0s_num; ++i) {
-            AT_IMAGE(&img_line, clip(rpts0s[i][0], 0, img_line.width - 1),
-                     clip(rpts0s[i][1], 0, img_line.height - 1)) = 0;
-        }
-        for (int i = 0; i < rpts1s_num; ++i) {
-            AT_IMAGE(&img_line, clip(rpts1s[i][0], 0, img_line.width - 1),
-                     clip(rpts1s[i][1], 0, img_line.height - 1)) = 80;
-        }
-
-        cv::Mat debug_gray = convert2DArrayToMat(img_line_data);
+        cv::Mat debug_bgr = buildBirdDebugOverlay();
         if (show_window_) {
-            cv::imshow("flow_end image process debug", debug_gray);
+            cv::imshow("flow_end image process debug", debug_bgr);
             cv::waitKey(1);
         }
 
         if (publish_debug_image_) {
             sensor_msgs::ImagePtr out_msg = cv_bridge::CvImage(
                 msg->header,
-                sensor_msgs::image_encodings::MONO8,
-                debug_gray).toImageMsg();
+                sensor_msgs::image_encodings::BGR8,
+                debug_bgr).toImageMsg();
             debug_pub_.publish(out_msg);
         }
     }

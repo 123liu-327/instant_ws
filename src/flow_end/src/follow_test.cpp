@@ -16,6 +16,18 @@ int main(int argc, char **argv) {
     bool publish_debug_image = true;
     bool show_window = false;
     bool parking_enabled = true;
+    bool parking_allow_either_l = true;
+    double parking_extra_dist = 0.215;
+    double parking_forward_speed = 0.20;
+    double parking_lateral_speed = 0.10;
+    double parking_lateral_deadband = 0.03;
+    double parking_lateral_cmd_sign = 1.0;
+    std::string parking_motion_mode = "s_curve";
+    double parking_max_angular_speed = 0.35;
+    double parking_yaw_kp = 1.5;
+    double parking_yaw_tolerance_deg = 3.0;
+    double parking_timeout = 6.0;
+    double parking_odom_timeout = 0.5;
     double base_speed = 0.30;
     double aim_distance = 0.10;
     double aim_y_bias_m = 0.20;
@@ -25,6 +37,10 @@ int main(int argc, char **argv) {
     int initial_turn_rpts_threshold = 40;
     double initial_turn_pause_sec = 0.5;
     double min_pid_speed = 0.08;
+    bool lost_corner_search_enabled = true;
+    double lost_corner_search_timeout = 0.6;
+    double lost_corner_search_angular_speed = 0.25;
+    double lost_corner_search_linear_speed = 0.0;
     
     // 视频保存相关参数
     bool enable_video_record = true;
@@ -41,6 +57,18 @@ int main(int argc, char **argv) {
     private_nh.param<bool>("publish_debug_image", publish_debug_image, true);
     private_nh.param<bool>("show_window", show_window, false);
     private_nh.param<bool>("parking_enabled", parking_enabled, true);
+    private_nh.param<bool>("parking_allow_either_l", parking_allow_either_l, true);
+    private_nh.param<double>("parking_extra_dist", parking_extra_dist, 0.215);
+    private_nh.param<double>("parking_forward_speed", parking_forward_speed, 0.20);
+    private_nh.param<double>("parking_lateral_speed", parking_lateral_speed, 0.10);
+    private_nh.param<double>("parking_lateral_deadband", parking_lateral_deadband, 0.03);
+    private_nh.param<double>("parking_lateral_cmd_sign", parking_lateral_cmd_sign, 1.0);
+    private_nh.param<std::string>("parking_motion_mode", parking_motion_mode, "s_curve");
+    private_nh.param<double>("parking_max_angular_speed", parking_max_angular_speed, 0.35);
+    private_nh.param<double>("parking_yaw_kp", parking_yaw_kp, 1.5);
+    private_nh.param<double>("parking_yaw_tolerance_deg", parking_yaw_tolerance_deg, 3.0);
+    private_nh.param<double>("parking_timeout", parking_timeout, 6.0);
+    private_nh.param<double>("parking_odom_timeout", parking_odom_timeout, 0.5);
     private_nh.param<double>("base_speed", base_speed, 0.30);
     private_nh.param<double>("aim_distance", aim_distance, 0.10);
     private_nh.param<double>("aim_y_bias_m", aim_y_bias_m, 0.20);
@@ -50,6 +78,10 @@ int main(int argc, char **argv) {
     private_nh.param<int>("initial_turn_rpts_threshold", initial_turn_rpts_threshold, 40);
     private_nh.param<double>("initial_turn_pause_sec", initial_turn_pause_sec, 0.5);
     private_nh.param<double>("min_pid_speed", min_pid_speed, 0.08);
+    private_nh.param<bool>("lost_corner_search_enabled", lost_corner_search_enabled, true);
+    private_nh.param<double>("lost_corner_search_timeout", lost_corner_search_timeout, 0.6);
+    private_nh.param<double>("lost_corner_search_angular_speed", lost_corner_search_angular_speed, 0.25);
+    private_nh.param<double>("lost_corner_search_linear_speed", lost_corner_search_linear_speed, 0.0);
     
     // 读取视频保存参数
     private_nh.param<bool>("enable_video_record", enable_video_record, true);
@@ -60,7 +92,17 @@ int main(int argc, char **argv) {
                                      base_speed, aim_distance, aim_y_bias_m,
                                      initial_turn_enabled, initial_turn_angle_deg,
                                      initial_turn_angular_speed, initial_turn_rpts_threshold,
-                                     initial_turn_pause_sec, min_pid_speed);
+                                     initial_turn_pause_sec, min_pid_speed,
+                                     parking_allow_either_l, parking_extra_dist,
+                                     parking_forward_speed, parking_lateral_speed,
+                                     parking_lateral_deadband, parking_lateral_cmd_sign,
+                                     parking_motion_mode, parking_max_angular_speed,
+                                     parking_yaw_kp, parking_yaw_tolerance_deg,
+                                     parking_timeout, parking_odom_timeout,
+                                     lost_corner_search_enabled,
+                                     lost_corner_search_timeout,
+                                     lost_corner_search_angular_speed,
+                                     lost_corner_search_linear_speed);
     
     // 配置视频保存
     flow_end::follow_test::configureVideo(enable_video_record, video_fps, video_save_path);

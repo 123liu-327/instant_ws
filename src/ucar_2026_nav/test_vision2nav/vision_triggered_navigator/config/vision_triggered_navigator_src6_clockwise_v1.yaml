@@ -43,7 +43,8 @@ coverage_preferred_odom_yaw_enabled: false
 coverage_preferred_odom_yaw: 0.0
 coverage_preferred_confirm_dwell_sec: 1.2
 coverage_preferred_scan_half_angle_deg: 18.0
-coverage_skip_anchors: ""
+# P4 remains the calibrated room-entry pose but is not part of OCR scanning.
+coverage_skip_anchors: "4"
 coverage_abort_fail_fast_count: 0
 target_topic: "/vision/target"
 non_target_topic: "/vision/non_target_observation"
@@ -142,16 +143,30 @@ parking_box_width: 0.50
 parking_box_depth: 0.50
 parking_goal_offset: 0.26
 parking_staging_offset: 0.55
+parking_staging_timeout_sec: 20.0
+parking_staging_position_tolerance: 0.10
+parking_staging_yaw_tolerance: 0.10
+parking_staging_watchdog_window_sec: 2.0
+parking_staging_no_progress_timeout_sec: 4.0
+parking_staging_min_progress: 0.03
+parking_staging_max_rotation_deg: 45.0
+# First candidate is directly in front of the OCR-locked wall. The remaining
+# offsets are fallbacks only when move_base cannot plan to that pose.
+parking_staging_normal_offsets_m: [0.55, 0.70, 0.85]
+parking_staging_tangent_offsets_m: [0.0, 0.15, -0.15]
+parking_staging_max_attempts: 3
+parking_make_plan_service: /move_base/make_plan
+parking_make_plan_tolerance_m: 0.12
 # 校准光轴命中点过于靠近墙端时只安全停止，不再移动复观测。
 parking_endpoint_min_clearance: 0.16
-parking_docking_timeout_sec: 30.0
+parking_docking_timeout_sec: 35.0
 parking_dock_max_x: 0.10
 parking_dock_max_y: 0.06
 parking_dock_max_yaw: 0.15
-parking_dock_min_yaw: 0.15
+parking_dock_min_yaw: 0.04
 parking_dock_normal_tolerance: 0.02
 parking_dock_tangent_tolerance: 0.02
-parking_dock_yaw_tolerance: 0.05
+parking_dock_yaw_tolerance: 0.06
 parking_dock_stable_sec: 0.5
 parking_min_wall_distance: 0.19
 parking_lidar_stop_distance: 0.15
@@ -170,6 +185,17 @@ scan_front_half_angle_deg: 15.0
 parking_recenter_tolerance: 0.04
 parking_recenter_timeout_sec: 8.0
 parking_recenter_initial_wait_sec: 1.0
+# A side obstacle may already touch the conservative envelope. Permit only a
+# slow lateral command that increases clearance; front/rear motion stays gated.
+parking_recenter_escape_clearance_m: 0.015
+parking_recenter_escape_max_lateral: 0.035
+parking_ignore_lateral_obstacles: true
+# Prefer the strict 4cm/2deg lock above. When chassis deadband and OCR jitter
+# straddle it, accept only repeated fresh observations inside this safe band.
+parking_recenter_fallback_tolerance: 0.14
+parking_recenter_fallback_yaw_tolerance_deg: 8.0
+parking_recenter_fallback_required_hits: 2
+parking_recenter_fallback_stable_sec: 0.25
 parking_wall_fit_half_angle_deg: 35.0
 parking_wall_fit_min_points: 12
 parking_wall_fit_min_span: 0.25
@@ -178,6 +204,7 @@ parking_wall_fit_max_distance_jump: 0.05
 parking_wall_fit_max_normal_jump_deg: 8.0
 parking_wall_fit_max_residual: 0.015
 parking_wall_fit_max_normal_error_deg: 20.0
+parking_wall_fit_grace_sec: 1.5
 parking_normal_offset: 0.0
 parking_tangent_offset: 0.03
 parking_xy_tolerance: 0.04
@@ -205,25 +232,28 @@ initial_pose:
   y: 0.0
   yaw: 0.0
 
-# 39ff0ec 实车基准：9 个巡航点按 4,3,2,1,9,8,7,6,5 顺序，每点只扫描一次。
+# 39ff0ec 实车基准：保留9个标定编号；P4只作入房基准并在扫描中跳过。
 patrol_points:
   - x: -0.70
     y: -2.82
-    yaw: -1.56
+    # Start at -45deg and sweep clockwise 75deg to -120deg.
+    yaw: -0.7854
     rotations:
-      - {direction: "right", duration: 3.0}
+      - {direction: "right", duration: 2.6180}
 
   - x: -1.68
     y: -2.79
-    yaw: -3.12
+    # Start at -60deg and sweep clockwise 180deg to +120deg.
+    yaw: -1.0472
     rotations:
-      - {direction: "left", duration: 4.5}
+      - {direction: "right", duration: 6.2832}
 
   - x: -1.66
     y: -2.28
-    yaw: -3.14
+    # Start at 180deg and sweep clockwise 90deg to +90deg.
+    yaw: 3.1416
     rotations:
-      - {direction: "right", duration: 3.0}
+      - {direction: "right", duration: 3.1416}
 
   - x: -1.65
     y: -1.77
@@ -232,19 +262,19 @@ patrol_points:
       - {direction: "left", duration: 4.5}
 
   - x: 0.30
-    y: -1.65
+    y: -1.77
     yaw: 0.89
     rotations:
       - {direction: "left", duration: 4.0}
 
   - x: 1.26
-    y: -1.65
+    y: -1.77
     yaw: 0.85
     rotations:
       - {direction: "left", duration: 4.0}
 
   - x: 2.35
-    y: -1.65
+    y: -1.77
     yaw: -0.86
     rotations:
       - {direction: "left", duration: 4.5}

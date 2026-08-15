@@ -70,6 +70,10 @@
   <exec_depend>roscpp</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>ucar_controller</exec_depend>
+  <exec_depend>ucar_camera</exec_depend>
+  <exec_depend>traffic_light_vision</exec_depend>
+  <exec_depend>speech_command</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

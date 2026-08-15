@@ -56,13 +56,14 @@ class UcarCamera:
         if len(self.pixel_format) != 4:
             raise RuntimeError("pixel_format must be a four-character FOURCC code")
 
-        self.cap = cv2.VideoCapture(self.device_path)
+        # Force the Linux V4L2 backend. OpenCV's V4L2 capture path uses mmap
+        # streaming for this UVC device.
+        self.cap = cv2.VideoCapture(self.device_path, cv2.CAP_V4L2)
         if not self.cap.isOpened():
             raise RuntimeError("failed to open camera device {}".format(self.device_path))
 
-        # Format must be selected before the size.  This camera only exposes
-        # native 1280x720 through MJPG; selecting the size while still in YUYV
-        # makes V4L2 fall back to 800x600.
+        # Format must be selected before the size so V4L2 negotiates the
+        # requested native 640x480 YUYV mode instead of falling back.
         set_results = {
             "pixel_format": self.cap.set(
                 cv2.CAP_PROP_FOURCC,

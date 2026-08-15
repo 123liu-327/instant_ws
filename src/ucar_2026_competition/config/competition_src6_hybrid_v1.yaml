@@ -93,7 +93,7 @@ parking_dock_max_yaw: 0.30
 parking_dock_min_yaw: 0.30
 parking_dock_normal_tolerance: 0.02
 parking_dock_tangent_tolerance: 0.02
-parking_dock_yaw_tolerance: 0.05
+parking_dock_yaw_tolerance: 0.06
 parking_dock_translation_yaw_gate: 0.22
 parking_dock_forward_yaw_gate: 0.14
 parking_dock_forward_tangent_gate: 0.12

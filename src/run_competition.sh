@@ -6,7 +6,7 @@ ROBOT_WS="${ROBOT_WS:-/home/ucar/ucar_ws}"
 ROS_SETUP="/opt/ros/noetic/setup.bash"
 CURRENT_SETUP="$ROOT/devel/setup.bash"
 SPEECH_BIN="$ROBOT_WS/devel/lib/speech_command/speech_command_node"
-TTS_BIN="$ROBOT_WS/devel/lib/speech_command/voice_speak_node"
+TTS_BIN="$ROOT/devel/lib/speech_command/speech_command_node"
 SPEECH_PACKAGE="$ROBOT_WS/src/speech_command"
 IAT_CREDENTIALS="${IAT_CREDENTIALS_FILE:-/home/ucar/.config/ucar_2026/iat_credentials.json}"
 DEBUG=false
@@ -79,7 +79,7 @@ rosparam list >/dev/null 2>&1 || { echo "ROS master did not become ready." >&2; 
 
 ROS_PACKAGE_PATH="$VOICE_ROS_PACKAGE_PATH" "$SPEECH_BIN" >"$LOG_DIR/speech_command.log" 2>&1 &
 PIDS+=("$!")
-ROS_PACKAGE_PATH="$VOICE_ROS_PACKAGE_PATH" "$TTS_BIN" >"$LOG_DIR/voice_speak.log" 2>&1 &
+"$TTS_BIN" _tts_only:=true _tts_topic:=/factory/tts_text >"$LOG_DIR/tts.log" 2>&1 &
 PIDS+=("$!")
 rosrun ucar_2026_competition fixed_command_iat.py >"$LOG_DIR/fixed_command_iat.log" 2>&1 &
 PIDS+=("$!")
@@ -100,6 +100,7 @@ fi
 echo "Competition logs: $LOG_DIR"
 echo "Simulation bridge: $SIM_BRIDGE_HOST:${SIM_BRIDGE_PORT:-26003}"
 roslaunch ucar_2026_competition full_competition.launch \
+  start_external_voice:=false \
   debug:="$DEBUG" \
   sim_bridge_host:="$SIM_BRIDGE_HOST" \
   sim_bridge_port:="${SIM_BRIDGE_PORT:-26003}" \

@@ -1,5 +1,7 @@
 #include <flow_end/follow.h>
 #include <flow_end/follow_line_test.h>
+#include <flow_end/follow_motion_controller.h>
+#include <flow_end/parking_s_curve.h>
 #include <flow_end/ImagePerspectiveInit.h>
 #include <flow_end/MatTransform.h>
 #include <flow_end/process_image.h>
@@ -11,6 +13,7 @@
 #include <cctype>
 #include <cmath>
 #include <ctime>
+#include <sstream>
 #include <string>
 
 // follow_line_test.cpp 是 follow_test 节点的具体工作逻辑文件。
@@ -98,9 +101,9 @@ float rptsc0e[POINTS_MAX_LEN][2];
 float rptsc1e[POINTS_MAX_LEN][2];
 int rptsc0e_num = 0, rptsc1e_num = 0;
 
-int Ypt0_rpts0s_id = 0, Ypt1_rpts1s_id = 0;
+int Ypt0_rpts0s_id = -1, Ypt1_rpts1s_id = -1;
 bool Ypt0_found = false, Ypt1_found = false;
-int Lpt0_rpts0s_id = 0, Lpt1_rpts1s_id = 0;
+int Lpt0_rpts0s_id = -1, Lpt1_rpts1s_id = -1;
 bool Lpt0_found = false, Lpt1_found = false;
 const float PI = 3.14159265358979323846f;
 bool is_straight0 = false, is_straight1 = false;
@@ -148,12 +151,26 @@ ros::Publisher debug_pub;
 ros::Publisher status_pub;
 float middle_path[POINTS_MAX_LEN][2];
 int middle_path_num = 0;
+FollowMotionController motion_controller;
 
 // These runtime params are written through configure(); Callback_test.cpp refreshes
 // them from the private parameter server before each start command.
 bool publish_debug_image = true;
 bool show_window = false;
 bool parking_enabled = true;
+bool parking_allow_either_l = true;
+double parking_extra_dist = 0.215;
+double parking_forward_speed = 0.20;
+double parking_lateral_speed = 0.10;
+double parking_lateral_deadband = 0.03;
+double parking_lateral_cmd_sign = 1.0;
+std::string parking_motion_mode = "s_curve";
+double parking_max_angular_speed = 0.35;
+double parking_yaw_kp = 1.5;
+double parking_yaw_tolerance_deg = 3.0;
+double parking_timeout = 6.0;
+double parking_odom_timeout = 0.5;
+ros::Time last_odom_time;
 double base_speed = 0.30;
 double aim_distance = 0.10;
 double aim_y_bias_m = 0.20;
@@ -167,12 +184,48 @@ ros::Time initial_turn_last_time;
 bool initial_turn_has_last_time = false;
 double min_pid_speed = 0.08;
 ros::Time initial_turn_pause_start;
-bool parking_first_corner_seen = false;
-bool parking_first_corner_released = false;
-float parking_first_corner_odom = 0.0f;
-PathSelect parking_first_corner_path = PathSelect::RIGHT;
-int parking_first_corner_id = -1;
-const float parking_second_corner_min_dist = 0.20f;
+bool lost_corner_search_enabled = true;
+double lost_corner_search_timeout = 0.6;
+double lost_corner_search_angular_speed = 0.25;
+double lost_corner_search_linear_speed = 0.0;
+bool lost_corner_search_active = false;
+bool lost_corner_search_timed_out = false;
+ros::Time lost_corner_search_start_time;
+
+bool y_branch_mode_requested = false;
+PathSelect pending_branch_path = PathSelect::MIDDLE;
+double y_approach_dist = 0.20;
+double y_turn_angle_deg = 45.0;
+double y_turn_angular_speed = 0.35;
+double y_turn_pause_sec = 0.5;
+int y_detect_min_id = 0;
+int y_detect_max_id = 100;
+int y_detect_confirm_frames = 2;
+double y_center_aim_dist = 0.45;
+double y_approach_speed = 0.18;
+double y_center_max_wz = 0.25;
+int y_lost_confirm_frames = 3;
+double y_entry_min_odom = 0.08;
+double y_entry_max_odom = 0.60;
+double y_crossbar_seek_speed = 0.08;
+int y_crossbar_lost_confirm_frames = 3;
+double y_crossbar_target_long_m = 0.25;
+double y_crossbar_long_tolerance_m = 0.10;
+double y_crossbar_max_abs_lat_m = 0.18;
+int y_crossbar_confirm_frames = 2;
+double y_crossbar_seek_max_odom = 0.40;
+
+int y_detect_confirm_count = 0;
+int y_entry_lost_count = 0;
+int y_crossbar_lost_count = 0;
+int y_crossbar_confirm_count = 0;
+float y_approach_start_odom = 0.0f;
+float y_crossbar_seek_start_odom = 0.0f;
+ros::Time y_approach_start_time;
+ros::Time y_turn_last_time;
+bool y_turn_has_last_time = false;
+double y_turn_integrated_angle_deg = 0.0;
+ros::Time y_turn_pause_start;
 
 std::string normalize(std::string value) {
     // 指令统一转成小写，兼容 Left/left/L 等写法。
@@ -233,12 +286,36 @@ std::string motionStateToString(MotionState state) {
 void publishStatus(const std::string &state);
 void publishDebugImage(const sensor_msgs::ImageConstPtr &source_msg = sensor_msgs::ImageConstPtr());
 
+void resetMotionController() {
+    motion_controller.reset();
+}
+
+void resetYBranchState() {
+    y_branch_mode_requested = false;
+    pending_branch_path = PathSelect::MIDDLE;
+    y_detect_confirm_count = 0;
+    y_entry_lost_count = 0;
+    y_crossbar_lost_count = 0;
+    y_crossbar_confirm_count = 0;
+    y_approach_start_odom = odom_dist;
+    y_crossbar_seek_start_odom = odom_dist;
+    y_approach_start_time = ros::Time();
+    y_turn_last_time = ros::Time();
+    y_turn_has_last_time = false;
+    y_turn_integrated_angle_deg = 0.0;
+    y_turn_pause_start = ros::Time();
+    forward_crossbar_result = {false, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f};
+    resetMotionController();
+}
+
+void resetLostCornerSearchState() {
+    lost_corner_search_active = false;
+    lost_corner_search_timed_out = false;
+    lost_corner_search_start_time = ros::Time();
+}
+
 void resetParkingCornerState() {
-    parking_first_corner_seen = false;
-    parking_first_corner_released = false;
-    parking_first_corner_odom = odom_dist;
-    parking_first_corner_path = path_select;
-    parking_first_corner_id = -1;
+    resetLostCornerSearchState();
 }
 
 double normalizeAngleDeg(double angle) {
@@ -258,6 +335,22 @@ int selectedPathPointCount() {
 }
 
 void startInitialTurnIfNeeded() {
+    resetMotionController();
+    if (y_branch_mode_requested) {
+        motion_state = MotionState::FOLLOWING_STRAIGHT;
+        y_detect_confirm_count = 0;
+        y_entry_lost_count = 0;
+        y_crossbar_lost_count = 0;
+        y_crossbar_confirm_count = 0;
+        y_turn_integrated_angle_deg = 0.0;
+        y_turn_has_last_time = false;
+        forward_crossbar_result.found = false;
+        resetParkingCornerState();
+        pid.reset();
+        publishStatus("Y_SEARCH_" + pathToString(pending_branch_path));
+        return;
+    }
+
     if (!initial_turn_enabled || path_select == PathSelect::MIDDLE) {
         motion_state = MotionState::FOLLOWING;
         publishStatus("RUNNING_" + pathToString(path_select));
@@ -276,25 +369,50 @@ void startInitialTurnIfNeeded() {
 
 bool setPathSelect(const std::string &raw_value) {
     const std::string value = normalize(raw_value);
+    if (value == "yleft" || value == "y_left" || value == "yl") {
+        resetYBranchState();
+        path_select = PathSelect::MIDDLE;
+        pending_branch_path = PathSelect::LEFT;
+        y_branch_mode_requested = true;
+        track_type = TRACK_MIDDLE;
+        resetLostCornerSearchState();
+        return true;
+    }
+    if (value == "yright" || value == "y_right" || value == "yr") {
+        resetYBranchState();
+        path_select = PathSelect::MIDDLE;
+        pending_branch_path = PathSelect::RIGHT;
+        y_branch_mode_requested = true;
+        track_type = TRACK_MIDDLE;
+        resetLostCornerSearchState();
+        return true;
+    }
     if (value == "left" || value == "l") {
+        resetYBranchState();
         path_select = PathSelect::LEFT;
         track_type = TRACK_LEFT;
+        resetLostCornerSearchState();
         return true;
     }
     if (value == "middle" || value == "mid" || value == "center" || value == "centre" || value == "m") {
+        resetYBranchState();
         path_select = PathSelect::MIDDLE;
         track_type = TRACK_MIDDLE;
+        resetLostCornerSearchState();
         return true;
     }
     if (value == "right" || value == "r") {
+        resetYBranchState();
         path_select = PathSelect::RIGHT;
         track_type = TRACK_RIGHT;
+        resetLostCornerSearchState();
         return true;
     }
     return false;
 }
 
 void publishStop() {
+    resetMotionController();
     // 连续发布零速度，比只发一次更可靠，避免底盘控制器错过停车指令。
     geometry_msgs::Twist stop_msg;
     for (int i = 0; i < 10; ++i) {
@@ -321,6 +439,10 @@ void detectCorners() {
     Lpt1_found = false;
     Ypt0_found = false;
     Lpt0_found = false;
+    Ypt0_rpts0s_id = -1;
+    Ypt1_rpts1s_id = -1;
+    Lpt0_rpts0s_id = -1;
+    Lpt1_rpts1s_id = -1;
     is_straight0 = rpts0s_num > 1.0 / sample_dist;
     is_straight1 = rpts1s_num > 1.0 / sample_dist;
 
@@ -329,7 +451,7 @@ void detectCorners() {
         int im1 = clip(i - (int)round(angle_dist / sample_dist), 0, rpts0s_num - 1);
         int ip1 = clip(i + (int)round(angle_dist / sample_dist), 0, rpts0s_num - 1);
         float conf = fabs(rpts0a[i]) - (fabs(rpts0a[im1]) + fabs(rpts0a[ip1])) / 2;
-        if (!Ypt0_found && 30.0 / 180.0 * PI < conf && conf < 65.0 / 180.0 * PI && i < 0.8 / sample_dist) {
+        if (!Ypt0_found && 25.0 / 180.0 * PI < conf && conf < 65.0 / 180.0 * PI && i < 0.8 / sample_dist) {
             Ypt0_rpts0s_id = i;
             Ypt0_found = true;
         }
@@ -348,7 +470,7 @@ void detectCorners() {
         int im1 = clip(i - (int)round(angle_dist / sample_dist), 0, rpts1s_num - 1);
         int ip1 = clip(i + (int)round(angle_dist / sample_dist), 0, rpts1s_num - 1);
         float conf = fabs(rpts1a[i]) - (fabs(rpts1a[im1]) + fabs(rpts1a[ip1])) / 2;
-        if (!Ypt1_found && 30.0 / 180.0 * PI < conf && conf < 65.0 / 180.0 * PI && i < 0.8 / sample_dist) {
+        if (!Ypt1_found && 25.0 / 180.0 * PI < conf && conf < 65.0 / 180.0 * PI && i < 0.8 / sample_dist) {
             Ypt1_rpts1s_id = i;
             Ypt1_found = true;
         }
@@ -612,7 +734,7 @@ bool handleYBranchFlow() {
 bool handleParkingCorner() {
     // 停车逻辑保留原工程的“近距离 L 角点停车”能力。
     // 判断到靠近图像底部的 L 型角点后，先计算角点相对车体中心的距离，
-    // 再用一个低速前进/横移的小循环把车挪到停车位置，最后发布 STOP。
+    // 再用低速 S 弯（或兼容的 lateral 模式）把车挪到停车位置，最后发布 STOP。
     if (!parking_enabled) {
         return false;
     }
@@ -621,8 +743,12 @@ bool handleParkingCorner() {
     bool is_stop_corner = false;
     const char *parking_line_type = "None";
     int parking_corner_id = -1;
+    float parking_shape_forward = 0.0f;
+    float parking_shape_lateral = 0.0f;
+    float parking_corner_y = 0.0f;
 
-    if (path_select == PathSelect::RIGHT &&
+    if ((path_select == PathSelect::RIGHT ||
+         (parking_allow_either_l && path_select == PathSelect::LEFT && !Lpt0_found)) &&
         Lpt1_found && Lpt1_rpts1s_id >= 3 && Lpt1_rpts1s_id < rptsc1_num) {
         // 右侧线 L 角点：角点前后点在图像中形成“向左折”的趋势，
         // 且角点位于图像下方，说明停车点已经接近车体。
@@ -632,11 +758,15 @@ bool handleParkingCorner() {
                          (rptsc1[ip1][0] - rptsc1[Lpt1_rpts1s_id][0] < -20) &&
                          (rptsc1[Lpt1_rpts1s_id][1] > RESULT_ROW - 40);
         if (is_stop_corner) {
+            parking_shape_forward = rptsc1[im1][1] - rptsc1[Lpt1_rpts1s_id][1];
+            parking_shape_lateral = rptsc1[ip1][0] - rptsc1[Lpt1_rpts1s_id][0];
+            parking_corner_y = rptsc1[Lpt1_rpts1s_id][1];
             corner_move(rpts1s, corner_dot, Lpt1_rpts1s_id, -pixel_per_meter * ROAD_WIDTH / 2);
             parking_line_type = "Right_L";
             parking_corner_id = Lpt1_rpts1s_id;
         }
-    } else if (path_select == PathSelect::LEFT &&
+    } else if ((path_select == PathSelect::LEFT ||
+                (parking_allow_either_l && path_select == PathSelect::RIGHT && !Lpt1_found)) &&
                Lpt0_found && Lpt0_rpts0s_id >= 3 && Lpt0_rpts0s_id < rptsc0_num) {
         // 左侧线 L 角点：判断条件和右侧线对称，横向方向相反。
         int im0 = clip(Lpt0_rpts0s_id - (int)round(angle_dist / sample_dist), 0, rptsc0_num - 1);
@@ -645,6 +775,43 @@ bool handleParkingCorner() {
                          (rptsc0[ip0][0] - rptsc0[Lpt0_rpts0s_id][0] > 20) &&
                          (rptsc0[Lpt0_rpts0s_id][1] > RESULT_ROW - 40);
         if (is_stop_corner) {
+            parking_shape_forward = rptsc0[im0][1] - rptsc0[Lpt0_rpts0s_id][1];
+            parking_shape_lateral = rptsc0[ip0][0] - rptsc0[Lpt0_rpts0s_id][0];
+            parking_corner_y = rptsc0[Lpt0_rpts0s_id][1];
+            corner_move(rpts0s, corner_dot, Lpt0_rpts0s_id, pixel_per_meter * ROAD_WIDTH / 2);
+            parking_line_type = "Left_L";
+            parking_corner_id = Lpt0_rpts0s_id;
+        }
+    }
+
+    if (!is_stop_corner && parking_allow_either_l && path_select == PathSelect::LEFT &&
+        Lpt1_found && Lpt1_rpts1s_id >= 3 && Lpt1_rpts1s_id < rptsc1_num) {
+        int im1 = clip(Lpt1_rpts1s_id - (int)round(angle_dist / sample_dist), 0, rptsc1_num - 1);
+        int ip1 = clip(Lpt1_rpts1s_id + (int)round(angle_dist / sample_dist), 0, rptsc1_num - 1);
+        is_stop_corner = (rptsc1[im1][1] - rptsc1[Lpt1_rpts1s_id][1] > 20) &&
+                         (rptsc1[ip1][0] - rptsc1[Lpt1_rpts1s_id][0] < -20) &&
+                         (rptsc1[Lpt1_rpts1s_id][1] > RESULT_ROW - 40);
+        if (is_stop_corner) {
+            parking_shape_forward = rptsc1[im1][1] - rptsc1[Lpt1_rpts1s_id][1];
+            parking_shape_lateral = rptsc1[ip1][0] - rptsc1[Lpt1_rpts1s_id][0];
+            parking_corner_y = rptsc1[Lpt1_rpts1s_id][1];
+            corner_move(rpts1s, corner_dot, Lpt1_rpts1s_id, -pixel_per_meter * ROAD_WIDTH / 2);
+            parking_line_type = "Right_L";
+            parking_corner_id = Lpt1_rpts1s_id;
+        }
+    }
+
+    if (!is_stop_corner && parking_allow_either_l && path_select == PathSelect::RIGHT &&
+        Lpt0_found && Lpt0_rpts0s_id >= 3 && Lpt0_rpts0s_id < rptsc0_num) {
+        int im0 = clip(Lpt0_rpts0s_id - (int)round(angle_dist / sample_dist), 0, rptsc0_num - 1);
+        int ip0 = clip(Lpt0_rpts0s_id + (int)round(angle_dist / sample_dist), 0, rptsc0_num - 1);
+        is_stop_corner = (rptsc0[im0][1] - rptsc0[Lpt0_rpts0s_id][1] > 20) &&
+                         (rptsc0[ip0][0] - rptsc0[Lpt0_rpts0s_id][0] > 20) &&
+                         (rptsc0[Lpt0_rpts0s_id][1] > RESULT_ROW - 40);
+        if (is_stop_corner) {
+            parking_shape_forward = rptsc0[im0][1] - rptsc0[Lpt0_rpts0s_id][1];
+            parking_shape_lateral = rptsc0[ip0][0] - rptsc0[Lpt0_rpts0s_id][0];
+            parking_corner_y = rptsc0[Lpt0_rpts0s_id][1];
             corner_move(rpts0s, corner_dot, Lpt0_rpts0s_id, pixel_per_meter * ROAD_WIDTH / 2);
             parking_line_type = "Left_L";
             parking_corner_id = Lpt0_rpts0s_id;
@@ -652,49 +819,24 @@ bool handleParkingCorner() {
     }
 
     if (!is_stop_corner) {
-        if (parking_first_corner_seen && !parking_first_corner_released) {
-            parking_first_corner_released = true;
-            ROS_WARN("[PARKING] First square corner released | path=%s | first_id=%d | odom=%.3fm",
-                     pathToString(parking_first_corner_path).c_str(),
-                     parking_first_corner_id,
-                     odom_dist);
-        }
         // 周期性打印角点检测状态（即使未检测到停车点）
-        ROS_WARN_THROTTLE(2.0, "[PARKING] CornerDetect | path=%s | L0=%d(id=%d) | L1=%d(id=%d) | Y0=%d(id=%d) | Y1=%d(id=%d) | left_pts=%d | right_pts=%d | parking_enable=%d",
+        ROS_WARN_THROTTLE(2.0, "[PARKING] CornerDetect | path=%s | L0=%d(id=%d) | L1=%d(id=%d) | Y0=%d(id=%d) | Y1=%d(id=%d) | left_pts=%d | right_pts=%d | parking_enable=%d | allow_either_l=%d",
                   pathToString(path_select).c_str(),
                   Lpt0_found, Lpt0_rpts0s_id, Lpt1_found, Lpt1_rpts1s_id,
                   Ypt0_found, Ypt0_rpts0s_id, Ypt1_found, Ypt1_rpts1s_id,
-                  rptsc0_num, rptsc1_num, parking_enabled);
+                  rptsc0_num, rptsc1_num, parking_enabled, parking_allow_either_l);
         return false;
     }
 
-    if (!parking_first_corner_seen || parking_first_corner_path != path_select) {
-        parking_first_corner_seen = true;
-        parking_first_corner_released = false;
-        parking_first_corner_odom = odom_dist;
-        parking_first_corner_path = path_select;
-        parking_first_corner_id = parking_corner_id;
-        ROS_WARN("[PARKING] First square corner ignored | path=%s | line_type=%s | corner_id=%d | odom=%.3fm",
-                 pathToString(path_select).c_str(),
-                 parking_line_type,
-                 parking_corner_id,
-                 odom_dist);
-        return false;
-    }
-
-    const float moved_after_first_corner = std::abs(odom_dist - parking_first_corner_odom);
-    if (!parking_first_corner_released || moved_after_first_corner < parking_second_corner_min_dist) {
-        ROS_WARN_THROTTLE(0.5,
-                          "[PARKING] Waiting second square corner | path=%s | line_type=%s | corner_id=%d | first_id=%d | released=%d | moved=%.3fm/%.3fm",
-                          pathToString(path_select).c_str(),
-                          parking_line_type,
-                          parking_corner_id,
-                          parking_first_corner_id,
-                          parking_first_corner_released,
-                          moved_after_first_corner,
-                          parking_second_corner_min_dist);
-        return false;
-    }
+    ROS_WARN("[PARKING] CornerDetect accepted | path=%s | L0=%d(id=%d) | L1=%d(id=%d) | "
+             "left_pts=%d | right_pts=%d | line_type=%s | corner_id=%d | shape=(dy=%.1f,dx=%.1f,y=%.1f) | allow_either_l=%d",
+             pathToString(path_select).c_str(),
+             Lpt0_found, Lpt0_rpts0s_id,
+             Lpt1_found, Lpt1_rpts1s_id,
+             rptsc0_num, rptsc1_num,
+             parking_line_type, parking_corner_id,
+             parking_shape_forward, parking_shape_lateral, parking_corner_y,
+             parking_allow_either_l);
 
     const float cx = RESULT_COL / 2.0f;
     const float cy = RESULT_ROW + 10.0f;
@@ -714,20 +856,53 @@ bool handleParkingCorner() {
 
     int parking_loop_count = 0;  // 停车循环计数器
     ros::Time parking_start_time = ros::Time::now();  // 停车开始时间
-    float last_print_dis = target_dis;  // 上次打印时的距离
-    const float initial_target_dis = target_dis;
-    const float parking_start_odom = odom_dist;
-    const float parking_extra_dist = 0.215f;
-    const float parking_total_dist = std::max(0.001f, std::abs(target_dis) + parking_extra_dist);
-    float parking_moved_from_velocity = 0.0f;
-    float previous_target_dis = target_dis;  // 上一次的目标距离
+    const double parking_total_dist =
+        std::max(0.001, std::abs(static_cast<double>(target_dis)) + parking_extra_dist);
+    const double parking_target_lateral = parking_lateral_cmd_sign * target_dis_x;
+    const bool use_s_curve = parking_motion_mode == "s_curve";
+    const ParkingSCurvePlan s_curve_plan = makeParkingSCurvePlan(
+        parking_total_dist, parking_target_lateral, parking_forward_speed,
+        parking_lateral_deadband, parking_max_angular_speed);
+    const double parking_path_length = use_s_curve
+        ? s_curve_plan.total_length
+        : parking_total_dist;
+    const double parking_cmd_speed = use_s_curve
+        ? s_curve_plan.forward_speed
+        : parking_forward_speed;
+    const double parking_start_yaw = current_yaw * PI / 180.0;
+    const double yaw_tolerance_rad = parking_yaw_tolerance_deg * PI / 180.0;
+    double parking_moved = 0.0;
+    double legacy_lateral_remaining = parking_target_lateral;
+    double last_print_moved = -1.0;
     ros::Rate parking_rate(30.0);
+
+    ROS_WARN("[PARKING_PLAN] mode=%s | target=(%.3f,%.3f)m | curved=%d | radius=%.3fm | "
+             "peak_yaw=%.1fdeg | path=%.3fm | cmd_v=%.3fm/s | ff_wz=%.3frad/s | start_yaw=%.1fdeg",
+             parking_motion_mode.c_str(), parking_total_dist, parking_target_lateral,
+             s_curve_plan.curved, s_curve_plan.radius,
+             s_curve_plan.peak_yaw * 180.0 / PI, parking_path_length,
+             parking_cmd_speed, s_curve_plan.feedforward_wz, current_yaw);
+
+    const auto abortParking = [&](const std::string &status, const char *reason) {
+        publishStop();
+        run_car = false;
+        resetParkingCornerState();
+        publishStatus(status);
+        ROS_ERROR("[PARKING_ABORT] %s | moved=%.3fm/%.3fm | elapsed=%.2fs",
+                  reason, parking_moved, parking_path_length,
+                  (ros::Time::now() - parking_start_time).toSec());
+    };
 
     while (ros::ok()) {
         ros::spinOnce();
+        if (!run_car) {
+            // beginCallback 已经为 Stop 指令发布零速度并切换为 IDLE。
+            return true;
+        }
+
         const ros::Time now = ros::Time::now();
         float dt = (now - last_time).toSec();
-        
+
         // Only integrate with real elapsed time; the rate sleep below prevents
         // the parking loop from virtually consuming distance in a few ms.
         if (dt < 0.0f || dt > 0.2f) {
@@ -737,68 +912,78 @@ bool handleParkingCorner() {
         last_time = now;
         parking_loop_count++;
 
-        local_msg.linear.x = 0.20;
-        local_msg.linear.y = 0.0;
-        // 横向误差较大时增加 y 方向微调，让停车点尽量落到车体中心附近。
-        if (std::abs(target_dis_x) >= 0.08) {
-            local_msg.linear.y = target_dis_x > 0 ? 0.1 : -0.1;
+        const double elapsed_sec = (now - parking_start_time).toSec();
+        if (elapsed_sec > parking_timeout) {
+            abortParking("PARKING_ABORTED_TIMEOUT", "parking timeout");
+            return true;
         }
+        if (last_odom_time.isZero() ||
+            (now - last_odom_time).toSec() > parking_odom_timeout) {
+            abortParking("PARKING_ABORTED_ODOM", "odometry missing or stale");
+            return true;
+        }
+
+        parking_moved += std::abs(current_linear_velocity_x) * dt;
+        const double traveled = std::min(parking_moved, parking_path_length);
+        const double relative_yaw = normalizeAngle(current_yaw * PI / 180.0 - parking_start_yaw);
+        const double reference_yaw = use_s_curve
+            ? parkingSCurveReferenceYaw(s_curve_plan, traveled)
+            : 0.0;
+        const double yaw_error = normalizeAngle(reference_yaw - relative_yaw);
+        const bool path_complete = parking_moved >= parking_path_length;
+
+        local_msg.linear.x = path_complete ? 0.0 : parking_cmd_speed;
+        local_msg.linear.y = 0.0;
         local_msg.angular.z = 0.0;
 
-        parking_moved_from_velocity += static_cast<float>(std::abs(current_linear_velocity_x)) * dt;
-        const float parking_moved = std::max(std::abs(odom_dist - parking_start_odom),
-                                             parking_moved_from_velocity);
-
-        // 保存旧值用于检测异常
-        previous_target_dis = target_dis;
-        target_dis = initial_target_dis - parking_moved;
-        target_dis_x -= local_msg.linear.y * dt;
-
-        // 检测距离异常（不应该增加）
-        if (target_dis > previous_target_dis && parking_loop_count > 10) {
-            ROS_ERROR("[PARKING_ERROR] Distance increased! prev=%.3fm -> curr=%.3fm | dt=%.4fs",
-                     previous_target_dis, target_dis, dt);
+        if (use_s_curve) {
+            const double feedforward_wz = parkingSCurveFeedforwardWz(s_curve_plan, traveled);
+            const double requested_wz = feedforward_wz + parking_yaw_kp * yaw_error;
+            local_msg.angular.z = std::max(-parking_max_angular_speed,
+                                           std::min(parking_max_angular_speed, requested_wz));
+        } else if (!path_complete &&
+                   std::abs(legacy_lateral_remaining) >= parking_lateral_deadband) {
+            local_msg.linear.y = legacy_lateral_remaining > 0.0
+                ? parking_lateral_speed
+                : -parking_lateral_speed;
+            legacy_lateral_remaining -= local_msg.linear.y * dt;
         }
 
-        float elapsed_sec = (now - parking_start_time).toSec();
         if (elapsed_sec > 1.0f && parking_moved < 0.02f) {
-            ROS_WARN_THROTTLE(1.0, "[PARKING_STUCK] cmd_vel is being published but odom_moved=%.3fm/%.3fm | odom_vx=%.3fm/s",
-                              parking_moved, parking_total_dist, current_linear_velocity_x);
+            ROS_WARN_THROTTLE(1.0, "[PARKING_STUCK] cmd_vel is being published but moved=%.3fm/%.3fm | odom_vx=%.3fm/s",
+                              parking_moved, parking_path_length, current_linear_velocity_x);
         }
 
-        // 靠近停车点时的调试信息（距离 < 0.5m 时开始打印）
-        if (std::abs(target_dis) < 0.5f) {
-            // Use the full planned parking distance: visible corner distance
-            // plus the configured extra distance after crossing the L point.
-            float remaining_dis = std::max(0.0f, parking_total_dist - parking_moved);
-            float progress_percent = ((parking_total_dist - remaining_dis) / parking_total_dist) * 100.0f;
-            
-            // Print when distance changes to avoid spamming
-            if (std::abs(target_dis - last_print_dis) > 0.02f) {
-                last_print_dis = target_dis;
-                ROS_WARN("[PARKING_PROGRESS] Approaching... | progress=%.0f%% | long_dist=%.3fm/%.3fm | "
-                         "lat_bias=%.3fm | vel=(%.2f,%.2f) | dt=%.4fs | loops=%d | elapsed=%.2fs",
-                         std::max(0.0f, std::min(progress_percent, 100.0f)),
-                         remaining_dis, parking_total_dist,
-                         target_dis_x,
-                         local_msg.linear.x, local_msg.linear.y,
-                         dt, parking_loop_count, elapsed_sec);
-            }
+        if (parking_moved - last_print_moved >= 0.02 ||
+            (path_complete && parking_loop_count % 15 == 0)) {
+            last_print_moved = parking_moved;
+            const double remaining = std::max(0.0, parking_path_length - parking_moved);
+            const double progress = 100.0 * traveled / std::max(0.001, parking_path_length);
+            ROS_WARN("[PARKING_PROGRESS] progress=%.0f%% | remaining=%.3fm/%.3fm | "
+                     "yaw=(ref=%.1f,actual=%.1f,error=%.1f)deg | cmd=(%.2f,%.2f,%.2f) | "
+                     "odom_age=%.3fs | loops=%d | elapsed=%.2fs",
+                     std::max(0.0, std::min(progress, 100.0)),
+                     remaining, parking_path_length,
+                     reference_yaw * 180.0 / PI,
+                     relative_yaw * 180.0 / PI,
+                     yaw_error * 180.0 / PI,
+                     local_msg.linear.x, local_msg.linear.y, local_msg.angular.z,
+                     (now - last_odom_time).toSec(), parking_loop_count, elapsed_sec);
         }
 
-        if (parking_moved >= parking_total_dist) {
+        const bool heading_aligned = std::abs(yaw_error) <= yaw_tolerance_rad;
+        if (path_complete && (!use_s_curve || heading_aligned)) {
             // 到达停车距离后，先发零速度，再向 end_topic 发布 STOP，
             // 这样外部上层逻辑可以知道本段巡线已经结束。
-            
-            float total_time = (now - parking_start_time).toSec();
-            ROS_WARN("[PARKING] Parking finished! | final_long_dist=%.3fm | final_lat_bias=%.3fm | "
-                     "odom_moved=%.3fm/%.3fm | total_loops=%d | total_time=%.2fs | line_type=%s",
-                     std::max(0.0f, parking_total_dist - parking_moved),
-                     target_dis_x,
+            ROS_WARN("[PARKING] Parking finished! | remaining=%.3fm | target_lat=%.3fm | "
+                     "yaw_error=%.2fdeg | moved=%.3fm/%.3fm | total_loops=%d | total_time=%.2fs | line_type=%s",
+                     std::max(0.0, parking_path_length - parking_moved),
+                     parking_target_lateral,
+                     yaw_error * 180.0 / PI,
                      parking_moved,
-                     parking_total_dist,
+                     parking_path_length,
                      parking_loop_count,
-                     total_time,
+                     elapsed_sec,
                      parking_line_type);
             
             publishStop();
@@ -974,28 +1159,191 @@ ROS_WARN_THROTTLE(0.5,
     return true;
 }
 
+bool handleLostCornerSearch() {
+    const bool has_control_path = rpts_num > 0;
+    const bool has_l_corner = Lpt0_found || Lpt1_found;
+    const bool can_search_path = path_select == PathSelect::LEFT || path_select == PathSelect::RIGHT;
+
+    if (has_control_path || has_l_corner || !can_search_path) {
+        if (lost_corner_search_active || lost_corner_search_timed_out) {
+            ROS_WARN("[LOST_CORNER_SEARCH] Recovered | path=%s | rpts=%d | L0=%d | L1=%d",
+                     pathToString(path_select).c_str(), rpts_num, Lpt0_found, Lpt1_found);
+        }
+        resetLostCornerSearchState();
+        return false;
+    }
+
+    if (!lost_corner_search_enabled) {
+        resetLostCornerSearchState();
+        return false;
+    }
+
+    geometry_msgs::Twist msg;
+    if (lost_corner_search_timed_out) {
+        pub.publish(msg);
+        publishDebugImage();
+        ROS_WARN_THROTTLE(0.5,
+                          "[LOST_CORNER_SEARCH] Timed out, holding stop | path=%s | timeout=%.2fs | L0=%d | L1=%d",
+                          pathToString(path_select).c_str(),
+                          lost_corner_search_timeout,
+                          Lpt0_found,
+                          Lpt1_found);
+        return true;
+    }
+
+    const ros::Time now = ros::Time::now();
+    if (!lost_corner_search_active) {
+        lost_corner_search_active = true;
+        lost_corner_search_start_time = now;
+        publishStatus("LOST_CORNER_SEARCH_" + pathToString(path_select));
+        ROS_WARN("[LOST_CORNER_SEARCH] Started | path=%s | dir=%s | timeout=%.2fs | wz=%.2f | vx=%.2f",
+                 pathToString(path_select).c_str(),
+                 path_select == PathSelect::LEFT ? "right" : "left",
+                 lost_corner_search_timeout,
+                 lost_corner_search_angular_speed,
+                 lost_corner_search_linear_speed);
+    }
+
+    const double elapsed = (now - lost_corner_search_start_time).toSec();
+    if (elapsed >= lost_corner_search_timeout) {
+        lost_corner_search_active = false;
+        lost_corner_search_timed_out = true;
+        pub.publish(msg);
+        publishDebugImage();
+        ROS_WARN("[LOST_CORNER_SEARCH] Timeout stop | path=%s | elapsed=%.2fs/%.2fs | L0=%d | L1=%d",
+                 pathToString(path_select).c_str(),
+                 elapsed,
+                 lost_corner_search_timeout,
+                 Lpt0_found,
+                 Lpt1_found);
+        return true;
+    }
+
+    msg.linear.x = lost_corner_search_linear_speed;
+    msg.angular.z = path_select == PathSelect::LEFT
+        ? -std::abs(lost_corner_search_angular_speed)
+        : std::abs(lost_corner_search_angular_speed);
+    pub.publish(msg);
+    publishDebugImage();
+    ROS_WARN_THROTTLE(0.25,
+                      "[LOST_CORNER_SEARCH] Searching | path=%s | elapsed=%.2fs/%.2fs | cmd_v=%.2f | cmd_wz=%.2f | L0=%d | L1=%d",
+                      pathToString(path_select).c_str(),
+                      elapsed,
+                      lost_corner_search_timeout,
+                      msg.linear.x,
+                      msg.angular.z,
+                      Lpt0_found,
+                      Lpt1_found);
+    return true;
+}
+
 void publishDebugImage(const sensor_msgs::ImageConstPtr &source_msg) {
-    // 调试图像是 MONO8：底图来自 ImageUsed，随后叠加左右偏移线和当前控制路径。
-    // 颜色值约定：0 标左线，80 标右线，160 标当前选择的控制路径。
+    // 恢复历史 MONO8 调试图：ImageUsed 为底图，不再转换为 BGR 彩色图。
+    // 灰度值约定：0=左目标线，80=右目标线，160=当前控制路径。
     for (int i = 0; i < RESULT_ROW; ++i) {
         for (int j = 0; j < RESULT_COL; ++j) {
             img_line_data[i][j] = ImageUsed[i][j];
         }
     }
     for (int i = 0; i < rptsc0e_num; ++i) {
-        AT_IMAGE(&img_line, clip(rptsc0e[i][0], 0, img_line.width - 1),
-                 clip(rptsc0e[i][1], 0, img_line.height - 1)) = 0;
+        AT_IMAGE(&img_line,
+                 clip(static_cast<int>(rptsc0e[i][0]), 0, img_line.width - 1),
+                 clip(static_cast<int>(rptsc0e[i][1]), 0, img_line.height - 1)) = 0;
     }
     for (int i = 0; i < rptsc1e_num; ++i) {
-        AT_IMAGE(&img_line, clip(rptsc1e[i][0], 0, img_line.width - 1),
-                 clip(rptsc1e[i][1], 0, img_line.height - 1)) = 80;
+        AT_IMAGE(&img_line,
+                 clip(static_cast<int>(rptsc1e[i][0]), 0, img_line.width - 1),
+                 clip(static_cast<int>(rptsc1e[i][1]), 0, img_line.height - 1)) = 80;
     }
     for (int i = 0; i < rpts_num; ++i) {
-        AT_IMAGE(&img_line, clip(rpts[i][0], 0, img_line.width - 1),
-                 clip(rpts[i][1], 0, img_line.height - 1)) = 160;
+        AT_IMAGE(&img_line,
+                 clip(static_cast<int>(rpts[i][0]), 0, img_line.width - 1),
+                 clip(static_cast<int>(rpts[i][1]), 0, img_line.height - 1)) = 160;
     }
 
     cv::Mat debug_gray = convert2DArrayToMat(img_line_data);
+
+    auto drawPointLabel = [&](float pts[][2], int pts_num, int idx,
+                              const std::string &label, uint8_t gray,
+                              bool cross_marker) {
+        if (idx < 0 || idx >= pts_num) {
+            return;
+        }
+        const int x = clip(static_cast<int>(std::round(pts[idx][0])),
+                           0, RESULT_COL - 1);
+        const int y = clip(static_cast<int>(std::round(pts[idx][1])),
+                           0, RESULT_ROW - 1);
+        const cv::Point point(x, y);
+        const cv::Scalar color(gray);
+
+        if (cross_marker) {
+            cv::line(debug_gray, cv::Point(std::max(0, x - 6), y),
+                     cv::Point(std::min(RESULT_COL - 1, x + 6), y), color, 2);
+            cv::line(debug_gray, cv::Point(x, std::max(0, y - 6)),
+                     cv::Point(x, std::min(RESULT_ROW - 1, y + 6)), color, 2);
+        } else {
+            cv::circle(debug_gray, point, 6, color, 2);
+        }
+        cv::putText(debug_gray, label,
+                    cv::Point(std::min(RESULT_COL - 1, x + 8),
+                              std::max(12, y - 8)),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.35, color, 1);
+    };
+
+    if (Lpt0_found) {
+        drawPointLabel(rpts0s, rpts0s_num, Lpt0_rpts0s_id,
+                       "L0", 255, false);
+    }
+    if (Lpt1_found) {
+        drawPointLabel(rpts1s, rpts1s_num, Lpt1_rpts1s_id,
+                       "L1", 220, false);
+    }
+    if (Ypt0_found) {
+        drawPointLabel(rpts0s, rpts0s_num, Ypt0_rpts0s_id,
+                       "Y0", 200, true);
+    }
+    if (Ypt1_found) {
+        drawPointLabel(rpts1s, rpts1s_num, Ypt1_rpts1s_id,
+                       "Y1", 180, true);
+    }
+
+    if (motion_state == MotionState::Y_CROSSBAR_SEEK &&
+        forward_crossbar_result.found) {
+        const int crossbar_x = clip(
+            static_cast<int>(std::round(forward_crossbar_result.map_x)),
+            0, RESULT_COL - 1);
+        const int crossbar_y = clip(
+            static_cast<int>(std::round(forward_crossbar_result.map_y)),
+            0, RESULT_ROW - 1);
+        cv::drawMarker(debug_gray, cv::Point(crossbar_x, crossbar_y),
+                       cv::Scalar(240), cv::MARKER_CROSS, 18, 2);
+        cv::putText(debug_gray, "Y_BAR",
+                    cv::Point(std::min(RESULT_COL - 90, crossbar_x + 8),
+                              std::max(18, crossbar_y - 8)),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.35,
+                    cv::Scalar(240), 1, cv::LINE_AA);
+    }
+
+    std::ostringstream state_line;
+    state_line << "path=" << pathToString(path_select)
+               << " state=" << motionStateToString(motion_state);
+    if (y_branch_mode_requested) {
+        state_line << " next=" << pathToString(pending_branch_path);
+    }
+    cv::putText(debug_gray, state_line.str(), cv::Point(8, 18),
+                cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0), 3, cv::LINE_AA);
+    cv::putText(debug_gray, state_line.str(), cv::Point(8, 18),
+                cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(240), 1, cv::LINE_AA);
+
+    if (publish_debug_image && debug_pub) {
+        std_msgs::Header header;
+        if (source_msg) {
+            header = source_msg->header;
+        }
+        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(
+            header, sensor_msgs::image_encodings::MONO8, debug_gray).toImageMsg();
+        debug_pub.publish(msg);
+    }
 
     // 显示窗口（如果启用）
     if (show_window) {
@@ -1021,7 +1369,7 @@ void publishDebugImage(const sensor_msgs::ImageConstPtr &source_msg) {
                 cv::VideoWriter::fourcc('M', 'J', 'P', 'G'),
                 video_fps,
                 cv::Size(RESULT_COL, RESULT_ROW),
-                false  // 灰度图
+                false
             );
 
             if (debug_video_writer.isOpened()) {
@@ -1073,8 +1421,16 @@ int followLineTestOnce() {
         return 0;
     }
 
+    if (handleYBranchFlow()) {
+        return 0;
+    }
+
     if (handleParkingCorner()) {
         // 检测到停车角点并完成停车后，本轮不再继续发布巡线速度。
+        return 0;
+    }
+
+    if (handleLostCornerSearch()) {
         return 0;
     }
 
@@ -1127,11 +1483,41 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
                double speed, double distance, double y_bias_m,
                bool enable_initial_turn, double turn_angle_deg,
                double turn_angular_speed, int turn_rpts_threshold,
-               double turn_pause_sec, double min_turn_pid_speed) {
+               double turn_pause_sec, double min_turn_pid_speed,
+               bool allow_either_l, double extra_parking_dist,
+               double forward_parking_speed, double lateral_parking_speed,
+               double lateral_parking_deadband, double lateral_cmd_sign,
+               const std::string &parking_mode,
+               double max_parking_angular_speed, double parking_heading_kp,
+               double parking_heading_tolerance_deg,
+               double parking_timeout_sec, double parking_odom_timeout_sec,
+               bool enable_lost_corner_search,
+               double lost_corner_timeout, double lost_corner_angular_speed,
+               double lost_corner_linear_speed) {
     // 保存 launch 参数，供后续图像调试、停车开关和速度控制使用。
     publish_debug_image = publish_debug;
     show_window = show_debug_window;
     parking_enabled = enable_parking;
+    parking_allow_either_l = allow_either_l;
+    parking_extra_dist = std::max(0.0, extra_parking_dist);
+    parking_forward_speed = std::max(0.0, forward_parking_speed);
+    parking_lateral_speed = std::max(0.0, lateral_parking_speed);
+    parking_lateral_deadband = std::max(0.0, lateral_parking_deadband);
+    parking_lateral_cmd_sign = lateral_cmd_sign < 0.0 ? -1.0 : 1.0;
+    parking_motion_mode = parking_mode;
+    std::transform(parking_motion_mode.begin(), parking_motion_mode.end(),
+                   parking_motion_mode.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (parking_motion_mode != "s_curve" && parking_motion_mode != "lateral") {
+        ROS_WARN("Unknown parking_motion_mode '%s', fallback to s_curve.",
+                 parking_motion_mode.c_str());
+        parking_motion_mode = "s_curve";
+    }
+    parking_max_angular_speed = std::max(0.0, max_parking_angular_speed);
+    parking_yaw_kp = std::max(0.0, parking_heading_kp);
+    parking_yaw_tolerance_deg = std::max(0.0, parking_heading_tolerance_deg);
+    parking_timeout = std::max(0.1, parking_timeout_sec);
+    parking_odom_timeout = std::max(0.05, parking_odom_timeout_sec);
     base_speed = speed;
     aim_distance = distance;
     aim_y_bias_m = y_bias_m;
@@ -1141,6 +1527,50 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
     initial_turn_rpts_threshold = std::max(1, turn_rpts_threshold);
     initial_turn_pause_sec = std::max(0.0, turn_pause_sec);
     min_pid_speed = std::max(0.0, min_turn_pid_speed);
+    lost_corner_search_enabled = enable_lost_corner_search;
+    lost_corner_search_timeout = std::max(0.0, lost_corner_timeout);
+    lost_corner_search_angular_speed = std::abs(lost_corner_angular_speed);
+    lost_corner_search_linear_speed = std::max(0.0, lost_corner_linear_speed);
+}
+
+void configureYBranch(double approach_dist, double turn_angle_deg,
+                      double turn_angular_speed, double turn_pause_sec,
+                      int detect_min_id, int detect_max_id,
+                      int detect_confirm_frames,
+                      double center_aim_dist, double approach_speed,
+                      double center_max_wz, int lost_confirm_frames,
+                      double entry_min_odom, double entry_max_odom,
+                      double crossbar_seek_speed,
+                      int crossbar_lost_confirm_frames,
+                      double crossbar_target_long_m,
+                      double crossbar_long_tolerance_m,
+                      double crossbar_max_abs_lat_m,
+                      int crossbar_confirm_frames,
+                      double crossbar_seek_max_odom) {
+    y_approach_dist = std::max(0.0, approach_dist);
+    y_turn_angle_deg = std::max(0.0, turn_angle_deg);
+    y_turn_angular_speed = std::abs(turn_angular_speed);
+    y_turn_pause_sec = std::max(0.0, turn_pause_sec);
+    y_detect_min_id = std::max(0, detect_min_id);
+    y_detect_max_id = std::max(y_detect_min_id, detect_max_id);
+    y_detect_confirm_frames = std::max(1, detect_confirm_frames);
+    y_center_aim_dist = std::max(0.01, center_aim_dist);
+    y_approach_speed = std::max(0.0, approach_speed);
+    y_center_max_wz = std::max(0.0, center_max_wz);
+    y_lost_confirm_frames = std::max(1, lost_confirm_frames);
+    y_entry_min_odom = std::max(0.0, entry_min_odom);
+    y_entry_max_odom = std::max(y_entry_min_odom, entry_max_odom);
+    y_crossbar_seek_speed = std::max(0.0, crossbar_seek_speed);
+    y_crossbar_lost_confirm_frames = std::max(1, crossbar_lost_confirm_frames);
+    y_crossbar_target_long_m = std::max(0.0, crossbar_target_long_m);
+    y_crossbar_long_tolerance_m = std::max(0.0, crossbar_long_tolerance_m);
+    y_crossbar_max_abs_lat_m = std::max(0.0, crossbar_max_abs_lat_m);
+    y_crossbar_confirm_frames = std::max(1, crossbar_confirm_frames);
+    y_crossbar_seek_max_odom = std::max(0.0, crossbar_seek_max_odom);
+}
+
+void configureMotionController(const MotionControlConfig &config) {
+    motion_controller.configure(config);
 }
 
 void configureVideo(bool enable_record, int fps, const std::string &save_path) {
@@ -1169,6 +1599,7 @@ bool shouldExit() {
 }
 
 void shutdown() {
+    resetYBranchState();
     // 节点退出时主动停车，避免调试时 Ctrl-C 后底盘保留上一条速度。
     publishStop();
 

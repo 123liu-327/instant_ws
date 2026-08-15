@@ -4,6 +4,7 @@
 flow_end/CMakeFiles/follow_test.dir/src/Callback_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/Callback_test.h
 flow_end/CMakeFiles/follow_test.dir/src/Callback_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow.h
 flow_end/CMakeFiles/follow_test.dir/src/Callback_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow_line_test.h
+flow_end/CMakeFiles/follow_test.dir/src/Callback_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow_motion_controller.h
 flow_end/CMakeFiles/follow_test.dir/src/Callback_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/Callback_test.cpp
 flow_end/CMakeFiles/follow_test.dir/src/Callback_test.cpp.o: /opt/ros/noetic/include/cv_bridge/cv_bridge.h
 flow_end/CMakeFiles/follow_test.dir/src/Callback_test.cpp.o: /opt/ros/noetic/include/geometry_msgs/Point.h
@@ -637,6 +638,8 @@ flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/insta
 flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/corner_move.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow_line_test.h
+flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow_motion_controller.h
+flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/parking_s_curve.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/process_image.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/track_line.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/follow_line_test.cpp
@@ -764,6 +767,7 @@ flow_end/CMakeFiles/follow_test.dir/src/follow_motion_controller.cpp.o: /opt/ros
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/Callback_test.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow_line_test.h
+flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/follow_motion_controller.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/follow_test.cpp
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /opt/ros/noetic/include/cv_bridge/cv_bridge.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /opt/ros/noetic/include/geometry_msgs/Point.h
@@ -865,6 +869,9 @@ flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /opt/ros/noetic/inclu
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /opt/ros/noetic/include/tf/transform_datatypes.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /opt/ros/noetic/include/xmlrpcpp/XmlRpcDecl.h
 flow_end/CMakeFiles/follow_test.dir/src/follow_test.cpp.o: /opt/ros/noetic/include/xmlrpcpp/XmlRpcValue.h
+
+flow_end/CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/parking_s_curve.h
+flow_end/CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/src/parking_s_curve.cpp
 
 flow_end/CMakeFiles/follow_test.dir/src/process_image.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/Findline_Adaptive.h
 flow_end/CMakeFiles/follow_test.dir/src/process_image.cpp.o: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/include/flow_end/Point_Process.h

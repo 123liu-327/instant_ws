@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Serialize all competition announcements through the robot's legacy /speak TTS."""
+"""Serialize all competition announcements through the unified factory TTS topic."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from ucar_2026_competition_speech.speech_templates import (
 
 class CompetitionAnnouncer:
     def __init__(self) -> None:
-        self.speak_topic = rospy.get_param("~speak_topic", "/speak")
+        self.speak_topic = rospy.get_param("~speak_topic", "/factory/tts_text")
         self.request_topic = rospy.get_param(
             "~request_topic", "/competition_speech/request"
         )

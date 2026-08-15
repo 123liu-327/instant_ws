@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Call the task-1 LLM service once, then publish the result to /speak."""
+"""Call the task-1 LLM service once, then publish the result to /factory/tts_text."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def main() -> None:
     rospy.init_node("smart_factory_llm_reason_and_speak_once")
 
     service_name = rospy.get_param("~service_name", "/smart_factory_llm/reason_pickup_order")
-    speak_topic = rospy.get_param("~speak_topic", "/speak")
+    speak_topic = rospy.get_param("~speak_topic", "/factory/tts_text")
     announce_service = rospy.get_param("~announce_service", "/competition_speech/announce")
     announce_service_timeout_sec = float(rospy.get_param("~announce_service_timeout_sec", 2.0))
     item_a = rospy.get_param("~item_a", "").strip()

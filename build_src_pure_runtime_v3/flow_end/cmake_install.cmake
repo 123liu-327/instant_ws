@@ -52,3 +52,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/flow_end" TYPE FILE FILES "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/package.xml")
 endif()
 
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/flow_end/launch" TYPE DIRECTORY FILES "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/flow_end/launch/")
+endif()
+

@@ -142,7 +142,7 @@ vote_window_size: 5
 vote_min_count: 2
 cooldown_sec: 5.0
 speech_service: /competition_speech/announce
-speech_topic: /speak
+speech_topic: /factory/tts_text
 ```
 
 ## 语音接口
@@ -154,7 +154,7 @@ speech_topic: /speak
 
 兜底：
 
-- topic：`/speak`
+- topic：`/factory/tts_text`
 - type：`std_msgs/String`
 
 手动测试：

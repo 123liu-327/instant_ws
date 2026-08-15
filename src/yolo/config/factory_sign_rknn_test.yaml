@@ -30,7 +30,7 @@ image_timeout: 5.0            # 图像超时 (秒)
 enable_speech: true
 announce_service: /competition_speech/announce
 announce_service_timeout_sec: 0.5
-speak_topic: /speak
+speak_topic: /factory/tts_text
 use_announce_service: true
 fallback_to_speak_topic: true
 repeat_same: true              # 同一类别是否重复播报

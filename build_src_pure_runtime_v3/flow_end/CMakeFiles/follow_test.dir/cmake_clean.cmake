@@ -3,6 +3,7 @@ file(REMOVE_RECURSE
   "CMakeFiles/follow_test.dir/src/Callback_test.cpp.o"
   "CMakeFiles/follow_test.dir/src/follow_line_test.cpp.o"
   "CMakeFiles/follow_test.dir/src/follow_motion_controller.cpp.o"
+  "CMakeFiles/follow_test.dir/src/parking_s_curve.cpp.o"
   "CMakeFiles/follow_test.dir/src/PID.cpp.o"
   "CMakeFiles/follow_test.dir/src/corner_move.cpp.o"
   "CMakeFiles/follow_test.dir/src/Findline_Adaptive.cpp.o"

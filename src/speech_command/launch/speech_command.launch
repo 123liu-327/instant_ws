@@ -1,6 +1,7 @@
 <launch>
 
     <arg name="tts_topic" default="/factory/tts_text" />
+    <arg name="tts_speed" default="60" />
 
     <!-- ========================= -->
     <!--      语音识别节点(C++)      -->
@@ -11,6 +12,7 @@
         name="cloud_asr_test2"
         output="screen">
         <param name="tts_topic" value="$(arg tts_topic)" />
+        <param name="tts_speed" value="$(arg tts_speed)" />
     </node>
 
     <!-- ========================= -->

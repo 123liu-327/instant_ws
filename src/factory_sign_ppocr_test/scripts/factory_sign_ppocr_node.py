@@ -372,7 +372,7 @@ class FactorySignPPOCRNode:
         self.speech_mode = rospy.get_param("~speech_mode", "service").strip().lower()
         self.speech_service = rospy.get_param("~speech_service", "/competition_speech/announce")
         self.speech_timeout = float(rospy.get_param("~speech_service_timeout_sec", 0.5))
-        self.speech_topic = rospy.get_param("~speech_topic", "/speak")
+        self.speech_topic = rospy.get_param("~speech_topic", "/factory/tts_text")
         self.fallback_to_topic = ros_bool(rospy.get_param("~fallback_to_speech_topic", True), True)
         self.speech_wait = ros_bool(rospy.get_param("~speech_wait", False), False)
 

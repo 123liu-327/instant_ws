@@ -2,7 +2,7 @@
 
 This package is the single announcement gateway for all five smart-factory
 competition subtasks. It keeps the robot's legacy offline TTS interface
-unchanged: generated text is published as `std_msgs/String` on `/speak`.
+unchanged: generated text is published as `std_msgs/String` on `/factory/tts_text`.
 
 ## Official announcement events
 
@@ -18,7 +18,7 @@ Start the old TTS node, then the gateway:
 
 ```bash
 source /home/ucar/ucar_ws/devel/setup.bash
-rosrun speech_command voice_speak_node
+rosrun speech_command speech_command_node _tts_only:=true _tts_topic:=/factory/tts_text
 
 source ~/2026-xunfei-race/devel/setup.bash
 roslaunch ucar_2026_competition_speech competition_speech.launch

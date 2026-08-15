@@ -9,10 +9,10 @@ import sys
 from urllib.parse import urlencode
 
 class Ws_Param(object):
-    def __init__(self, APPID, APIKey, APISecret, Text):
+    def __init__(self, APPID, APIKey, APISecret, Text, Speed=40):
         self.APPID, self.APIKey, self.APISecret, self.Text = APPID, APIKey, APISecret, Text
         self.CommonArgs = {"app_id": self.APPID}
-        self.BusinessArgs = {"aue": "raw", "auf": "audio/L16;rate=16000", "vcn": "xiaoyan", "tte": "utf8"}
+        self.BusinessArgs = {"aue": "raw", "auf": "audio/L16;rate=16000", "vcn": "xiaoyan", "tte": "utf8", "speed": Speed}
         self.Data = {"status": 2, "text": str(base64.b64encode(self.Text.encode('utf-8')), "utf-8")}
 
     def create_url(self):
@@ -48,7 +48,8 @@ def on_open(ws):
 if __name__ == "__main__":
     target_dir = os.path.dirname('/home/ucar/instant_ws/src/speech_command/tmp/tts_result.pcm')
     if not os.path.exists(target_dir): os.makedirs(target_dir)
-    wsParam = Ws_Param(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    speed = max(0, min(100, int(sys.argv[5]))) if len(sys.argv) > 5 else 40
+    wsParam = Ws_Param(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], speed)
     ws = websocket.WebSocketApp(wsParam.create_url(), on_message=on_message, on_error=on_error, on_close=on_close)
     ws.on_open = on_open
     ws.run_forever()

@@ -108,7 +108,7 @@ while not rospy.is_shutdown():
         if args.with_speech:
             speech_code, speech_graph, speech_error = execute(
                 client,
-                "bash -lc '{} && rosnode list; rostopic info /speak; "
+                "bash -lc '{} && rosnode list; rostopic info /factory/tts_text; "
                 "rosnode info /traffic_light_external_tts'".format(env),
                 True,
             )
@@ -119,7 +119,7 @@ while not rospy.is_shutdown():
                 speech_code != 0
                 or "/traffic_light_external_tts" not in speech_graph
                 or "Subscribers:" not in speech_graph
-                or "/voice_speak_node" not in speech_graph
+                or "/speech_command_node" not in speech_graph
             ):
                 _, log_text, _ = execute(client, "tail -n 160 {}".format(launch_log), True)
                 raise RuntimeError("TTS graph is incomplete; launch log:\n{}".format(log_text))

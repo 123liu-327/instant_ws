@@ -20,7 +20,7 @@
   <arg name="task2_center_only" default="false" />
   <arg name="max_coverage_anchors" default="0" />
   <arg name="target_center_steering_sign" default="-1.0" />
-  <arg name="parking_recenter_lateral_sign" default="1.0" />
+  <arg name="parking_recenter_lateral_sign" default="-1.0" />
   <arg name="camera_boresight_yaw_offset" default="0.292" />
   <arg name="task2_vision_offset" default="0.4" />
   <arg name="coverage_scan_step_deg" default="20.0" />
@@ -45,14 +45,14 @@
   <arg name="parking_staging_timeout_sec" default="20.0" />
   <arg name="parking_staging_position_tolerance" default="0.10" />
   <arg name="parking_staging_yaw_tolerance" default="0.10" />
-  <arg name="parking_docking_timeout_sec" default="30.0" />
+  <arg name="parking_docking_timeout_sec" default="35.0" />
   <arg name="parking_dock_max_x" default="0.10" />
   <arg name="parking_dock_max_y" default="0.06" />
-  <arg name="parking_dock_max_yaw" default="0.30" />
-  <arg name="parking_dock_min_yaw" default="0.30" />
+  <arg name="parking_dock_max_yaw" default="0.15" />
+  <arg name="parking_dock_min_yaw" default="0.04" />
   <arg name="parking_dock_normal_tolerance" default="0.02" />
   <arg name="parking_dock_tangent_tolerance" default="0.02" />
-  <arg name="parking_dock_yaw_tolerance" default="0.05" />
+  <arg name="parking_dock_yaw_tolerance" default="0.06" />
   <arg name="parking_dock_translation_yaw_gate" default="0.22" />
   <arg name="parking_dock_forward_yaw_gate" default="0.14" />
   <arg name="parking_dock_forward_tangent_gate" default="0.12" />

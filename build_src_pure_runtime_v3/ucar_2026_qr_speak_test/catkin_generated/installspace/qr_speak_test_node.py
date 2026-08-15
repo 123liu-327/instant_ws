@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Clean QR JSON, call Spark LLM directly, and publish slow speech to /speak."""
+"""Clean QR JSON, call Spark LLM directly, and publish slow speech to /factory/tts_text."""
 
 from __future__ import annotations
 
@@ -163,7 +163,7 @@ class SparkX2Client:
 class QRSpeakTestNode:
     def __init__(self) -> None:
         self.qr_topic = rospy.get_param("~qr_topic", "/qr_code_data")
-        self.speak_topic = rospy.get_param("~speak_topic", "/speak")
+        self.speak_topic = rospy.get_param("~speak_topic", "/factory/tts_text")
         self.status_topic = rospy.get_param("~status_topic", "/qr_speak_test/status")
         self.speak_prefix = rospy.get_param("~speak_prefix", "")
         self.speak_suffix = rospy.get_param("~speak_suffix", "")

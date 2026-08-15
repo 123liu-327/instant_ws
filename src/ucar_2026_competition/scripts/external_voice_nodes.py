@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Run legacy ASR/TTS without sourcing the duplicate-filled legacy workspace."""
+"""Run legacy ASR without sourcing the duplicate-filled legacy workspace."""
 
 import os
 import signal
@@ -17,10 +17,8 @@ class ExternalVoiceNodes:
         requested = []
         if rospy.get_param("~start_asr", False):
             requested.append(os.path.join(lib_dir, "speech_command_node"))
-        if rospy.get_param("~start_tts", False):
-            requested.append(os.path.join(lib_dir, "voice_speak_node"))
         if not requested:
-            raise RuntimeError("no external voice process requested")
+            raise RuntimeError("external ASR was not requested")
         if not os.path.isfile(os.path.join(package_dir, "package.xml")):
             raise RuntimeError("external speech_command package is unavailable: {}".format(package_dir))
         for path in requested:

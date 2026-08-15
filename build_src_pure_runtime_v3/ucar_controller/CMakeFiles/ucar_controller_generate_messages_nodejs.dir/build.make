@@ -83,8 +83,8 @@ ucar_controller/CMakeFiles/ucar_controller_generate_messages_nodejs: /home/ucar/
 
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/share/gennodejs/ros/ucar_controller/srv/GetBatteryInfo.js: /opt/ros/noetic/lib/gennodejs/gen_nodejs.py
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/share/gennodejs/ros/ucar_controller/srv/GetBatteryInfo.js: /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv
-/home/ucar/instant_ws/devel_src_pure_runtime_v3/share/gennodejs/ros/ucar_controller/srv/GetBatteryInfo.js: /opt/ros/noetic/share/std_msgs/msg/Header.msg
 /home/ucar/instant_ws/devel_src_pure_runtime_v3/share/gennodejs/ros/ucar_controller/srv/GetBatteryInfo.js: /opt/ros/noetic/share/sensor_msgs/msg/BatteryState.msg
+/home/ucar/instant_ws/devel_src_pure_runtime_v3/share/gennodejs/ros/ucar_controller/srv/GetBatteryInfo.js: /opt/ros/noetic/share/std_msgs/msg/Header.msg
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ucar/instant_ws/build_src_pure_runtime_v3/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Generating Javascript code from ucar_controller/GetBatteryInfo.srv"
 	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_controller && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/gennodejs/cmake/../../../lib/gennodejs/gen_nodejs.py /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv -Istd_msgs:/opt/ros/noetic/share/std_msgs/cmake/../msg -Isensor_msgs:/opt/ros/noetic/share/sensor_msgs/cmake/../msg -Igeometry_msgs:/opt/ros/noetic/share/geometry_msgs/cmake/../msg -p ucar_controller -o /home/ucar/instant_ws/devel_src_pure_runtime_v3/share/gennodejs/ros/ucar_controller/srv
 

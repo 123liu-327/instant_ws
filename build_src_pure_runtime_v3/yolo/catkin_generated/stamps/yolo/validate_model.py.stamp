@@ -707,7 +707,7 @@ class RknnRosNode:
         self.enable_speech = bool(rospy.get_param("~enable_speech", True))
         self.announce_service = rospy.get_param("~announce_service", "/competition_speech/announce")
         self.announce_timeout = float(rospy.get_param("~announce_service_timeout_sec", 0.5))
-        self.speak_topic = rospy.get_param("~speak_topic", "/speak")
+        self.speak_topic = rospy.get_param("~speak_topic", "/factory/tts_text")
         self.use_announce_service = bool(rospy.get_param("~use_announce_service", True))
         self.fallback_to_speak_topic = bool(rospy.get_param("~fallback_to_speak_topic", True))
         self.repeat_same = bool(rospy.get_param("~repeat_same", True))

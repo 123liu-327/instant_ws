@@ -207,31 +207,20 @@ void xunfei_llm_tts_callback(const std_msgs::String::ConstPtr& msg)
 
 int main(int argc, char **argv)
 {
-	try
-	{
-		_serial.setPort(DEV_ID);
-		_serial.setBaudrate(BAUD_RATE);
-		_serial.setFlowcontrol(serial::flowcontrol_none);
-		_serial.setParity(serial::parity_none); 
-		_serial.setStopbits(serial::stopbits_one);
-		_serial.setBytesize(serial::eightbits);
-		serial::Timeout to = serial::Timeout::simpleTimeout(1000);
-		_serial.setTimeout(to);
-		_serial.open();
-		ROS_INFO_STREAM("Port has been open successfully");
-	}
-	catch (serial::IOException &e)
-	{
-		ROS_ERROR_STREAM("Unable to open port");
-		return -1;
-	}
+	ros::init(argc, argv, "speech_command_node");
+	ros::NodeHandle ndHandle;
+	ros::NodeHandle privateHandle("~");
+	bool tts_only = false;
+	string tts_topic = "/factory/tts_text";
+	int tts_speed = 40;
+	privateHandle.param("tts_only", tts_only, false);
+	privateHandle.param<string>("tts_topic", tts_topic, "/factory/tts_text");
+	privateHandle.param("tts_speed", tts_speed, 40);
+	if (tts_speed < 0) tts_speed = 0;
+	if (tts_speed > 100) tts_speed = 100;
+	setTTSSpeed(tts_speed);
+	ROS_INFO_STREAM("TTS speed configured as " << tts_speed);
 
-	if (_serial.isOpen())
-	{
-		sleep(1/10);
-		_serial.flush();			
-		ROS_INFO_STREAM("port initial successfully------");
-	}
 	string ros_package_path = ros::package::getPath("speech_command");
 	package_path = const_cast<char *>(ros_package_path.c_str());
 	
@@ -249,10 +238,42 @@ int main(int argc, char **argv)
 
 	string user_config_path = ros_package_path + USER_CONFIG_PATH;
 	LoadUserConfig(user_config_path);
-	AIUITester t;
 
-	ros::init(argc, argv, "speech_command_node");
-	ros::NodeHandle ndHandle;
+	if (tts_only)
+	{
+		ros::Subscriber tts_subscriber = ndHandle.subscribe(
+			tts_topic, 10, xunfei_llm_tts_callback);
+		ROS_INFO_STREAM("TTS-only mode listening on " << tts_topic);
+		ros::spin();
+		return 0;
+	}
+
+	try
+	{
+		_serial.setPort(DEV_ID);
+		_serial.setBaudrate(BAUD_RATE);
+		_serial.setFlowcontrol(serial::flowcontrol_none);
+		_serial.setParity(serial::parity_none);
+		_serial.setStopbits(serial::stopbits_one);
+		_serial.setBytesize(serial::eightbits);
+		serial::Timeout to = serial::Timeout::simpleTimeout(1000);
+		_serial.setTimeout(to);
+		_serial.open();
+		ROS_INFO_STREAM("Port has been open successfully");
+	}
+	catch (serial::IOException &e)
+	{
+		ROS_ERROR_STREAM("Unable to open port");
+		return -1;
+	}
+
+	if (_serial.isOpen())
+	{
+		sleep(1/10);
+		_serial.flush();
+		ROS_INFO_STREAM("port initial successfully------");
+	}
+	AIUITester t;
 
 	// 1. 挂载我们新加的话题订阅
 	ros::Subscriber sub_llm_tts = ndHandle.subscribe("/factory/tts_text", 10, xunfei_llm_tts_callback);

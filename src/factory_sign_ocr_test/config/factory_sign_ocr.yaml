@@ -40,10 +40,9 @@ debug_show_image: false             # direct cv2.imshow; prefer image_view throu
 speech_mode: service                # service | topic | auto
 speech_service: /competition_speech/announce
 speech_service_timeout_sec: 0.5
-speech_topic: /speak
+speech_topic: /factory/tts_text
 fallback_to_speech_topic: true
 speech_wait: false
-
 
 
 

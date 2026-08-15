@@ -824,6 +824,8 @@ class StrictMissionNode:
             return
         try:
             restored = planner_client.update_configuration(saved_tolerances)
+            if not isinstance(restored, dict):
+                restored = saved_tolerances
             rospy.loginfo(
                 "restored TEB goal tolerances: xy=%.3f yaw=%.3f",
                 float(restored.get(
@@ -858,18 +860,34 @@ class StrictMissionNode:
             planner_client = dynamic_reconfigure.client.Client(
                 namespace, timeout=5.0)
             current = planner_client.get_configuration(timeout=3.0)
+            if not isinstance(current, dict):
+                rospy.logwarn(
+                    "TASK4_TOLERANCE_GUARD received no configuration "
+                    "snapshot; using ROS parameter values as the restore "
+                    "baseline.")
+                current = {}
             saved_tolerances = {
                 "xy_goal_tolerance": current.get(
-                    "xy_goal_tolerance", 0.15),
+                    "xy_goal_tolerance", rospy.get_param(
+                        namespace + "/xy_goal_tolerance", 0.15)),
                 "yaw_goal_tolerance": current.get(
-                    "yaw_goal_tolerance", 0.10),
-                "free_goal_vel": current.get("free_goal_vel", False),
+                    "yaw_goal_tolerance", rospy.get_param(
+                        namespace + "/yaw_goal_tolerance", 0.10)),
+                "free_goal_vel": current.get(
+                    "free_goal_vel", rospy.get_param(
+                        namespace + "/free_goal_vel", False)),
             }
-            updated = planner_client.update_configuration({
+            requested = {
                 "xy_goal_tolerance": xy_tolerance,
                 "yaw_goal_tolerance": yaw_tolerance,
                 "free_goal_vel": False,
-            })
+            }
+            updated = planner_client.update_configuration(requested)
+            if not isinstance(updated, dict):
+                rospy.logwarn(
+                    "TASK4_TOLERANCE_GUARD update returned no payload; "
+                    "continuing with the requested values.")
+                updated = requested
             rospy.logwarn(
                 "TASK4_TOLERANCE_GUARD applied: xy=%.3f yaw=%.3f",
                 float(updated.get("xy_goal_tolerance", xy_tolerance)),
@@ -877,9 +895,11 @@ class StrictMissionNode:
             )
             return planner_client, saved_tolerances
         except Exception as exc:
-            raise RuntimeError(
-                "unable to tighten task4 TEB goal tolerances: {}".format(
-                    exc))
+            rospy.logwarn(
+                "TASK4_TOLERANCE_GUARD unavailable (%s); continuing with "
+                "the current planner tolerances and visual stop-line "
+                "alignment.", exc)
+            return None, None
 
     def align_to_staging_heading(self):
         target_yaw = float(rospy.get_param("~traffic_staging_yaw"))

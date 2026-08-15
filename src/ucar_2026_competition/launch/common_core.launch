@@ -4,6 +4,7 @@
   <arg name="start_speech" default="true" />
   <arg name="start_asr" default="false" />
   <arg name="start_tts" default="false" />
+  <arg name="tts_speed" default="40" />
   <arg name="start_llm" default="false" />
   <arg name="start_rviz" default="false" />
   <arg name="camera_topic" default="/usb_cam/image_raw" />
@@ -33,10 +34,11 @@
   </group>
 
   <group if="$(arg start_tts)">
-    <node pkg="ucar_2026_competition" type="external_voice_nodes.py"
-          name="competition_external_tts" output="screen" required="true">
-      <param name="start_asr" value="false" />
-      <param name="start_tts" value="true" />
+    <node pkg="speech_command" type="speech_command_node"
+          name="competition_tts" output="screen" required="true">
+      <param name="tts_only" value="true" />
+      <param name="tts_topic" value="/factory/tts_text" />
+      <param name="tts_speed" value="$(arg tts_speed)" />
     </node>
   </group>
 

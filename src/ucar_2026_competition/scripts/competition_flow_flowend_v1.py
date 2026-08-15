@@ -2062,7 +2062,7 @@ class CompetitionFlow:
             "target_center_steering_sign": rospy.get_param(
                 "~target_center_steering_sign", -1.0),
             "parking_recenter_lateral_sign": rospy.get_param(
-                "~parking_recenter_lateral_sign", 1.0),
+                "~parking_recenter_lateral_sign", -1.0),
             "camera_boresight_yaw_offset": rospy.get_param(
                 "~camera_boresight_yaw_offset", 0.0),
             "camera_horizontal_fov_deg": rospy.get_param(
@@ -2634,7 +2634,7 @@ class CompetitionFlow:
                     "target_center_steering_sign": rospy.get_param(
                         "~target_center_steering_sign", -1.0),
                     "parking_recenter_lateral_sign": rospy.get_param(
-                        "~parking_recenter_lateral_sign", 1.0),
+                        "~parking_recenter_lateral_sign", -1.0),
                     "camera_boresight_yaw_offset": rospy.get_param(
                         "~camera_boresight_yaw_offset", 0.0),
                     "center_only": center_only,

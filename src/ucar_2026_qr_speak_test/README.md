@@ -8,7 +8,7 @@ ROS Noetic test package for QR camera viewing and direct speech playback.
 - Opens an X11 `image_view` window so MobaXterm can show the live camera image.
 - Runs `yolo/qr_collect_and_decode.py --fetch` and listens to `/qr_code_data`.
 - Cleans QR JSON, classifies the three item results, and publishes the task
-  completion sentence to `/speak`.
+  completion sentence to `/factory/tts_text`.
 
 The node does not speak status codes, URLs, `ok`, `stamp`, or other debug fields.
 For a QR payload like:
@@ -53,13 +53,13 @@ source ~/2026-xunfei-race/devel/setup.bash
 Start the speech node in another terminal:
 
 ```bash
-rosrun speech_command voice_speak_node
+rosrun speech_command speech_command_node _tts_only:=true _tts_topic:=/factory/tts_text
 ```
 
 Quick TTS check:
 
 ```bash
-rostopic pub -1 /speak std_msgs/String "data: '你好，这是测试播报'"
+rostopic pub -1 /factory/tts_text std_msgs/String "data: '你好，这是测试播报'"
 ```
 
 Launch the QR test:
@@ -138,11 +138,11 @@ roslaunch ucar_2026_qr_speak_test qr_speak_sequence_test.launch start_camera:=fa
 ## Topics
 
 - Subscribes: `/qr_code_data` (`std_msgs/String`)
-- Publishes: `/speak` (`std_msgs/String`)
+- Publishes: `/factory/tts_text` (`std_msgs/String`)
 - Publishes: `/qr_speak_test/status` (`std_msgs/String`)
 
 ## Notes
 
 - The same QR key is spoken once by default to avoid repeated frame-by-frame playback.
 - Use `repeat_same:=true` only for manual repeated testing.
-- This package assumes the car has `usb_cam`, `image_view`, `yolo`, and a `/speak` TTS subscriber available.
+- This package assumes the car has `usb_cam`, `image_view`, `yolo`, and a `/factory/tts_text` TTS subscriber available.

@@ -2924,43 +2924,17 @@ run_tests_tf_gtest_tf_unittest/fast:
 .PHONY : run_tests_tf_gtest_tf_unittest/fast
 
 #=============================================================================
-# Target rules for targets named run_tests_flow_end_runtime_v1
+# Target rules for targets named _run_tests_flow_end
 
 # Build rule for target.
-run_tests_flow_end_runtime_v1: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 run_tests_flow_end_runtime_v1
-.PHONY : run_tests_flow_end_runtime_v1
+_run_tests_flow_end: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_flow_end
+.PHONY : _run_tests_flow_end
 
 # fast build rule for target.
-run_tests_flow_end_runtime_v1/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/run_tests_flow_end_runtime_v1.dir/build.make flow_end_runtime_v1/CMakeFiles/run_tests_flow_end_runtime_v1.dir/build
-.PHONY : run_tests_flow_end_runtime_v1/fast
-
-#=============================================================================
-# Target rules for targets named _run_tests_flow_end_runtime_v1
-
-# Build rule for target.
-_run_tests_flow_end_runtime_v1: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_flow_end_runtime_v1
-.PHONY : _run_tests_flow_end_runtime_v1
-
-# fast build rule for target.
-_run_tests_flow_end_runtime_v1/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/_run_tests_flow_end_runtime_v1.dir/build.make flow_end_runtime_v1/CMakeFiles/_run_tests_flow_end_runtime_v1.dir/build
-.PHONY : _run_tests_flow_end_runtime_v1/fast
-
-#=============================================================================
-# Target rules for targets named _run_tests_flow_end_runtime_v1_gtest
-
-# Build rule for target.
-_run_tests_flow_end_runtime_v1_gtest: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_flow_end_runtime_v1_gtest
-.PHONY : _run_tests_flow_end_runtime_v1_gtest
-
-# fast build rule for target.
-_run_tests_flow_end_runtime_v1_gtest/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/_run_tests_flow_end_runtime_v1_gtest.dir/build.make flow_end_runtime_v1/CMakeFiles/_run_tests_flow_end_runtime_v1_gtest.dir/build
-.PHONY : _run_tests_flow_end_runtime_v1_gtest/fast
+_run_tests_flow_end/fast:
+	$(MAKE) -f flow_end/CMakeFiles/_run_tests_flow_end.dir/build.make flow_end/CMakeFiles/_run_tests_flow_end.dir/build
+.PHONY : _run_tests_flow_end/fast
 
 #=============================================================================
 # Target rules for targets named follow_test
@@ -2972,47 +2946,21 @@ follow_test: cmake_check_build_system
 
 # fast build rule for target.
 follow_test/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/follow_test.dir/build.make flow_end_runtime_v1/CMakeFiles/follow_test.dir/build
+	$(MAKE) -f flow_end/CMakeFiles/follow_test.dir/build.make flow_end/CMakeFiles/follow_test.dir/build
 .PHONY : follow_test/fast
 
 #=============================================================================
-# Target rules for targets named test_parking_s_curve
+# Target rules for targets named run_tests_flow_end
 
 # Build rule for target.
-test_parking_s_curve: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 test_parking_s_curve
-.PHONY : test_parking_s_curve
+run_tests_flow_end: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_flow_end
+.PHONY : run_tests_flow_end
 
 # fast build rule for target.
-test_parking_s_curve/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/test_parking_s_curve.dir/build.make flow_end_runtime_v1/CMakeFiles/test_parking_s_curve.dir/build
-.PHONY : test_parking_s_curve/fast
-
-#=============================================================================
-# Target rules for targets named image_process_debug
-
-# Build rule for target.
-image_process_debug: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 image_process_debug
-.PHONY : image_process_debug
-
-# fast build rule for target.
-image_process_debug/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/image_process_debug.dir/build.make flow_end_runtime_v1/CMakeFiles/image_process_debug.dir/build
-.PHONY : image_process_debug/fast
-
-#=============================================================================
-# Target rules for targets named run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve
-
-# Build rule for target.
-run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve
-.PHONY : run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve
-
-# fast build rule for target.
-run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve.dir/build.make flow_end_runtime_v1/CMakeFiles/run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve.dir/build
-.PHONY : run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve/fast
+run_tests_flow_end/fast:
+	$(MAKE) -f flow_end/CMakeFiles/run_tests_flow_end.dir/build.make flow_end/CMakeFiles/run_tests_flow_end.dir/build
+.PHONY : run_tests_flow_end/fast
 
 #=============================================================================
 # Target rules for targets named follow_end
@@ -3024,47 +2972,99 @@ follow_end: cmake_check_build_system
 
 # fast build rule for target.
 follow_end/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/follow_end.dir/build.make flow_end_runtime_v1/CMakeFiles/follow_end.dir/build
+	$(MAKE) -f flow_end/CMakeFiles/follow_end.dir/build.make flow_end/CMakeFiles/follow_end.dir/build
 .PHONY : follow_end/fast
 
 #=============================================================================
-# Target rules for targets named run_tests_flow_end_runtime_v1_gtest
+# Target rules for targets named test_parking_s_curve
 
 # Build rule for target.
-run_tests_flow_end_runtime_v1_gtest: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 run_tests_flow_end_runtime_v1_gtest
-.PHONY : run_tests_flow_end_runtime_v1_gtest
+test_parking_s_curve: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 test_parking_s_curve
+.PHONY : test_parking_s_curve
 
 # fast build rule for target.
-run_tests_flow_end_runtime_v1_gtest/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/run_tests_flow_end_runtime_v1_gtest.dir/build.make flow_end_runtime_v1/CMakeFiles/run_tests_flow_end_runtime_v1_gtest.dir/build
-.PHONY : run_tests_flow_end_runtime_v1_gtest/fast
+test_parking_s_curve/fast:
+	$(MAKE) -f flow_end/CMakeFiles/test_parking_s_curve.dir/build.make flow_end/CMakeFiles/test_parking_s_curve.dir/build
+.PHONY : test_parking_s_curve/fast
 
 #=============================================================================
-# Target rules for targets named _run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve
+# Target rules for targets named run_tests_flow_end_gtest_test_parking_s_curve
 
 # Build rule for target.
-_run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve
-.PHONY : _run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve
+run_tests_flow_end_gtest_test_parking_s_curve: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_flow_end_gtest_test_parking_s_curve
+.PHONY : run_tests_flow_end_gtest_test_parking_s_curve
 
 # fast build rule for target.
-_run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/_run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve.dir/build.make flow_end_runtime_v1/CMakeFiles/_run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve.dir/build
-.PHONY : _run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve/fast
+run_tests_flow_end_gtest_test_parking_s_curve/fast:
+	$(MAKE) -f flow_end/CMakeFiles/run_tests_flow_end_gtest_test_parking_s_curve.dir/build.make flow_end/CMakeFiles/run_tests_flow_end_gtest_test_parking_s_curve.dir/build
+.PHONY : run_tests_flow_end_gtest_test_parking_s_curve/fast
 
 #=============================================================================
-# Target rules for targets named clean_test_results_flow_end_runtime_v1
+# Target rules for targets named image_process_debug
 
 # Build rule for target.
-clean_test_results_flow_end_runtime_v1: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 clean_test_results_flow_end_runtime_v1
-.PHONY : clean_test_results_flow_end_runtime_v1
+image_process_debug: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 image_process_debug
+.PHONY : image_process_debug
 
 # fast build rule for target.
-clean_test_results_flow_end_runtime_v1/fast:
-	$(MAKE) -f flow_end_runtime_v1/CMakeFiles/clean_test_results_flow_end_runtime_v1.dir/build.make flow_end_runtime_v1/CMakeFiles/clean_test_results_flow_end_runtime_v1.dir/build
-.PHONY : clean_test_results_flow_end_runtime_v1/fast
+image_process_debug/fast:
+	$(MAKE) -f flow_end/CMakeFiles/image_process_debug.dir/build.make flow_end/CMakeFiles/image_process_debug.dir/build
+.PHONY : image_process_debug/fast
+
+#=============================================================================
+# Target rules for targets named _run_tests_flow_end_gtest_test_parking_s_curve
+
+# Build rule for target.
+_run_tests_flow_end_gtest_test_parking_s_curve: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_flow_end_gtest_test_parking_s_curve
+.PHONY : _run_tests_flow_end_gtest_test_parking_s_curve
+
+# fast build rule for target.
+_run_tests_flow_end_gtest_test_parking_s_curve/fast:
+	$(MAKE) -f flow_end/CMakeFiles/_run_tests_flow_end_gtest_test_parking_s_curve.dir/build.make flow_end/CMakeFiles/_run_tests_flow_end_gtest_test_parking_s_curve.dir/build
+.PHONY : _run_tests_flow_end_gtest_test_parking_s_curve/fast
+
+#=============================================================================
+# Target rules for targets named run_tests_flow_end_gtest
+
+# Build rule for target.
+run_tests_flow_end_gtest: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_flow_end_gtest
+.PHONY : run_tests_flow_end_gtest
+
+# fast build rule for target.
+run_tests_flow_end_gtest/fast:
+	$(MAKE) -f flow_end/CMakeFiles/run_tests_flow_end_gtest.dir/build.make flow_end/CMakeFiles/run_tests_flow_end_gtest.dir/build
+.PHONY : run_tests_flow_end_gtest/fast
+
+#=============================================================================
+# Target rules for targets named _run_tests_flow_end_gtest
+
+# Build rule for target.
+_run_tests_flow_end_gtest: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_flow_end_gtest
+.PHONY : _run_tests_flow_end_gtest
+
+# fast build rule for target.
+_run_tests_flow_end_gtest/fast:
+	$(MAKE) -f flow_end/CMakeFiles/_run_tests_flow_end_gtest.dir/build.make flow_end/CMakeFiles/_run_tests_flow_end_gtest.dir/build
+.PHONY : _run_tests_flow_end_gtest/fast
+
+#=============================================================================
+# Target rules for targets named clean_test_results_flow_end
+
+# Build rule for target.
+clean_test_results_flow_end: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 clean_test_results_flow_end
+.PHONY : clean_test_results_flow_end
+
+# fast build rule for target.
+clean_test_results_flow_end/fast:
+	$(MAKE) -f flow_end/CMakeFiles/clean_test_results_flow_end.dir/build.make flow_end/CMakeFiles/clean_test_results_flow_end.dir/build
+.PHONY : clean_test_results_flow_end/fast
 
 #=============================================================================
 # Target rules for targets named map_goal_picker
@@ -4729,97 +4729,6 @@ stable_right_track_end_stop_node: cmake_check_build_system
 stable_right_track_end_stop_node/fast:
 	$(MAKE) -f ucar_2026_track_end_stop/CMakeFiles/stable_right_track_end_stop_node.dir/build.make ucar_2026_track_end_stop/CMakeFiles/stable_right_track_end_stop_node.dir/build
 .PHONY : stable_right_track_end_stop_node/fast
-
-#=============================================================================
-# Target rules for targets named clean_test_results_ucar_2026_traffic_light_rknn_test
-
-# Build rule for target.
-clean_test_results_ucar_2026_traffic_light_rknn_test: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 clean_test_results_ucar_2026_traffic_light_rknn_test
-.PHONY : clean_test_results_ucar_2026_traffic_light_rknn_test
-
-# fast build rule for target.
-clean_test_results_ucar_2026_traffic_light_rknn_test/fast:
-	$(MAKE) -f ucar_2026_traffic_light_rknn_test/CMakeFiles/clean_test_results_ucar_2026_traffic_light_rknn_test.dir/build.make ucar_2026_traffic_light_rknn_test/CMakeFiles/clean_test_results_ucar_2026_traffic_light_rknn_test.dir/build
-.PHONY : clean_test_results_ucar_2026_traffic_light_rknn_test/fast
-
-#=============================================================================
-# Target rules for targets named _run_tests_ucar_2026_traffic_light_rknn_test
-
-# Build rule for target.
-_run_tests_ucar_2026_traffic_light_rknn_test: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_2026_traffic_light_rknn_test
-.PHONY : _run_tests_ucar_2026_traffic_light_rknn_test
-
-# fast build rule for target.
-_run_tests_ucar_2026_traffic_light_rknn_test/fast:
-	$(MAKE) -f ucar_2026_traffic_light_rknn_test/CMakeFiles/_run_tests_ucar_2026_traffic_light_rknn_test.dir/build.make ucar_2026_traffic_light_rknn_test/CMakeFiles/_run_tests_ucar_2026_traffic_light_rknn_test.dir/build
-.PHONY : _run_tests_ucar_2026_traffic_light_rknn_test/fast
-
-#=============================================================================
-# Target rules for targets named run_tests_ucar_2026_traffic_light_rknn_test
-
-# Build rule for target.
-run_tests_ucar_2026_traffic_light_rknn_test: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_2026_traffic_light_rknn_test
-.PHONY : run_tests_ucar_2026_traffic_light_rknn_test
-
-# fast build rule for target.
-run_tests_ucar_2026_traffic_light_rknn_test/fast:
-	$(MAKE) -f ucar_2026_traffic_light_rknn_test/CMakeFiles/run_tests_ucar_2026_traffic_light_rknn_test.dir/build.make ucar_2026_traffic_light_rknn_test/CMakeFiles/run_tests_ucar_2026_traffic_light_rknn_test.dir/build
-.PHONY : run_tests_ucar_2026_traffic_light_rknn_test/fast
-
-#=============================================================================
-# Target rules for targets named run_tests_ucar_2026_traffic_light_rknn_test_nosetests
-
-# Build rule for target.
-run_tests_ucar_2026_traffic_light_rknn_test_nosetests: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_2026_traffic_light_rknn_test_nosetests
-.PHONY : run_tests_ucar_2026_traffic_light_rknn_test_nosetests
-
-# fast build rule for target.
-run_tests_ucar_2026_traffic_light_rknn_test_nosetests/fast:
-	$(MAKE) -f ucar_2026_traffic_light_rknn_test/CMakeFiles/run_tests_ucar_2026_traffic_light_rknn_test_nosetests.dir/build.make ucar_2026_traffic_light_rknn_test/CMakeFiles/run_tests_ucar_2026_traffic_light_rknn_test_nosetests.dir/build
-.PHONY : run_tests_ucar_2026_traffic_light_rknn_test_nosetests/fast
-
-#=============================================================================
-# Target rules for targets named run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py
-
-# Build rule for target.
-run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py
-.PHONY : run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py
-
-# fast build rule for target.
-run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py/fast:
-	$(MAKE) -f ucar_2026_traffic_light_rknn_test/CMakeFiles/run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py.dir/build.make ucar_2026_traffic_light_rknn_test/CMakeFiles/run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py.dir/build
-.PHONY : run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py/fast
-
-#=============================================================================
-# Target rules for targets named _run_tests_ucar_2026_traffic_light_rknn_test_nosetests
-
-# Build rule for target.
-_run_tests_ucar_2026_traffic_light_rknn_test_nosetests: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_2026_traffic_light_rknn_test_nosetests
-.PHONY : _run_tests_ucar_2026_traffic_light_rknn_test_nosetests
-
-# fast build rule for target.
-_run_tests_ucar_2026_traffic_light_rknn_test_nosetests/fast:
-	$(MAKE) -f ucar_2026_traffic_light_rknn_test/CMakeFiles/_run_tests_ucar_2026_traffic_light_rknn_test_nosetests.dir/build.make ucar_2026_traffic_light_rknn_test/CMakeFiles/_run_tests_ucar_2026_traffic_light_rknn_test_nosetests.dir/build
-.PHONY : _run_tests_ucar_2026_traffic_light_rknn_test_nosetests/fast
-
-#=============================================================================
-# Target rules for targets named _run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py
-
-# Build rule for target.
-_run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py
-.PHONY : _run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py
-
-# fast build rule for target.
-_run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py/fast:
-	$(MAKE) -f ucar_2026_traffic_light_rknn_test/CMakeFiles/_run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py.dir/build.make ucar_2026_traffic_light_rknn_test/CMakeFiles/_run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py.dir/build
-.PHONY : _run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py/fast
 
 #=============================================================================
 # Target rules for targets named crc_table_fd
@@ -7230,17 +7139,17 @@ help:
 	@echo "... _run_tests_tf_gtest"
 	@echo "... _tf_generate_messages_check_deps_tfMessage"
 	@echo "... run_tests_tf_gtest_tf_unittest"
-	@echo "... run_tests_flow_end_runtime_v1"
-	@echo "... _run_tests_flow_end_runtime_v1"
-	@echo "... _run_tests_flow_end_runtime_v1_gtest"
+	@echo "... _run_tests_flow_end"
 	@echo "... follow_test"
-	@echo "... test_parking_s_curve"
-	@echo "... image_process_debug"
-	@echo "... run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve"
+	@echo "... run_tests_flow_end"
 	@echo "... follow_end"
-	@echo "... run_tests_flow_end_runtime_v1_gtest"
-	@echo "... _run_tests_flow_end_runtime_v1_gtest_test_parking_s_curve"
-	@echo "... clean_test_results_flow_end_runtime_v1"
+	@echo "... test_parking_s_curve"
+	@echo "... run_tests_flow_end_gtest_test_parking_s_curve"
+	@echo "... image_process_debug"
+	@echo "... _run_tests_flow_end_gtest_test_parking_s_curve"
+	@echo "... run_tests_flow_end_gtest"
+	@echo "... _run_tests_flow_end_gtest"
+	@echo "... clean_test_results_flow_end"
 	@echo "... map_goal_picker"
 	@echo "... move_base_msgs_generate_messages_eus"
 	@echo "... move_base_msgs_generate_messages_cpp"
@@ -7369,13 +7278,6 @@ help:
 	@echo "... right_track_end_stop_node"
 	@echo "... track_end_stop_node"
 	@echo "... stable_right_track_end_stop_node"
-	@echo "... clean_test_results_ucar_2026_traffic_light_rknn_test"
-	@echo "... _run_tests_ucar_2026_traffic_light_rknn_test"
-	@echo "... run_tests_ucar_2026_traffic_light_rknn_test"
-	@echo "... run_tests_ucar_2026_traffic_light_rknn_test_nosetests"
-	@echo "... run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py"
-	@echo "... _run_tests_ucar_2026_traffic_light_rknn_test_nosetests"
-	@echo "... _run_tests_ucar_2026_traffic_light_rknn_test_nosetests_test.test_traffic_light_classifier.py"
 	@echo "... crc_table_fd"
 	@echo "... base_driver"
 	@echo "... _ucar_controller_generate_messages_check_deps_GetBatteryInfo"

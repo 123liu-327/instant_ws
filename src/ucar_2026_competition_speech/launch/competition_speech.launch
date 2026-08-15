@@ -1,5 +1,5 @@
 <launch>
-  <arg name="speak_topic" default="/speak" />
+  <arg name="speak_topic" default="/factory/tts_text" />
   <arg name="chars_per_second" default="3.0" />
   <arg name="finish_status_topic" default="" />
   <arg name="finish_status_value" default="finish" />

@@ -16,7 +16,7 @@
       横线触发：y_crossbar_target_long_m、y_crossbar_long_tolerance_m、
                 y_crossbar_confirm_frames、y_crossbar_seek_max_odom
       Y 转向：y_turn_angle_deg、y_turn_angular_speed、y_turn_pause_sec
-      停车：parking_extra_dist、parking_forward_speed、parking_lateral_speed
+      停车：parking_extra_dist、parking_forward_speed、parking_motion_mode、parking_max_angular_speed
       普通丢线：lost_corner_search_timeout、lost_corner_search_angular_speed
 
     安全原则：先降低速度，再逐步增加里程或角度；不要把 *_max_odom 设置为 0，
@@ -85,10 +85,18 @@
   <!-- 【关键】停车接近阶段前进速度，单位 m/s；实车初调建议 0.10～0.15。 -->
   <arg name="parking_forward_speed" default="0.15" />
 
-  <!-- 横向停车修正速度、死区与底盘方向符号。这三项也是 follow_voice_stack.launch 的 include 接口。 -->
+  <!-- lateral 模式使用横移速度；两种模式都使用横向死区与底盘方向符号。 -->
   <arg name="parking_lateral_speed" default="0.10" />
   <arg name="parking_lateral_deadband" default="0.03" />
   <arg name="parking_lateral_cmd_sign" default="1.0" />
+
+  <!-- 默认以两段对称圆弧完成横向修正；设为 lateral 可回退到旧的直接横移。 -->
+  <arg name="parking_motion_mode" default="s_curve" />
+  <arg name="parking_max_angular_speed" default="0.35" />
+  <arg name="parking_yaw_kp" default="1.5" />
+  <arg name="parking_yaw_tolerance_deg" default="3.0" />
+  <arg name="parking_timeout" default="6.0" />
+  <arg name="parking_odom_timeout" default="0.5" />
 
   <!-- 是否发布调试图像 /flow_end/follow_test_debug，可用 rqt_image_view 查看。 -->
   <arg name="publish_debug_image" default="true" />
@@ -182,7 +190,7 @@
     达到后会以 reason=max_odom 强制进入 Y 转向；增大可以多找一段，但会更深入岔路。
     0.08 m/s 下每增加 0.10 m，理论上会多搜索约 1.25 s。
   -->
-  <arg name="y_crossbar_seek_max_odom" default="0.55" />
+  <arg name="y_crossbar_seek_max_odom" default="0.75" />
 
   <!-- ======================== 中线接近控制器参数 ======================== -->
   <!-- 以下 control_* 只用于接入 follow_motion_controller 的特殊阶段；普通巡线仍使用当前控制。 -->
@@ -262,6 +270,15 @@
     <param name="parking_allow_either_l" value="$(arg parking_allow_either_l)" />
     <param name="parking_extra_dist" value="$(arg parking_extra_dist)" />
     <param name="parking_forward_speed" value="$(arg parking_forward_speed)" />
+    <param name="parking_lateral_speed" value="$(arg parking_lateral_speed)" />
+    <param name="parking_lateral_deadband" value="$(arg parking_lateral_deadband)" />
+    <param name="parking_lateral_cmd_sign" value="$(arg parking_lateral_cmd_sign)" />
+    <param name="parking_motion_mode" value="$(arg parking_motion_mode)" />
+    <param name="parking_max_angular_speed" value="$(arg parking_max_angular_speed)" />
+    <param name="parking_yaw_kp" value="$(arg parking_yaw_kp)" />
+    <param name="parking_yaw_tolerance_deg" value="$(arg parking_yaw_tolerance_deg)" />
+    <param name="parking_timeout" value="$(arg parking_timeout)" />
+    <param name="parking_odom_timeout" value="$(arg parking_odom_timeout)" />
     <param name="publish_debug_image" value="$(arg publish_debug_image)" />
     <param name="show_window" value="$(arg show_window)" />
     <param name="enable_video_record" value="$(arg enable_video_record)" />
@@ -320,5 +337,9 @@
     <param name="control_cmd_filter_alpha" value="$(arg control_cmd_filter_alpha)" />
     <param name="lost_line_coast_sec" value="$(arg lost_line_coast_sec)" />
     <param name="lost_line_coast_speed_scale" value="$(arg lost_line_coast_speed_scale)" />
+    <param name="lost_corner_search_enabled" value="$(arg lost_corner_search_enabled)" />
+    <param name="lost_corner_search_timeout" value="$(arg lost_corner_search_timeout)" />
+    <param name="lost_corner_search_angular_speed" value="$(arg lost_corner_search_angular_speed)" />
+    <param name="lost_corner_search_linear_speed" value="$(arg lost_corner_search_linear_speed)" />
   </node>
 </launch>

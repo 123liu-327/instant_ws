@@ -24,6 +24,7 @@ static IAIUIAgent* g_agent = nullptr;
 static bool g_asr_enable = true;
 static bool g_close_after_command_accepted = true;
 static bool g_command_accepted = false;
+static int g_tts_speed = 40;
 
 // 是否进入等待关闭状态
 static bool g_need_destroy = false;
@@ -62,7 +63,7 @@ void speakText(const string& text) {
     string py_path = pkg_path + "/xf_tts_stable.py";
     string pcm_path = pkg_path + "/tmp/tts_result.pcm";
     remove(pcm_path.c_str());
-    string cmd = "python3 " + py_path + " \"" + XF_APPID + "\" \"" + XF_API_KEY + "\" \"" + XF_API_SECRET + "\" \"" + text + "\"";
+    string cmd = "python3 " + py_path + " \"" + XF_APPID + "\" \"" + XF_API_KEY + "\" \"" + XF_API_SECRET + "\" \"" + text + "\" \"" + std::to_string(g_tts_speed) + "\"";
     system(cmd.c_str());
     string play_cmd ="aplay -D default -r 16000 -f S16_LE -c 1 "+ pcm_path;
     
@@ -154,6 +155,9 @@ int main(int argc, char** argv) {
     std::string tts_topic;
     std::string command_accepted_topic;
     private_nh.param<std::string>("tts_topic", tts_topic, "/factory/tts_text");
+    private_nh.param<int>("tts_speed", g_tts_speed, 40);
+    if (g_tts_speed < 0) g_tts_speed = 0;
+    if (g_tts_speed > 100) g_tts_speed = 100;
     private_nh.param<std::string>(
         "command_accepted_topic", command_accepted_topic,
         "/factory/voice_command_accepted");
@@ -174,6 +178,7 @@ int main(int argc, char** argv) {
     sub_command_accepted = nh.subscribe(
         command_accepted_topic, 1, commandAcceptedCallback);
     ROS_INFO_STREAM("TTS subscriber listening on " << tts_topic);
+    ROS_INFO_STREAM("TTS speed configured as " << g_tts_speed);
     ROS_INFO_STREAM(
         "ASR persistent until accepted command on "
         << command_accepted_topic);

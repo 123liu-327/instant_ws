@@ -15,6 +15,8 @@
   <arg name="traffic_enable_topic" default="/traffic_light/enable" />
   <arg name="traffic_state_topic" default="/traffic_light/state" />
   <arg name="traffic_decision_topic" default="/traffic_light/decision" />
+  <!-- 直行灯触发 Y 岔路选择；命令行可用 straight_command:=YRight 覆盖。 -->
+  <arg name="straight_command" default="YLeft" />
   <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
 
   <arg name="low_exposure_absolute" default="150" />
@@ -55,6 +57,7 @@
     <arg name="state_topic" value="$(arg traffic_state_topic)" />
     <arg name="command_topic" value="$(arg begin_topic)" />
     <arg name="decision_topic" value="$(arg traffic_decision_topic)" />
+    <arg name="straight_command" value="$(arg straight_command)" />
     <arg name="model_path" value="$(arg traffic_model_path)" />
     <arg name="confidence_threshold" value="$(arg traffic_confidence_threshold)" />
     <arg name="enabled_at_start" value="$(arg traffic_enabled_at_start)" />
