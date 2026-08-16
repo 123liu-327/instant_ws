@@ -57,6 +57,10 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ucar_2026_qr_speak_test" TYPE PROGRAM FILES "/home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_2026_qr_speak_test/catkin_generated/installspace/qr_rotate_scan_speak_test_node.py")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ucar_2026_qr_speak_test" TYPE PROGRAM FILES "/home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_2026_qr_speak_test/catkin_generated/installspace/qr_speak_test_node.py")
 endif()
 

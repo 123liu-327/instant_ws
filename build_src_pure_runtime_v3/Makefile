@@ -4445,6 +4445,97 @@ _run_tests_ucar_2026_competition_speech_nosetests/fast:
 .PHONY : _run_tests_ucar_2026_competition_speech_nosetests/fast
 
 #=============================================================================
+# Target rules for targets named clean_test_results_ucar_2026_qr_speak_test
+
+# Build rule for target.
+clean_test_results_ucar_2026_qr_speak_test: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 clean_test_results_ucar_2026_qr_speak_test
+.PHONY : clean_test_results_ucar_2026_qr_speak_test
+
+# fast build rule for target.
+clean_test_results_ucar_2026_qr_speak_test/fast:
+	$(MAKE) -f ucar_2026_qr_speak_test/CMakeFiles/clean_test_results_ucar_2026_qr_speak_test.dir/build.make ucar_2026_qr_speak_test/CMakeFiles/clean_test_results_ucar_2026_qr_speak_test.dir/build
+.PHONY : clean_test_results_ucar_2026_qr_speak_test/fast
+
+#=============================================================================
+# Target rules for targets named _run_tests_ucar_2026_qr_speak_test
+
+# Build rule for target.
+_run_tests_ucar_2026_qr_speak_test: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_2026_qr_speak_test
+.PHONY : _run_tests_ucar_2026_qr_speak_test
+
+# fast build rule for target.
+_run_tests_ucar_2026_qr_speak_test/fast:
+	$(MAKE) -f ucar_2026_qr_speak_test/CMakeFiles/_run_tests_ucar_2026_qr_speak_test.dir/build.make ucar_2026_qr_speak_test/CMakeFiles/_run_tests_ucar_2026_qr_speak_test.dir/build
+.PHONY : _run_tests_ucar_2026_qr_speak_test/fast
+
+#=============================================================================
+# Target rules for targets named _run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py
+
+# Build rule for target.
+_run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py
+.PHONY : _run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py
+
+# fast build rule for target.
+_run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py/fast:
+	$(MAKE) -f ucar_2026_qr_speak_test/CMakeFiles/_run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py.dir/build.make ucar_2026_qr_speak_test/CMakeFiles/_run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py.dir/build
+.PHONY : _run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py/fast
+
+#=============================================================================
+# Target rules for targets named run_tests_ucar_2026_qr_speak_test
+
+# Build rule for target.
+run_tests_ucar_2026_qr_speak_test: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_2026_qr_speak_test
+.PHONY : run_tests_ucar_2026_qr_speak_test
+
+# fast build rule for target.
+run_tests_ucar_2026_qr_speak_test/fast:
+	$(MAKE) -f ucar_2026_qr_speak_test/CMakeFiles/run_tests_ucar_2026_qr_speak_test.dir/build.make ucar_2026_qr_speak_test/CMakeFiles/run_tests_ucar_2026_qr_speak_test.dir/build
+.PHONY : run_tests_ucar_2026_qr_speak_test/fast
+
+#=============================================================================
+# Target rules for targets named _run_tests_ucar_2026_qr_speak_test_nosetests
+
+# Build rule for target.
+_run_tests_ucar_2026_qr_speak_test_nosetests: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_2026_qr_speak_test_nosetests
+.PHONY : _run_tests_ucar_2026_qr_speak_test_nosetests
+
+# fast build rule for target.
+_run_tests_ucar_2026_qr_speak_test_nosetests/fast:
+	$(MAKE) -f ucar_2026_qr_speak_test/CMakeFiles/_run_tests_ucar_2026_qr_speak_test_nosetests.dir/build.make ucar_2026_qr_speak_test/CMakeFiles/_run_tests_ucar_2026_qr_speak_test_nosetests.dir/build
+.PHONY : _run_tests_ucar_2026_qr_speak_test_nosetests/fast
+
+#=============================================================================
+# Target rules for targets named run_tests_ucar_2026_qr_speak_test_nosetests
+
+# Build rule for target.
+run_tests_ucar_2026_qr_speak_test_nosetests: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_2026_qr_speak_test_nosetests
+.PHONY : run_tests_ucar_2026_qr_speak_test_nosetests
+
+# fast build rule for target.
+run_tests_ucar_2026_qr_speak_test_nosetests/fast:
+	$(MAKE) -f ucar_2026_qr_speak_test/CMakeFiles/run_tests_ucar_2026_qr_speak_test_nosetests.dir/build.make ucar_2026_qr_speak_test/CMakeFiles/run_tests_ucar_2026_qr_speak_test_nosetests.dir/build
+.PHONY : run_tests_ucar_2026_qr_speak_test_nosetests/fast
+
+#=============================================================================
+# Target rules for targets named run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py
+
+# Build rule for target.
+run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py
+.PHONY : run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py
+
+# fast build rule for target.
+run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py/fast:
+	$(MAKE) -f ucar_2026_qr_speak_test/CMakeFiles/run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py.dir/build.make ucar_2026_qr_speak_test/CMakeFiles/run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py.dir/build
+.PHONY : run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py/fast
+
+#=============================================================================
 # Target rules for targets named ucar_2026_smart_factory_llm_gencpp
 
 # Build rule for target.
@@ -5015,6 +5106,279 @@ nav_point: cmake_check_build_system
 nav_point/fast:
 	$(MAKE) -f ucar_nav/CMakeFiles/nav_point.dir/build.make ucar_nav/CMakeFiles/nav_point.dir/build
 .PHONY : nav_point/fast
+
+#=============================================================================
+# Target rules for targets named clean_test_results_ucar_qr_decoder
+
+# Build rule for target.
+clean_test_results_ucar_qr_decoder: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 clean_test_results_ucar_qr_decoder
+.PHONY : clean_test_results_ucar_qr_decoder
+
+# fast build rule for target.
+clean_test_results_ucar_qr_decoder/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/clean_test_results_ucar_qr_decoder.dir/build.make ucar_qr_decoder/CMakeFiles/clean_test_results_ucar_qr_decoder.dir/build
+.PHONY : clean_test_results_ucar_qr_decoder/fast
+
+#=============================================================================
+# Target rules for targets named _run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py
+
+# Build rule for target.
+_run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py
+.PHONY : _run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py
+
+# fast build rule for target.
+_run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/_run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py.dir/build.make ucar_qr_decoder/CMakeFiles/_run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py.dir/build
+.PHONY : _run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py/fast
+
+#=============================================================================
+# Target rules for targets named run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py
+
+# Build rule for target.
+run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py
+.PHONY : run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py
+
+# fast build rule for target.
+run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py.dir/build.make ucar_qr_decoder/CMakeFiles/run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py.dir/build
+.PHONY : run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_generate_messages_eus
+
+# Build rule for target.
+ucar_qr_decoder_generate_messages_eus: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_generate_messages_eus
+.PHONY : ucar_qr_decoder_generate_messages_eus
+
+# fast build rule for target.
+ucar_qr_decoder_generate_messages_eus/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_eus.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_eus.dir/build
+.PHONY : ucar_qr_decoder_generate_messages_eus/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_generate_messages_py
+
+# Build rule for target.
+ucar_qr_decoder_generate_messages_py: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_generate_messages_py
+.PHONY : ucar_qr_decoder_generate_messages_py
+
+# fast build rule for target.
+ucar_qr_decoder_generate_messages_py/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_py.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_py.dir/build
+.PHONY : ucar_qr_decoder_generate_messages_py/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_genpy
+
+# Build rule for target.
+ucar_qr_decoder_genpy: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_genpy
+.PHONY : ucar_qr_decoder_genpy
+
+# fast build rule for target.
+ucar_qr_decoder_genpy/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_genpy.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_genpy.dir/build
+.PHONY : ucar_qr_decoder_genpy/fast
+
+#=============================================================================
+# Target rules for targets named _run_tests_ucar_qr_decoder_nosetests
+
+# Build rule for target.
+_run_tests_ucar_qr_decoder_nosetests: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_qr_decoder_nosetests
+.PHONY : _run_tests_ucar_qr_decoder_nosetests
+
+# fast build rule for target.
+_run_tests_ucar_qr_decoder_nosetests/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/_run_tests_ucar_qr_decoder_nosetests.dir/build.make ucar_qr_decoder/CMakeFiles/_run_tests_ucar_qr_decoder_nosetests.dir/build
+.PHONY : _run_tests_ucar_qr_decoder_nosetests/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_gencpp
+
+# Build rule for target.
+ucar_qr_decoder_gencpp: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_gencpp
+.PHONY : ucar_qr_decoder_gencpp
+
+# fast build rule for target.
+ucar_qr_decoder_gencpp/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_gencpp.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_gencpp.dir/build
+.PHONY : ucar_qr_decoder_gencpp/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_generate_messages_cpp
+
+# Build rule for target.
+ucar_qr_decoder_generate_messages_cpp: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_generate_messages_cpp
+.PHONY : ucar_qr_decoder_generate_messages_cpp
+
+# fast build rule for target.
+ucar_qr_decoder_generate_messages_cpp/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_cpp.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_cpp.dir/build
+.PHONY : ucar_qr_decoder_generate_messages_cpp/fast
+
+#=============================================================================
+# Target rules for targets named _run_tests_ucar_qr_decoder
+
+# Build rule for target.
+_run_tests_ucar_qr_decoder: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _run_tests_ucar_qr_decoder
+.PHONY : _run_tests_ucar_qr_decoder
+
+# fast build rule for target.
+_run_tests_ucar_qr_decoder/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/_run_tests_ucar_qr_decoder.dir/build.make ucar_qr_decoder/CMakeFiles/_run_tests_ucar_qr_decoder.dir/build
+.PHONY : _run_tests_ucar_qr_decoder/fast
+
+#=============================================================================
+# Target rules for targets named _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest
+
+# Build rule for target.
+_ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest
+.PHONY : _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest
+
+# fast build rule for target.
+_ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/_ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest.dir/build.make ucar_qr_decoder/CMakeFiles/_ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest.dir/build
+.PHONY : _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest/fast
+
+#=============================================================================
+# Target rules for targets named _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult
+
+# Build rule for target.
+_ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult
+.PHONY : _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult
+
+# fast build rule for target.
+_ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/_ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult.dir/build.make ucar_qr_decoder/CMakeFiles/_ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult.dir/build
+.PHONY : _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_gennodejs
+
+# Build rule for target.
+ucar_qr_decoder_gennodejs: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_gennodejs
+.PHONY : ucar_qr_decoder_gennodejs
+
+# fast build rule for target.
+ucar_qr_decoder_gennodejs/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_gennodejs.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_gennodejs.dir/build
+.PHONY : ucar_qr_decoder_gennodejs/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_genlisp
+
+# Build rule for target.
+ucar_qr_decoder_genlisp: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_genlisp
+.PHONY : ucar_qr_decoder_genlisp
+
+# fast build rule for target.
+ucar_qr_decoder_genlisp/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_genlisp.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_genlisp.dir/build
+.PHONY : ucar_qr_decoder_genlisp/fast
+
+#=============================================================================
+# Target rules for targets named run_tests_ucar_qr_decoder
+
+# Build rule for target.
+run_tests_ucar_qr_decoder: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_qr_decoder
+.PHONY : run_tests_ucar_qr_decoder
+
+# fast build rule for target.
+run_tests_ucar_qr_decoder/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/run_tests_ucar_qr_decoder.dir/build.make ucar_qr_decoder/CMakeFiles/run_tests_ucar_qr_decoder.dir/build
+.PHONY : run_tests_ucar_qr_decoder/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_geneus
+
+# Build rule for target.
+ucar_qr_decoder_geneus: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_geneus
+.PHONY : ucar_qr_decoder_geneus
+
+# fast build rule for target.
+ucar_qr_decoder_geneus/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_geneus.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_geneus.dir/build
+.PHONY : ucar_qr_decoder_geneus/fast
+
+#=============================================================================
+# Target rules for targets named run_tests_ucar_qr_decoder_nosetests
+
+# Build rule for target.
+run_tests_ucar_qr_decoder_nosetests: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 run_tests_ucar_qr_decoder_nosetests
+.PHONY : run_tests_ucar_qr_decoder_nosetests
+
+# fast build rule for target.
+run_tests_ucar_qr_decoder_nosetests/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/run_tests_ucar_qr_decoder_nosetests.dir/build.make ucar_qr_decoder/CMakeFiles/run_tests_ucar_qr_decoder_nosetests.dir/build
+.PHONY : run_tests_ucar_qr_decoder_nosetests/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_generate_messages
+
+# Build rule for target.
+ucar_qr_decoder_generate_messages: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_generate_messages
+.PHONY : ucar_qr_decoder_generate_messages
+
+# fast build rule for target.
+ucar_qr_decoder_generate_messages/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages.dir/build
+.PHONY : ucar_qr_decoder_generate_messages/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_generate_messages_lisp
+
+# Build rule for target.
+ucar_qr_decoder_generate_messages_lisp: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_generate_messages_lisp
+.PHONY : ucar_qr_decoder_generate_messages_lisp
+
+# fast build rule for target.
+ucar_qr_decoder_generate_messages_lisp/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_lisp.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_lisp.dir/build
+.PHONY : ucar_qr_decoder_generate_messages_lisp/fast
+
+#=============================================================================
+# Target rules for targets named ucar_qr_decoder_generate_messages_nodejs
+
+# Build rule for target.
+ucar_qr_decoder_generate_messages_nodejs: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 ucar_qr_decoder_generate_messages_nodejs
+.PHONY : ucar_qr_decoder_generate_messages_nodejs
+
+# fast build rule for target.
+ucar_qr_decoder_generate_messages_nodejs/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_nodejs.dir/build.make ucar_qr_decoder/CMakeFiles/ucar_qr_decoder_generate_messages_nodejs.dir/build
+.PHONY : ucar_qr_decoder_generate_messages_nodejs/fast
+
+#=============================================================================
+# Target rules for targets named zbar_decoder_node
+
+# Build rule for target.
+zbar_decoder_node: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 zbar_decoder_node
+.PHONY : zbar_decoder_node
+
+# fast build rule for target.
+zbar_decoder_node/fast:
+	$(MAKE) -f ucar_qr_decoder/CMakeFiles/zbar_decoder_node.dir/build.make ucar_qr_decoder/CMakeFiles/zbar_decoder_node.dir/build
+.PHONY : zbar_decoder_node/fast
 
 #=============================================================================
 # Target rules for targets named clean_test_results_voxel_grid
@@ -7256,6 +7620,13 @@ help:
 	@echo "... run_tests_ucar_2026_competition_speech_nosetests"
 	@echo "... ucar_2026_competition_speech_generate_messages_eus"
 	@echo "... _run_tests_ucar_2026_competition_speech_nosetests"
+	@echo "... clean_test_results_ucar_2026_qr_speak_test"
+	@echo "... _run_tests_ucar_2026_qr_speak_test"
+	@echo "... _run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py"
+	@echo "... run_tests_ucar_2026_qr_speak_test"
+	@echo "... _run_tests_ucar_2026_qr_speak_test_nosetests"
+	@echo "... run_tests_ucar_2026_qr_speak_test_nosetests"
+	@echo "... run_tests_ucar_2026_qr_speak_test_nosetests_test.test_qr_rotate_scan_speak_logic.py"
 	@echo "... ucar_2026_smart_factory_llm_gencpp"
 	@echo "... ucar_2026_smart_factory_llm_generate_messages_cpp"
 	@echo "... ucar_2026_smart_factory_llm_generate_messages"
@@ -7300,6 +7671,27 @@ help:
 	@echo "... ucar_controller_gennodejs"
 	@echo "... nav_photo"
 	@echo "... nav_point"
+	@echo "... clean_test_results_ucar_qr_decoder"
+	@echo "... _run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py"
+	@echo "... run_tests_ucar_qr_decoder_nosetests_test.test_decoder_logic.py"
+	@echo "... ucar_qr_decoder_generate_messages_eus"
+	@echo "... ucar_qr_decoder_generate_messages_py"
+	@echo "... ucar_qr_decoder_genpy"
+	@echo "... _run_tests_ucar_qr_decoder_nosetests"
+	@echo "... ucar_qr_decoder_gencpp"
+	@echo "... ucar_qr_decoder_generate_messages_cpp"
+	@echo "... _run_tests_ucar_qr_decoder"
+	@echo "... _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeRequest"
+	@echo "... _ucar_qr_decoder_generate_messages_check_deps_ZBarDecodeResult"
+	@echo "... ucar_qr_decoder_gennodejs"
+	@echo "... ucar_qr_decoder_genlisp"
+	@echo "... run_tests_ucar_qr_decoder"
+	@echo "... ucar_qr_decoder_geneus"
+	@echo "... run_tests_ucar_qr_decoder_nosetests"
+	@echo "... ucar_qr_decoder_generate_messages"
+	@echo "... ucar_qr_decoder_generate_messages_lisp"
+	@echo "... ucar_qr_decoder_generate_messages_nodejs"
+	@echo "... zbar_decoder_node"
 	@echo "... clean_test_results_voxel_grid"
 	@echo "... run_tests_voxel_grid_gtest_voxel_grid_tests"
 	@echo "... voxel_grid_tests"

@@ -1,0 +1,8 @@
+prefix=/home/ucar/instant_ws/src_pure_runtime_ws_v3/install
+
+Name: ucar_qr_decoder
+Description: Description of ucar_qr_decoder
+Version: 0.1.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib 
+Requires: cv_bridge message_runtime nav_msgs roscpp rospy sensor_msgs std_msgs

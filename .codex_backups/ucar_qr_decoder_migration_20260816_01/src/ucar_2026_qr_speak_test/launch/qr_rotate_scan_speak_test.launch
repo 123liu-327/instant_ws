@@ -1,0 +1,103 @@
+<launch>
+  <!-- Manual-positioned real-car QR rotate/scan/analyse/speak acceptance test. -->
+  <arg name="start_base" default="true" />
+  <arg name="start_camera" default="true" />
+  <arg name="start_qr" default="true" />
+  <arg name="start_tts" default="true" />
+  <arg name="start_viewer" default="false" />
+
+  <arg name="camera_topic" default="/usb_cam/image_raw" />
+  <arg name="odom_topic" default="/odom" />
+  <arg name="cmd_topic" default="/cmd_vel" />
+  <arg name="qr_topic" default="/qr_code_data" />
+  <arg name="decoder_status_topic" default="/qr_decoder/status" />
+  <arg name="tts_topic" default="/factory/tts_text" />
+
+  <arg name="video_device" default="/dev/video0" />
+  <arg name="image_width" default="640" />
+  <arg name="image_height" default="480" />
+  <arg name="framerate" default="30" />
+  <arg name="pixel_format" default="yuyv" />
+  <arg name="io_method" default="mmap" />
+
+  <arg name="save_keyframes" default="true" />
+  <arg name="keyframe_output" default="/home/ucar/instant_ws/qr_keyframes" />
+  <arg name="target_category" default="" />
+  <arg name="random_seed" default="-1" />
+  <arg name="api_password" default="$(optenv XF_SPARK_API_PASSWORD)" />
+  <arg name="spark_base_url" default="https://spark-api-open.xf-yun.com/x2/chat/completions" />
+  <arg name="spark_model" default="spark-x" />
+  <arg name="request_timeout_sec" default="90.0" />
+
+  <arg name="scan_speed" default="0.60" />
+  <arg name="scan_direction" default="1.0" />
+  <arg name="step_angle_rad" default="0.2617993878" />
+  <arg name="second_round_offset_rad" default="0.1308996939" />
+  <arg name="slow_speed" default="0.18" />
+  <arg name="scan_timeout" default="90.0" />
+  <arg name="odom_stale_sec" default="0.50" />
+
+  <group if="$(arg start_base)">
+    <include file="$(find ucar_controller)/launch/base_driver.launch" />
+  </group>
+
+  <group if="$(arg start_camera)">
+    <node pkg="usb_cam" type="usb_cam_node" name="usb_cam" output="screen" required="true">
+      <param name="video_device" value="$(arg video_device)" />
+      <param name="image_width" value="$(arg image_width)" />
+      <param name="image_height" value="$(arg image_height)" />
+      <param name="framerate" value="$(arg framerate)" />
+      <param name="pixel_format" value="$(arg pixel_format)" />
+      <param name="io_method" value="$(arg io_method)" />
+      <param name="camera_frame_id" value="usb_cam" />
+    </node>
+  </group>
+
+  <group if="$(arg start_qr)">
+    <include file="$(find ucar_2026_competition)/launch/qr_decoder_src6_hybrid_v1.launch">
+      <arg name="camera_topic" value="$(arg camera_topic)" />
+      <arg name="odom_topic" value="$(arg odom_topic)" />
+      <arg name="pub_topic" value="$(arg qr_topic)" />
+      <arg name="status_topic" value="$(arg decoder_status_topic)" />
+      <arg name="save_keyframes" value="$(arg save_keyframes)" />
+      <arg name="keyframe_output" value="$(arg keyframe_output)" />
+    </include>
+  </group>
+
+  <group if="$(arg start_tts)">
+    <node pkg="speech_command" type="speech_command_node" name="qr_rotate_test_tts" output="screen">
+      <param name="tts_only" value="true" />
+      <param name="tts_topic" value="$(arg tts_topic)" />
+    </node>
+  </group>
+
+  <group if="$(arg start_viewer)">
+    <node pkg="image_view" type="image_view" name="qr_rotate_test_viewer" output="screen">
+      <remap from="image" to="$(arg camera_topic)" />
+      <param name="image_transport" value="raw" />
+    </node>
+  </group>
+
+  <node pkg="ucar_2026_qr_speak_test" type="qr_rotate_scan_speak_test_node.py"
+        name="qr_rotate_scan_speak_test" output="screen" required="true">
+    <param name="camera_topic" value="$(arg camera_topic)" />
+    <param name="odom_topic" value="$(arg odom_topic)" />
+    <param name="cmd_topic" value="$(arg cmd_topic)" />
+    <param name="qr_topic" value="$(arg qr_topic)" />
+    <param name="decoder_status_topic" value="$(arg decoder_status_topic)" />
+    <param name="tts_topic" value="$(arg tts_topic)" />
+    <param name="target_category" value="$(arg target_category)" />
+    <param name="random_seed" value="$(arg random_seed)" />
+    <param name="api_password" value="$(arg api_password)" />
+    <param name="spark_base_url" value="$(arg spark_base_url)" />
+    <param name="spark_model" value="$(arg spark_model)" />
+    <param name="request_timeout_sec" value="$(arg request_timeout_sec)" />
+    <param name="scan_speed" value="$(arg scan_speed)" />
+    <param name="scan_direction" value="$(arg scan_direction)" />
+    <param name="step_angle_rad" value="$(arg step_angle_rad)" />
+    <param name="second_round_offset_rad" value="$(arg second_round_offset_rad)" />
+    <param name="slow_speed" value="$(arg slow_speed)" />
+    <param name="scan_timeout" value="$(arg scan_timeout)" />
+    <param name="odom_stale_sec" value="$(arg odom_stale_sec)" />
+  </node>
+</launch>

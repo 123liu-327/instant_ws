@@ -73,10 +73,6 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/yolo" TYPE PROGRAM FILES "/home/ucar/instant_ws/build_src_pure_runtime_v3/yolo/catkin_generated/installspace/qr_collect_and_decode.py")
-endif()
-
-if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/yolo" TYPE PROGRAM FILES "/home/ucar/instant_ws/build_src_pure_runtime_v3/yolo/catkin_generated/installspace/validate_model.py")
 endif()
 

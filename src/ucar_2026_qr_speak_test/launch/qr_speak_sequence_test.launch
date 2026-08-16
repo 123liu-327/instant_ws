@@ -67,30 +67,16 @@
   </group>
 
   <group if="$(arg start_qr)">
-    <group if="$(arg fetch)">
-      <group if="$(arg flip)">
-        <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode" output="screen"
-              launch-prefix="bash -c 'sleep 3; exec &quot;$@&quot;' dummy"
-              args="--topic $(arg camera_topic) --pub-topic $(arg qr_topic) --fetch --offline-mode $(arg offline_mode) --flip" />
-      </group>
-      <group unless="$(arg flip)">
-        <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode" output="screen"
-              launch-prefix="bash -c 'sleep 3; exec &quot;$@&quot;' dummy"
-              args="--topic $(arg camera_topic) --pub-topic $(arg qr_topic) --fetch --offline-mode $(arg offline_mode)" />
-      </group>
-    </group>
-    <group unless="$(arg fetch)">
-      <group if="$(arg flip)">
-        <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode" output="screen"
-              launch-prefix="bash -c 'sleep 3; exec &quot;$@&quot;' dummy"
-              args="--topic $(arg camera_topic) --pub-topic $(arg qr_topic) --flip" />
-      </group>
-      <group unless="$(arg flip)">
-        <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode" output="screen"
-              launch-prefix="bash -c 'sleep 3; exec &quot;$@&quot;' dummy"
-              args="--topic $(arg camera_topic) --pub-topic $(arg qr_topic)" />
-      </group>
-    </group>
+    <include file="$(find ucar_qr_decoder)/launch/qr_decoder.launch">
+      <arg name="camera_topic" value="$(arg camera_topic)" />
+      <arg name="pub_topic" value="$(arg qr_topic)" />
+      <arg name="selection_mode" value="interval" />
+      <arg name="backend" value="hybrid" />
+      <arg name="fetch" value="$(arg fetch)" />
+      <arg name="offline_mode" value="$(arg offline_mode)" />
+      <arg name="flip" value="$(arg flip)" />
+      <arg name="coordinator_name" value="qr_collect_and_decode" />
+    </include>
   </group>
 
   <node pkg="ucar_2026_qr_speak_test" type="qr_speak_test_node.py" name="qr_speak_test_node" output="screen"

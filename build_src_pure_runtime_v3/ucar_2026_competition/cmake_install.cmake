@@ -65,6 +65,10 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ucar_2026_competition" TYPE PROGRAM FILES "/home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_2026_competition/catkin_generated/installspace/competition_flow_current_front_39ff_room_v1.py")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ucar_2026_competition" TYPE PROGRAM FILES "/home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_2026_competition/catkin_generated/installspace/external_voice_nodes.py")
 endif()
 

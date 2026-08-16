@@ -13,6 +13,7 @@ from sign_memory_parking_logic_v1 import (
     local_lateral_displacement,
     nearest_cardinal_yaw,
     projected_lateral_offset,
+    should_run_mid_recenter,
 )
 
 
@@ -85,6 +86,18 @@ class SignMemoryParkingLogicTest(unittest.TestCase):
         self.assertEqual(choose_lateral_dodge(0.38, 0.24, 0.18), 1)
         self.assertEqual(choose_lateral_dodge(0.20, 0.35, 0.18), -1)
         self.assertEqual(choose_lateral_dodge(0.15, 0.16, 0.18), 0)
+
+    def test_mid_recenter_runs_once_in_approach_window(self):
+        self.assertTrue(should_run_mid_recenter(
+            False, 0.47, 0.48, 0.20))
+        self.assertFalse(should_run_mid_recenter(
+            False, 0.62, 0.48, 0.20))
+        self.assertFalse(should_run_mid_recenter(
+            True, 0.47, 0.48, 0.20))
+
+    def test_mid_recenter_does_not_start_at_final_wall_stop(self):
+        self.assertFalse(should_run_mid_recenter(
+            False, 0.23, 0.48, 0.20))
 
 
 if __name__ == "__main__":

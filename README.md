@@ -34,3 +34,5 @@ rosrun map_server map_saver -f 5.4.1
 ```
 <!-- sudo bash ~/ucar_ws/src/pwm_fan.sh -->
 ```
+
+bash ~/instant_ws/src/startup_scripts/start_full_flow.sh

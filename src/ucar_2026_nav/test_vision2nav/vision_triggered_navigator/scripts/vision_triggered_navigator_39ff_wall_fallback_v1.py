@@ -68,6 +68,7 @@ from sign_memory_parking_logic_v1 import (
     local_lateral_displacement,
     nearest_cardinal_yaw as memory_nearest_cardinal_yaw,
     projected_lateral_offset,
+    should_run_mid_recenter,
 )
 
 
@@ -442,6 +443,15 @@ class VisionTriggeredNavigator(object):
                 "~memory_parking_front_cone_lateral_speed", 0.055)))
         self.memory_parking_front_cone_max_avoids = max(1, int(
             rospy.get_param("~memory_parking_front_cone_max_avoids", 3)))
+        self.memory_parking_mid_recenter_distance = max(0.28, float(
+            rospy.get_param(
+                "~memory_parking_mid_recenter_distance_m", 0.48)))
+        self.memory_parking_mid_recenter_timeout = max(2.0, float(
+            rospy.get_param(
+                "~memory_parking_mid_recenter_timeout_sec", 6.0)))
+        self.memory_parking_mid_recenter_reacquire_timeout = max(1.0, float(
+            rospy.get_param(
+                "~memory_parking_mid_recenter_reacquire_timeout_sec", 2.5)))
         self.memory_parking_front_stop = abs(float(rospy.get_param(
             "~memory_parking_front_stop_m", 0.20)))
         self.memory_parking_front_hard_stop = min(
@@ -2629,7 +2639,9 @@ class VisionTriggeredNavigator(object):
         self.cmd_vel_pub.publish(Twist())
         return False
 
-    def _memory_center_sign_laterally(self, target_yaw, remembered_error):
+    def _memory_center_sign_laterally(self, target_yaw, remembered_error,
+                                      timeout=None,
+                                      reacquire_timeout=None):
         """Center using a timestamped image-to-wall odometry projection."""
         self._publish_status("memory_parking_lateral_centering")
         self.memory_parking_center_result = "running"
@@ -2637,7 +2649,14 @@ class VisionTriggeredNavigator(object):
             self.memory_parking_center_result = "odom_unavailable"
             return False
         start_pose = tuple(self.odom_pose)
-        deadline = rospy.get_time() + self.memory_parking_center_timeout
+        center_timeout = (
+            self.memory_parking_center_timeout if timeout is None else
+            max(1.0, float(timeout)))
+        reacquire_limit = (
+            self.memory_parking_sign_reacquire_timeout
+            if reacquire_timeout is None else
+            max(0.5, float(reacquire_timeout)))
+        deadline = rospy.get_time() + center_timeout
         center_started_at = rospy.get_time()
         last_error = float(remembered_error)
         last_visible_at = self.target_payload_at
@@ -2705,7 +2724,7 @@ class VisionTriggeredNavigator(object):
 
             if (not post_align_observation and
                     now - center_started_at >=
-                    self.memory_parking_sign_reacquire_timeout):
+                    reacquire_limit):
                 self.cmd_vel_pub.publish(Twist())
                 self.memory_parking_center_result = "sign_not_reacquired"
                 rospy.logwarn(
@@ -2804,6 +2823,7 @@ class VisionTriggeredNavigator(object):
         deadline = rospy.get_time() + self.memory_parking_forward_timeout
         stopped_since = None
         front_cone_avoids = 0
+        mid_recenter_done = False
         rate = rospy.Rate(25)
         while not rospy.is_shutdown() and rospy.get_time() < deadline:
             now = rospy.get_time()
@@ -2847,6 +2867,40 @@ class VisionTriggeredNavigator(object):
                 if not self._memory_center_sign_laterally(
                         target_yaw, remembered_error):
                     return False
+                if wall_distance <= self.memory_parking_mid_recenter_distance:
+                    mid_recenter_done = True
+                deadline = rospy.get_time() + self.memory_parking_forward_timeout
+                self._publish_status("memory_parking_forward_resumed")
+                continue
+            if should_run_mid_recenter(
+                    mid_recenter_done, wall_distance,
+                    self.memory_parking_mid_recenter_distance,
+                    self.memory_parking_front_stop):
+                self.cmd_vel_pub.publish(Twist())
+                stopped_since = None
+                mid_recenter_done = True
+                self._publish_status("memory_parking_mid_recenter")
+                rospy.logwarn(
+                    "MEMORY_PARK_MID_RECENTER_START wall=%.3fm trigger=%.3fm",
+                    wall_distance,
+                    self.memory_parking_mid_recenter_distance)
+                remembered_error = (
+                    float(self.target_error)
+                    if self.target_error is not None else 0.0)
+                recentered = self._memory_center_sign_laterally(
+                    target_yaw, remembered_error,
+                    timeout=self.memory_parking_mid_recenter_timeout,
+                    reacquire_timeout=(
+                        self.memory_parking_mid_recenter_reacquire_timeout))
+                if recentered:
+                    self._publish_status("memory_parking_mid_recentered")
+                    rospy.logwarn("MEMORY_PARK_MID_RECENTER_DONE")
+                else:
+                    self._publish_status("memory_parking_mid_recenter_skipped")
+                    rospy.logwarn(
+                        "MEMORY_PARK_MID_RECENTER_SKIPPED reason=%s; "
+                        "continuing final approach",
+                        self.memory_parking_center_result)
                 deadline = rospy.get_time() + self.memory_parking_forward_timeout
                 self._publish_status("memory_parking_forward_resumed")
                 continue

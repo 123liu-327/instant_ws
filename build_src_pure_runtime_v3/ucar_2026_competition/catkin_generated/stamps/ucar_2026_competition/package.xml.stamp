@@ -29,6 +29,7 @@
   <exec_depend>ucar_2026_strict_mission</exec_depend>
   <exec_depend>ucar_2026_traffic_light_rknn_test</exec_depend>
   <exec_depend>ucar_nav</exec_depend>
+  <exec_depend>ucar_qr_decoder</exec_depend>
   <exec_depend>usb_cam</exec_depend>
   <exec_depend>vision_triggered_navigator</exec_depend>
   <exec_depend>yolo</exec_depend>

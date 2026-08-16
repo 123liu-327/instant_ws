@@ -1,5 +1,6 @@
 <launch>
   <arg name="start_stage" default="full" />
+  <arg name="wait_for_start" default="false" />
   <arg name="enable_simulation" default="true" />
   <arg name="debug" default="false" />
   <arg name="target_category" default="" />
@@ -101,6 +102,7 @@
          by the new shadow localizer.  Keep the old mission trigger path. -->
     <param name="factory_sign_localization_mode" value="off" />
     <param name="start_stage" value="$(arg start_stage)" />
+    <param name="wait_for_start" value="$(arg wait_for_start)" />
     <param name="enable_simulation" value="$(arg enable_simulation)" />
     <param name="debug" value="$(arg debug)" />
     <param name="target_category" value="$(arg target_category)" />

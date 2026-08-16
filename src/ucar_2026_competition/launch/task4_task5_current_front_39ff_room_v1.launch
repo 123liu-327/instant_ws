@@ -1,0 +1,47 @@
+<launch>
+  <!--
+    Standalone production front-stage flow:
+      1. navigate to the configured traffic staging pose;
+      2. visually align with and stop at the yellow line;
+      3. switch /dev/video0 from usb_cam to ucar_camera;
+      4. recognize the traffic-light direction;
+      5. hand the already-running camera/controller stack to flow_end.
+
+    The vehicle moves only after /competition/start is called.
+  -->
+  <arg name="debug" default="false" />
+  <arg name="start_tts" default="false" />
+  <arg name="tts_speed" default="40" />
+
+  <arg name="traffic_pose_configured" default="true" />
+  <arg name="traffic_x" default="0.3695" />
+  <arg name="traffic_y" default="-3.09" />
+  <arg name="traffic_yaw" default="-1.5596" />
+
+  <!-- Set true only for a manual test that starts already centered at the line. -->
+  <arg name="skip_yellow_line_approach" default="false" />
+
+  <include file="$(find ucar_2026_competition)/launch/common_core.launch">
+    <arg name="start_nav" value="true" />
+    <arg name="start_camera" value="false" />
+    <arg name="start_speech" value="true" />
+    <arg name="start_asr" value="false" />
+    <arg name="start_tts" value="$(arg start_tts)" />
+    <arg name="tts_speed" value="$(arg tts_speed)" />
+    <arg name="start_llm" value="false" />
+    <arg name="start_rviz" value="$(arg debug)" />
+  </include>
+
+  <include file="$(find ucar_2026_competition)/launch/flow_node_current_front_39ff_room_v1.launch">
+    <arg name="start_stage" value="task4_task5" />
+    <arg name="wait_for_start" value="true" />
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="enable_simulation" value="false" />
+    <arg name="traffic_pose_configured" value="$(arg traffic_pose_configured)" />
+    <arg name="traffic_x" value="$(arg traffic_x)" />
+    <arg name="traffic_y" value="$(arg traffic_y)" />
+    <arg name="traffic_yaw" value="$(arg traffic_yaw)" />
+    <arg name="skip_task4_stop_line_approach" value="$(arg skip_yellow_line_approach)" />
+    <arg name="stage_exclusive_resources" value="true" />
+  </include>
+</launch>

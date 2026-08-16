@@ -10,6 +10,7 @@
   <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
   <arg name="require_camera_profile" default="true" />
   <arg name="camera_profile_timeout_seconds" default="2.0" />
+  <arg name="python_executable" default="/home/ucar/miniconda3/bin/python3" />
 
   <arg name="model_path"
        default="$(find traffic_light_vision)/models/traffic_light_yolov5s_fp16.rknn" />
@@ -34,6 +35,7 @@
         type="traffic_light_detector.py"
         name="traffic_light_detector"
         output="screen"
+        launch-prefix="$(arg python_executable)"
         required="true">
     <param name="image_topic" type="string" value="$(arg image_topic)" />
     <param name="enable_topic" type="string" value="$(arg enable_topic)" />

@@ -18,7 +18,6 @@ catkin_install_python(PROGRAMS
   coco2yolo.py
   collect_factory_sign.py
   keyboard_collect_yolo_images.py
-  qr_collect_and_decode.py
   validate_model.py
   scripts/init_traffic_dataset.py
   scripts/build_traffic_yolo_dataset.py

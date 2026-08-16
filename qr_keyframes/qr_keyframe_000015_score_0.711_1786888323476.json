@@ -1,0 +1,21 @@
+{
+  "backend": "opencv",
+  "decode_ms": 392.64384699981747,
+  "decoded": [],
+  "hit_stage": "none",
+  "image_path": "/home/ucar/instant_ws/qr_keyframes/qr_keyframe_000015_score_0.711_1786888323476.jpg",
+  "metrics": {
+    "clipped_ratio": 0.0,
+    "contrast": 0.36603457875758805,
+    "dark_ratio": 0.0034375,
+    "frame_delta": null,
+    "score": 0.7113504993136383,
+    "sharpness": 467.12268730400933,
+    "white_ratio": 0.5334375
+  },
+  "opencv_ms": 214.58530000018072,
+  "sequence": 15,
+  "source": "stationary_keyframe",
+  "stamp": 1786888323.4766915,
+  "zbar_ms": 167.72850036621094
+}

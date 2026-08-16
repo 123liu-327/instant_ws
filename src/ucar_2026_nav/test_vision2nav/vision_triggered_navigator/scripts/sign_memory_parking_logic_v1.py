@@ -102,6 +102,18 @@ def choose_lateral_dodge(left_clearance, right_clearance, minimum_clearance):
     return 1 if left >= right else -1
 
 
+def should_run_mid_recenter(already_done, wall_distance, trigger_distance,
+                            wall_stop, minimum_gap=0.05):
+    """Return true once while approaching through the useful middle range."""
+    if already_done or wall_distance is None:
+        return False
+    distance = float(wall_distance)
+    if not math.isfinite(distance):
+        return False
+    return (distance <= float(trigger_distance) and
+            distance > float(wall_stop) + float(minimum_gap))
+
+
 def _least_squares_x_from_y(points):
     count = float(len(points))
     mean_y = sum(point[1] for point in points) / count

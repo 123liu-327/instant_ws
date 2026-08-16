@@ -10,11 +10,20 @@
   <buildtool_depend>catkin</buildtool_depend>
 
   <depend>rospy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
 
+  <exec_depend>rosgraph</exec_depend>
+  <exec_depend>rospkg</exec_depend>
   <exec_depend>usb_cam</exec_depend>
   <exec_depend>image_view</exec_depend>
-  <exec_depend>yolo</exec_depend>
+  <exec_depend>ucar_qr_decoder</exec_depend>
+  <exec_depend>ucar_controller</exec_depend>
+  <exec_depend>speech_command</exec_depend>
+  <exec_depend>ucar_2026_competition</exec_depend>
 
   <export>
   </export>

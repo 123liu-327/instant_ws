@@ -1,0 +1,114 @@
+<launch>
+  <!--
+    One-command field test sequence:
+    1. USB camera
+    2. TTS subscriber on /factory/tts_text
+    3. X11 camera viewer for MobaXterm
+    4. QR decoder
+    5. QR -> Spark LLM -> /factory/tts_text
+  -->
+  <arg name="start_camera" default="true" />
+  <arg name="start_audio_setup" default="true" />
+  <arg name="start_tts" default="true" />
+  <arg name="start_viewer" default="true" />
+  <arg name="start_qr" default="true" />
+  <arg name="camera_topic" default="/usb_cam/image_raw" />
+  <arg name="qr_topic" default="/qr_code_data" />
+  <arg name="speak_topic" default="/factory/tts_text" />
+  <arg name="status_topic" default="/qr_speak_test/status" />
+  <arg name="flip" default="false" />
+  <arg name="fetch" default="true" />
+  <arg name="offline_mode" default="fallback" />
+  <arg name="speak_prefix" default="" />
+  <arg name="speak_suffix" default="" />
+  <arg name="min_item_count" default="1" />
+  <arg name="debounce_sec" default="2.0" />
+  <arg name="slow_speech" default="true" />
+  <arg name="initial_publish_delay_sec" default="0.8" />
+  <arg name="publish_retries" default="1" />
+  <arg name="voice_instruction" default="请帮我取食品大类的货品" />
+  <arg name="api_password" default="$(optenv XF_SPARK_API_PASSWORD)" />
+  <arg name="spark_base_url" default="https://spark-api-open.xf-yun.com/x2/chat/completions" />
+  <arg name="spark_model" default="spark-x" />
+  <arg name="request_timeout_sec" default="90.0" />
+  <arg name="master_volume" default="90%" />
+  <arg name="pcm_volume" default="90%" />
+  <arg name="extra_audio_control" default="" />
+  <arg name="extra_audio_volume" default="" />
+
+  <group if="$(arg start_camera)">
+    <include file="$(find usb_cam)/launch/usb_cam-test.launch" />
+  </group>
+
+  <group if="$(arg start_audio_setup)">
+    <node pkg="ucar_2026_qr_speak_test" type="audio_setup_node.py" name="audio_setup_node" output="screen">
+      <param name="enabled" value="true" />
+      <param name="master_volume" value="$(arg master_volume)" />
+      <param name="pcm_volume" value="$(arg pcm_volume)" />
+      <param name="extra_control" value="$(arg extra_audio_control)" />
+      <param name="extra_volume" value="$(arg extra_audio_volume)" />
+    </node>
+  </group>
+
+  <group if="$(arg start_tts)">
+    <node pkg="speech_command" type="speech_command_node" name="qr_test_tts" output="screen"
+          launch-prefix="bash -c 'sleep 1; exec &quot;$@&quot;' dummy">
+      <param name="tts_only" value="true" />
+      <param name="tts_topic" value="$(arg speak_topic)" />
+    </node>
+  </group>
+
+  <group if="$(arg start_viewer)">
+    <node pkg="image_view" type="image_view" name="qr_camera_x11_viewer" output="screen"
+          launch-prefix="bash -c 'sleep 2; exec &quot;$@&quot;' dummy">
+      <remap from="image" to="$(arg camera_topic)" />
+      <param name="image_transport" value="raw" />
+    </node>
+  </group>
+
+  <group if="$(arg start_qr)">
+    <group if="$(arg fetch)">
+      <group if="$(arg flip)">
+        <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode" output="screen"
+              launch-prefix="bash -c 'sleep 3; exec &quot;$@&quot;' dummy"
+              args="--topic $(arg camera_topic) --pub-topic $(arg qr_topic) --fetch --offline-mode $(arg offline_mode) --flip" />
+      </group>
+      <group unless="$(arg flip)">
+        <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode" output="screen"
+              launch-prefix="bash -c 'sleep 3; exec &quot;$@&quot;' dummy"
+              args="--topic $(arg camera_topic) --pub-topic $(arg qr_topic) --fetch --offline-mode $(arg offline_mode)" />
+      </group>
+    </group>
+    <group unless="$(arg fetch)">
+      <group if="$(arg flip)">
+        <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode" output="screen"
+              launch-prefix="bash -c 'sleep 3; exec &quot;$@&quot;' dummy"
+              args="--topic $(arg camera_topic) --pub-topic $(arg qr_topic) --flip" />
+      </group>
+      <group unless="$(arg flip)">
+        <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode" output="screen"
+              launch-prefix="bash -c 'sleep 3; exec &quot;$@&quot;' dummy"
+              args="--topic $(arg camera_topic) --pub-topic $(arg qr_topic)" />
+      </group>
+    </group>
+  </group>
+
+  <node pkg="ucar_2026_qr_speak_test" type="qr_speak_test_node.py" name="qr_speak_test_node" output="screen"
+        launch-prefix="bash -c 'sleep 4; exec &quot;$@&quot;' dummy">
+    <param name="qr_topic" value="$(arg qr_topic)" />
+    <param name="speak_topic" value="$(arg speak_topic)" />
+    <param name="status_topic" value="$(arg status_topic)" />
+    <param name="speak_prefix" value="$(arg speak_prefix)" />
+    <param name="speak_suffix" value="$(arg speak_suffix)" />
+    <param name="min_item_count" value="$(arg min_item_count)" />
+    <param name="debounce_sec" value="$(arg debounce_sec)" />
+    <param name="slow_speech" value="$(arg slow_speech)" />
+    <param name="initial_publish_delay_sec" value="$(arg initial_publish_delay_sec)" />
+    <param name="publish_retries" value="$(arg publish_retries)" />
+    <param name="voice_instruction" value="$(arg voice_instruction)" />
+    <param name="api_password" value="$(arg api_password)" />
+    <param name="spark_base_url" value="$(arg spark_base_url)" />
+    <param name="spark_model" value="$(arg spark_model)" />
+    <param name="request_timeout_sec" value="$(arg request_timeout_sec)" />
+  </node>
+</launch>

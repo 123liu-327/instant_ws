@@ -1,11 +1,42 @@
 <launch>
+  <!-- Compatibility forwarding entry. The implementation now lives in ucar_qr_decoder. -->
   <arg name="camera_topic" default="/usb_cam/image_raw" />
-  <arg name="decode_interval" default="0.10" />
+  <arg name="odom_topic" default="/odom" />
+  <arg name="pub_topic" default="/qr_code_data" />
+  <arg name="decode_interval" default="0.03" />
   <arg name="decode_scales" default="1.0,1.5,2.0" />
   <arg name="status_topic" default="/qr_decoder/status" />
   <arg name="fetch_retries" default="3" />
   <arg name="retry_backoff" default="0.20" />
-  <node pkg="yolo" type="qr_collect_and_decode_src6_hybrid_v1.py" name="qr_collect_and_decode_src6_hybrid_v1"
-        output="screen" required="true"
-        args="--topic $(arg camera_topic) --pub-topic /qr_code_data --status-topic $(arg status_topic) --fetch --fetch-retries $(arg fetch_retries) --retry-backoff $(arg retry_backoff) --offline-mode off --decode-interval $(arg decode_interval) --decode-scales $(arg decode_scales)" />
+  <arg name="keyframe_sample_count" default="1" />
+  <arg name="keyframe_sample_window" default="0.10" />
+  <arg name="stationary_hold" default="0.30" />
+  <arg name="odom_stale_sec" default="0.50" />
+  <arg name="stationary_linear_tolerance" default="0.025" />
+  <arg name="stationary_angular_tolerance" default="0.05" />
+  <arg name="save_keyframes" default="false" />
+  <arg name="keyframe_output" default="/home/ucar/instant_ws/qr_keyframes" />
+  <arg name="backend" default="hybrid" />
+
+  <include file="$(find ucar_qr_decoder)/launch/qr_decoder.launch">
+    <arg name="camera_topic" value="$(arg camera_topic)" />
+    <arg name="odom_topic" value="$(arg odom_topic)" />
+    <arg name="pub_topic" value="$(arg pub_topic)" />
+    <arg name="status_topic" value="$(arg status_topic)" />
+    <arg name="backend" value="$(arg backend)" />
+    <arg name="selection_mode" value="keyframe" />
+    <arg name="decode_interval" value="$(arg decode_interval)" />
+    <arg name="decode_scales" value="$(arg decode_scales)" />
+    <arg name="fetch_retries" value="$(arg fetch_retries)" />
+    <arg name="retry_backoff" value="$(arg retry_backoff)" />
+    <arg name="keyframe_sample_count" value="$(arg keyframe_sample_count)" />
+    <arg name="keyframe_sample_window" value="$(arg keyframe_sample_window)" />
+    <arg name="stationary_hold" value="$(arg stationary_hold)" />
+    <arg name="odom_stale_sec" value="$(arg odom_stale_sec)" />
+    <arg name="stationary_linear_tolerance" value="$(arg stationary_linear_tolerance)" />
+    <arg name="stationary_angular_tolerance" value="$(arg stationary_angular_tolerance)" />
+    <arg name="save_keyframes" value="$(arg save_keyframes)" />
+    <arg name="keyframe_output" value="$(arg keyframe_output)" />
+    <arg name="coordinator_name" value="qr_collect_and_decode_src6_hybrid_v1" />
+  </include>
 </launch>

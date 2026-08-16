@@ -57,6 +57,8 @@ class StrictMissionNode:
         self.fault_reason = ""
         self.started = False
         self.last_image_at = 0.0
+        self.last_image_processed_at = 0.0
+        self.image_sub = None
         self.line_missing_since = None
         self.line_search_origin_yaw = None
         self.line_search_direction = 1.0
@@ -166,6 +168,11 @@ class StrictMissionNode:
                 "final center tolerance must not exceed coarse tolerance")
 
         self.image_topic = rospy.get_param("~image_topic", "/usb_cam/image_raw")
+        self.image_process_rate_hz = max(
+            1.0, float(rospy.get_param("~image_process_rate_hz", 8.0)))
+        self.image_process_period = 1.0 / self.image_process_rate_hz
+        self.image_process_max_width = max(
+            320, int(rospy.get_param("~image_process_max_width", 640)))
         self.cmd_vel_topic = rospy.get_param("~cmd_vel_topic", "/cmd_vel")
         self.status_topic = rospy.get_param(
             "~status_topic", "/strict_mission/status")
@@ -186,10 +193,6 @@ class StrictMissionNode:
             self.status_topic, String, queue_size=10, latch=True)
         self.debug_pub = rospy.Publisher(
             "~debug_image", Image, queue_size=1)
-        rospy.Subscriber(
-            self.image_topic, Image, self.image_callback, queue_size=1,
-            buff_size=2 ** 24,
-        )
         rospy.Subscriber("/odom", Odometry, self.odom_callback, queue_size=5)
         rospy.Subscriber(
             self.traffic_topic, String, self.traffic_callback, queue_size=10)
@@ -218,6 +221,26 @@ class StrictMissionNode:
         self.publish_status("waiting for explicit start")
         self.worker = threading.Thread(target=self.run, daemon=True)
         self.worker.start()
+
+    def ensure_image_subscription(self):
+        """Subscribe only when visual stop-line control actually starts."""
+        with self.lock:
+            if self.image_sub is not None:
+                return
+            self.last_image_at = time.monotonic()
+            self.last_image_processed_at = 0.0
+            self.image_sub = rospy.Subscriber(
+                self.image_topic,
+                Image,
+                self.image_callback,
+                queue_size=1,
+                buff_size=4 * 1024 * 1024,
+                tcp_nodelay=True,
+            )
+        rospy.logwarn(
+            "STRICT_IMAGE_PIPELINE_ACTIVE topic=%s rate=%.1fHz max_width=%d",
+            self.image_topic, self.image_process_rate_hz,
+            self.image_process_max_width)
 
     def publish_status(self, detail="", **extra):
         if self.state == "FAULT" and "error" not in extra:
@@ -439,6 +462,9 @@ class StrictMissionNode:
             state = self.state
             if state not in ("APPROACH_LINE", "FINAL_VISUAL_APPROACH"):
                 return
+            if now - self.last_image_processed_at < self.image_process_period:
+                return
+            self.last_image_processed_at = now
         final_visual_approach = state == "FINAL_VISUAL_APPROACH"
         try:
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
@@ -452,6 +478,15 @@ class StrictMissionNode:
                 return
             self.set_fault("cv_bridge failed: {}".format(exc))
             return
+        height, width = frame.shape[:2]
+        if width > self.image_process_max_width:
+            scale = float(self.image_process_max_width) / float(width)
+            frame = cv2.resize(
+                frame,
+                (self.image_process_max_width,
+                 max(1, int(round(float(height) * scale)))),
+                interpolation=cv2.INTER_AREA,
+            )
         bottom_ratio, mask, box, center_error, angle_error = \
             self.detect_stop_line(frame)
         if bottom_ratio is None:
@@ -1184,6 +1219,7 @@ class StrictMissionNode:
                     self.odom_pose[2] if self.odom_pose else None)
                 self.line_search_direction = 1.0
                 self.line_search_reversals = 0
+            self.ensure_image_subscription()
             self.publish_status("visual stop-line approach armed")
             fallback_timeout = max(0.0, float(rospy.get_param(
                 "~calibrated_final_advance_fallback_sec", 3.0)))
@@ -1332,6 +1368,14 @@ class StrictMissionNode:
 
     def shutdown(self):
         self.shutdown_event.set()
+        with self.lock:
+            image_sub = self.image_sub
+            self.image_sub = None
+        if image_sub is not None:
+            try:
+                image_sub.unregister()
+            except Exception:
+                pass
         try:
             self.move_base.cancel_all_goals()
         except Exception:

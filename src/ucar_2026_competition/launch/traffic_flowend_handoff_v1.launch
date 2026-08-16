@@ -8,6 +8,7 @@
   <arg name="traffic_enable_topic" default="/traffic_light/enable" />
   <arg name="traffic_decision_topic" default="/traffic_light/decision" />
   <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
+  <arg name="traffic_python_executable" default="/home/ucar/miniconda3/bin/python3" />
 
   <!-- Keep the follower alive but IDLE before a confirmed direction arrives. -->
   <include file="$(find flow_end)/launch/follow_test.launch">
@@ -32,6 +33,7 @@
     <arg name="command_topic" value="$(arg begin_topic)" />
     <arg name="decision_topic" value="$(arg traffic_decision_topic)" />
     <arg name="camera_profile_service" value="$(arg camera_profile_service)" />
+    <arg name="python_executable" value="$(arg traffic_python_executable)" />
     <arg name="require_camera_profile" value="true" />
     <arg name="enabled_at_start" value="false" />
     <arg name="publish_commands" value="true" />

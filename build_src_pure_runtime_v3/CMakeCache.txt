@@ -118,7 +118,7 @@ CATKIN_SKIP_TESTING:BOOL=OFF
 CATKIN_SYMLINK_INSTALL:BOOL=OFF
 
 //List of ';' separated packages to build
-CATKIN_WHITELIST_PACKAGES:STRING=amcl;base_local_planner;clear_costmap_recovery;costmap_2d;cv_bridge;dwa_local_planner;factory_sign_ppocr_rknn_test;flow_end;global_planner;image_view;map_goal_picker;map_server;move_base;move_slow_and_clear;my_planner;nav_core;navfn;rotate_recovery;simple_navigator;tf;tf2;tf2_geometry_msgs;tf2_msgs;tf2_py;tf2_sensor_msgs;traffic_light_vision;ucar_2026_competition;ucar_2026_competition_speech;ucar_2026_qr_speak_test;ucar_2026_smart_factory_llm;ucar_2026_strict_mission;ucar_2026_track_end_stop;ucar_camera;ucar_controller;ucar_map;ucar_nav;vision_triggered_navigator;voxel_grid;ydlidar;yolo
+CATKIN_WHITELIST_PACKAGES:STRING=amcl;base_local_planner;clear_costmap_recovery;costmap_2d;cv_bridge;dwa_local_planner;factory_sign_ppocr_rknn_test;flow_end;global_planner;image_view;map_goal_picker;map_server;move_base;move_slow_and_clear;my_planner;nav_core;navfn;rotate_recovery;simple_navigator;tf;tf2;tf2_geometry_msgs;tf2_msgs;tf2_py;tf2_sensor_msgs;traffic_light_vision;ucar_2026_competition;ucar_2026_competition_speech;ucar_2026_qr_speak_test;ucar_2026_smart_factory_llm;ucar_2026_strict_mission;ucar_2026_track_end_stop;ucar_camera;ucar_controller;ucar_map;ucar_nav;ucar_qr_decoder;vision_triggered_navigator;voxel_grid;ydlidar;yolo
 
 //Path to a program.
 CMAKE_AR:FILEPATH=/usr/bin/ar
@@ -809,6 +809,9 @@ orocos_kdl_DIR:PATH=/usr/share/orocos_kdl/cmake
 //Path to a library.
 pkgcfg_lib_YAMLCPP_yaml-cpp:FILEPATH=/usr/lib/aarch64-linux-gnu/libyaml-cpp.so
 
+//Path to a library.
+pkgcfg_lib_ZBAR_zbar:FILEPATH=/usr/lib/aarch64-linux-gnu/libzbar.so
+
 //The directory containing a CMake configuration file for pluginlib.
 pluginlib_DIR:PATH=/opt/ros/noetic/share/pluginlib/cmake
 
@@ -1039,6 +1042,12 @@ ucar_nav_BINARY_DIR:STATIC=/home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_
 
 //Value Computed by CMake
 ucar_nav_SOURCE_DIR:STATIC=/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_nav
+
+//Value Computed by CMake
+ucar_qr_decoder_BINARY_DIR:STATIC=/home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_qr_decoder
+
+//Value Computed by CMake
+ucar_qr_decoder_SOURCE_DIR:STATIC=/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_qr_decoder
 
 //Value Computed by CMake
 vision_triggered_navigator_BINARY_DIR:STATIC=/home/ucar/instant_ws/build_src_pure_runtime_v3/vision_triggered_navigator
@@ -1272,7 +1281,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=48
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=49
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP
@@ -1417,6 +1426,40 @@ YAMLCPP_yaml-cpp_INCLUDEDIR:INTERNAL=
 YAMLCPP_yaml-cpp_LIBDIR:INTERNAL=
 YAMLCPP_yaml-cpp_PREFIX:INTERNAL=
 YAMLCPP_yaml-cpp_VERSION:INTERNAL=
+ZBAR_CFLAGS:INTERNAL=
+ZBAR_CFLAGS_I:INTERNAL=
+ZBAR_CFLAGS_OTHER:INTERNAL=
+ZBAR_FOUND:INTERNAL=1
+ZBAR_INCLUDEDIR:INTERNAL=/usr/include
+ZBAR_INCLUDE_DIRS:INTERNAL=
+ZBAR_LDFLAGS:INTERNAL=-lzbar
+ZBAR_LDFLAGS_OTHER:INTERNAL=
+ZBAR_LIBDIR:INTERNAL=/usr/lib/aarch64-linux-gnu
+ZBAR_LIBRARIES:INTERNAL=zbar
+ZBAR_LIBRARY_DIRS:INTERNAL=
+ZBAR_LIBS:INTERNAL=
+ZBAR_LIBS_L:INTERNAL=
+ZBAR_LIBS_OTHER:INTERNAL=
+ZBAR_LIBS_PATHS:INTERNAL=
+ZBAR_PREFIX:INTERNAL=/usr
+ZBAR_STATIC_CFLAGS:INTERNAL=
+ZBAR_STATIC_CFLAGS_I:INTERNAL=
+ZBAR_STATIC_CFLAGS_OTHER:INTERNAL=
+ZBAR_STATIC_INCLUDE_DIRS:INTERNAL=
+ZBAR_STATIC_LDFLAGS:INTERNAL=-lzbar
+ZBAR_STATIC_LDFLAGS_OTHER:INTERNAL=
+ZBAR_STATIC_LIBDIR:INTERNAL=
+ZBAR_STATIC_LIBRARIES:INTERNAL=zbar
+ZBAR_STATIC_LIBRARY_DIRS:INTERNAL=
+ZBAR_STATIC_LIBS:INTERNAL=
+ZBAR_STATIC_LIBS_L:INTERNAL=
+ZBAR_STATIC_LIBS_OTHER:INTERNAL=
+ZBAR_STATIC_LIBS_PATHS:INTERNAL=
+ZBAR_VERSION:INTERNAL=0.22
+ZBAR_zbar_INCLUDEDIR:INTERNAL=
+ZBAR_zbar_LIBDIR:INTERNAL=
+ZBAR_zbar_PREFIX:INTERNAL=
+ZBAR_zbar_VERSION:INTERNAL=
 //Components requested for this build tree.
 _Boost_COMPONENTS_SEARCHED:INTERNAL=atomic;chrono;date_time;filesystem;python37;system;thread
 //Last used Boost_INCLUDE_DIR value.
@@ -1432,7 +1475,9 @@ _Boost_USE_MULTITHREADED_LAST:INTERNAL=TRUE
 //CMAKE_INSTALL_PREFIX during last run
 _GNUInstallDirs_LAST_CMAKE_INSTALL_PREFIX:INTERNAL=/home/ucar/instant_ws/src_pure_runtime_ws_v3/install
 __pkg_config_arguments_YAMLCPP:INTERNAL=yaml-cpp;QUIET
+__pkg_config_arguments_ZBAR:INTERNAL=REQUIRED;zbar
 __pkg_config_checked_YAMLCPP:INTERNAL=1
+__pkg_config_checked_ZBAR:INTERNAL=1
 //ADVANCED property for variable: gmock_build_tests
 gmock_build_tests-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: gtest_build_samples
@@ -1445,5 +1490,5 @@ gtest_disable_pthreads-ADVANCED:INTERNAL=1
 gtest_force_shared_crt-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: gtest_hide_internal_symbols
 gtest_hide_internal_symbols-ADVANCED:INTERNAL=1
-prefix_result:INTERNAL=/usr//usr/lib/aarch64-linux-gnu
+prefix_result:INTERNAL=/usr/lib/aarch64-linux-gnu
 

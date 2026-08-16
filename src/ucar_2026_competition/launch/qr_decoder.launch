@@ -1,8 +1,15 @@
 <launch>
+  <!-- Legacy interval-decoder entry retained for existing callers. -->
   <arg name="camera_topic" default="/usb_cam/image_raw" />
   <arg name="decode_interval" default="0.10" />
   <arg name="decode_scales" default="1.0,1.5,2.0" />
-  <node pkg="yolo" type="qr_collect_and_decode.py" name="qr_collect_and_decode"
-        output="log" required="true"
-        args="--topic $(arg camera_topic) --pub-topic /qr_code_data --fetch --offline-mode off --decode-interval $(arg decode_interval) --decode-scales $(arg decode_scales)" />
+  <arg name="backend" default="hybrid" />
+  <include file="$(find ucar_qr_decoder)/launch/qr_decoder.launch">
+    <arg name="camera_topic" value="$(arg camera_topic)" />
+    <arg name="selection_mode" value="interval" />
+    <arg name="backend" value="$(arg backend)" />
+    <arg name="decode_interval" value="$(arg decode_interval)" />
+    <arg name="decode_scales" value="$(arg decode_scales)" />
+    <arg name="coordinator_name" value="qr_collect_and_decode" />
+  </include>
 </launch>

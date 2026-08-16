@@ -13,7 +13,7 @@ source /opt/ros/noetic/setup.bash
 
 if [[ ! -f "$PURE_DEVEL/setup.bash" ]]; then
   echo "[ERROR] Missing pure unified-src build: $PURE_DEVEL/setup.bash" >&2
-  echo "[ERROR] Run $SOURCE_ROOT/build_src_pure_runtime_v3.sh once." >&2
+  echo "[ERROR] Run $SOURCE_ROOT/startup_scripts/build_src_pure_runtime_v3.sh once." >&2
   exit 1
 fi
 source "$PURE_DEVEL/setup.bash"
@@ -27,6 +27,7 @@ required_packages=(
   ucar_2026_competition
   ucar_2026_competition_speech
   ucar_2026_smart_factory_llm
+  ucar_qr_decoder
   factory_sign_ppocr_rknn_test
   flow_end
   traffic_light_vision

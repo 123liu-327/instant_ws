@@ -1,0 +1,19 @@
+{
+  "decode_ms": 297.3944400000619,
+  "decoded": [
+    "https://mariasdrive.cloud/api/qrcode/food"
+  ],
+  "image_path": "/home/ucar/instant_ws/qr_keyframes/qr_keyframe_000043_score_0.731_1786869270575.jpg",
+  "metrics": {
+    "clipped_ratio": 0.0,
+    "contrast": 0.47180189054655053,
+    "dark_ratio": 0.005706380208333334,
+    "frame_delta": 1.222724609375,
+    "score": 0.7308068183146119,
+    "sharpness": 285.1855236256812,
+    "white_ratio": 0.3225227864583333
+  },
+  "sequence": 43,
+  "source": "stationary_keyframe",
+  "stamp": 1786869270.5755508
+}

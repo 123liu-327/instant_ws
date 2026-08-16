@@ -1,0 +1,21 @@
+<launch>
+  <arg name="camera_topic" default="/usb_cam/image_raw" />
+  <arg name="odom_topic" default="/odom" />
+  <arg name="decode_interval" default="0.03" />
+  <arg name="decode_scales" default="1.0,1.5,2.0" />
+  <arg name="status_topic" default="/qr_decoder/status" />
+  <arg name="fetch_retries" default="3" />
+  <arg name="retry_backoff" default="0.20" />
+  <arg name="keyframe_sample_count" default="6" />
+  <arg name="keyframe_sample_window" default="0.18" />
+  <arg name="stationary_hold" default="0.15" />
+  <arg name="odom_stale_sec" default="0.50" />
+  <arg name="stationary_linear_tolerance" default="0.025" />
+  <arg name="stationary_angular_tolerance" default="0.05" />
+  <arg name="moving_decode_interval" default="0.30" />
+  <arg name="moving_decode_max_angular_speed" default="0.25" />
+  <arg name="moving_decode_arm_sec" default="0.75" />
+  <node pkg="yolo" type="qr_collect_and_decode_src6_hybrid_v1.py" name="qr_collect_and_decode_src6_hybrid_v1"
+        output="screen" required="true"
+        args="--topic $(arg camera_topic) --odom-topic $(arg odom_topic) --pub-topic /qr_code_data --status-topic $(arg status_topic) --fetch --fetch-retries $(arg fetch_retries) --retry-backoff $(arg retry_backoff) --offline-mode off --decode-interval $(arg decode_interval) --decode-scales $(arg decode_scales) --keyframe-sample-count $(arg keyframe_sample_count) --keyframe-sample-window $(arg keyframe_sample_window) --stationary-hold $(arg stationary_hold) --odom-stale-sec $(arg odom_stale_sec) --stationary-linear-tolerance $(arg stationary_linear_tolerance) --stationary-angular-tolerance $(arg stationary_angular_tolerance) --moving-decode-interval $(arg moving_decode_interval) --moving-decode-max-angular-speed $(arg moving_decode_max_angular_speed) --moving-decode-arm-sec $(arg moving_decode_arm_sec)" />
+</launch>

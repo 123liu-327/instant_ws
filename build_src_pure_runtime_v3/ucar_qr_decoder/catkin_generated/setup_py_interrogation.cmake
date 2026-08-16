@@ -1,0 +1,7 @@
+set(ucar_qr_decoder_SETUP_PY_SETUP_MODULE "setuptools")
+set(ucar_qr_decoder_SETUP_PY_VERSION "0.1.0")
+set(ucar_qr_decoder_SETUP_PY_SCRIPTS "")
+set(ucar_qr_decoder_SETUP_PY_PACKAGES "ucar_qr_decoder")
+set(ucar_qr_decoder_SETUP_PY_PACKAGE_DIRS "src/ucar_qr_decoder")
+set(ucar_qr_decoder_SETUP_PY_MODULES "")
+set(ucar_qr_decoder_SETUP_PY_MODULE_DIRS "")

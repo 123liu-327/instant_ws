@@ -1,0 +1,56 @@
+<launch>
+  <arg name="camera_topic" default="/usb_cam/image_raw" />
+  <arg name="odom_topic" default="/odom" />
+  <arg name="pub_topic" default="/qr_code_data" />
+  <arg name="raw_topic" default="/qr_code_result" />
+  <arg name="parsed_topic" default="/qr_url_parsed" />
+  <arg name="status_topic" default="/qr_decoder/status" />
+  <arg name="legacy_start_topic" default="/qr_node_start" />
+  <arg name="legacy_start_gate" default="false" />
+  <arg name="backend" default="hybrid" />
+  <arg name="selection_mode" default="keyframe" />
+  <arg name="decode_interval" default="0.03" />
+  <arg name="decode_scales" default="1.0,1.5,2.0" />
+  <arg name="zbar_raw_timeout" default="0.060" />
+  <arg name="zbar_enhanced_timeout" default="0.180" />
+  <arg name="fetch" default="true" />
+  <arg name="fetch_retries" default="3" />
+  <arg name="retry_backoff" default="0.20" />
+  <arg name="offline_mode" default="off" />
+  <arg name="keyframe_sample_count" default="1" />
+  <arg name="keyframe_sample_window" default="0.10" />
+  <arg name="stationary_hold" default="0.30" />
+  <arg name="odom_stale_sec" default="0.50" />
+  <arg name="stationary_linear_tolerance" default="0.025" />
+  <arg name="stationary_angular_tolerance" default="0.05" />
+  <arg name="save_keyframes" default="false" />
+  <arg name="keyframe_output" default="/home/ucar/instant_ws/qr_keyframes" />
+  <arg name="flip" default="false" />
+  <arg name="white_contour_test" default="false" />
+  <arg name="coordinator_name" default="qr_collect_and_decode_src6_hybrid_v1" />
+  <arg name="python_executable" default="/home/ucar/miniconda3/bin/python3" />
+
+  <node pkg="ucar_qr_decoder" type="zbar_decoder_node" name="qr_zbar_backend"
+        output="log" required="false" />
+
+  <node pkg="ucar_qr_decoder" type="qr_decoder_node.py" name="$(arg coordinator_name)"
+        output="screen" required="true" launch-prefix="$(arg python_executable)"
+        args="--topic $(arg camera_topic) --odom-topic $(arg odom_topic)
+              --pub-topic $(arg pub_topic) --raw-topic $(arg raw_topic)
+              --parsed-topic $(arg parsed_topic) --status-topic $(arg status_topic)
+              --legacy-start-topic $(arg legacy_start_topic)
+              --legacy-start-gate $(arg legacy_start_gate)
+              --backend $(arg backend) --selection-mode $(arg selection_mode)
+              --decode-interval $(arg decode_interval) --decode-scales $(arg decode_scales)
+              --zbar-raw-timeout $(arg zbar_raw_timeout)
+              --zbar-enhanced-timeout $(arg zbar_enhanced_timeout)
+              --fetch $(arg fetch) --fetch-retries $(arg fetch_retries)
+              --retry-backoff $(arg retry_backoff) --offline-mode $(arg offline_mode)
+              --keyframe-sample-count $(arg keyframe_sample_count)
+              --keyframe-sample-window $(arg keyframe_sample_window)
+              --stationary-hold $(arg stationary_hold) --odom-stale-sec $(arg odom_stale_sec)
+              --stationary-linear-tolerance $(arg stationary_linear_tolerance)
+              --stationary-angular-tolerance $(arg stationary_angular_tolerance)
+              --save-keyframes $(arg save_keyframes) --keyframe-output $(arg keyframe_output)
+              --flip $(arg flip) --white-contour-test $(arg white_contour_test)" />
+</launch>

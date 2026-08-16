@@ -331,7 +331,7 @@ class CompetitionFlow:
                 rospy.get_param("~factory_sign_localization_required_hits", 2),
                 rospy.get_param(
                     "~factory_sign_localization_evidence_window_sec", 1.5))
-            for category in ("food", "daily", "electronic")
+            for category in ("food", "daily", "electronics")
         }
         self.handoff_scan_received_at = 0.0
         self.handoff_costmap_received_at = 0.0
@@ -993,10 +993,17 @@ class CompetitionFlow:
             category = normalize_category(observation.get("category"))
             if not category:
                 continue
+            category_filter = self.factory_sign_category_filters.get(category)
+            if category_filter is None:
+                rospy.logwarn_throttle(
+                    5.0,
+                    "[SIGN LOCALIZATION] ignoring unsupported category=%s",
+                    category)
+                continue
             observed_categories.add(category)
             candidate = self._factory_sign_candidate(
                 observation, category, image_stamp)
-            confirmed = self.factory_sign_category_filters[category].push(
+            confirmed = category_filter.push(
                 category, category if candidate is not None else None, now)
             if candidate is None:
                 continue
@@ -2309,84 +2316,68 @@ class CompetitionFlow:
         self.safe_stop()
         raise StageError("QR scan failed to return to its original final yaw")
 
-    def _slow_qr_fallback_scan(
-            self, expected_count, direction, stale_sec, scan_deadline,
-            status_state, initial_scan=False):
-        """Run the continuous slow scan as either primary or fallback mode."""
-        speed = abs(float(rospy.get_param(
-            "~qr_fallback_angular_speed", 0.22)))
-        min_speed = abs(float(rospy.get_param(
-            "~qr_fallback_min_angular_speed", 0.08)))
-        acceleration = abs(float(rospy.get_param(
-            "~qr_fallback_angular_accel", 0.35)))
-        if speed <= 0.0 or min_speed <= 0.0 or acceleration <= 0.0:
-            raise StageError("QR fallback scan parameters must be positive")
-        min_speed = min(min_speed, speed)
-
-        tracker = DirectedYawAccumulator(direction=direction)
-        tracker.reset(self._fresh_qr_odom_yaw(stale_sec))
-        started_at = time.monotonic()
-        reported_rounds = 0
-        if initial_scan:
-            status_text = (
-                "[QR] continuous slow scan started at {:.2f}rad/s; count={}/{}"
-                .format(speed, self._qr_count(), expected_count)
-            )
-        else:
-            status_text = (
-                "[QR] fast round incomplete: count={}/{}; legacy slow fallback "
-                "started at {:.2f}rad/s".format(
-                    self._qr_count(), expected_count, speed)
-            )
-        self.publish_status("task1", status_state, status_text)
-
-        while self._qr_count() < expected_count and not rospy.is_shutdown():
+    def _run_qr_keyframe_round(
+            self, round_index, step_count, step_angle, speed, direction,
+            settle_sec, expected_count, stale_sec, scan_deadline,
+            step_margin, status_state):
+        """Rotate-stop-sample once per angle; image selection lives in QR node."""
+        self.publish_status(
+            "task1",
+            status_state,
+            "[QR] keyframe round {} started: {:.1f}-degree steps; count={}/{}"
+            .format(
+                round_index,
+                math.degrees(step_angle),
+                self._qr_count(),
+                expected_count,
+            ),
+        )
+        for round_step in range(1, step_count + 1):
+            if self._qr_count() >= expected_count or rospy.is_shutdown():
+                break
             self.check_abort()
-            self._check_qr_decoder()
-            now = time.monotonic()
-            if now >= scan_deadline:
+            if time.monotonic() >= scan_deadline:
                 raise StageError(
-                    "QR slow fallback timed out with {}/{} unique URLs".format(
-                        self._qr_count(), expected_count))
-
-            progress = tracker.update(self._fresh_qr_odom_yaw(stale_sec))
-            rounds = int(progress / (2.0 * math.pi))
-            if rounds > reported_rounds:
-                reported_rounds = rounds
-                self.publish_status(
-                    "task1",
-                    status_state,
-                    "[QR] {} round {} complete: count={}/{}".format(
-                        "continuous slow" if initial_scan else "slow fallback",
-                        rounds, self._qr_count(), expected_count),
+                    "QR keyframe round {} timed out with {}/{} unique URLs"
+                    .format(round_index, self._qr_count(), expected_count)
                 )
-
-            elapsed = now - started_at
-            command_speed = min(
+            self._rotate_qr_step(
+                step_angle,
                 speed,
-                max(min_speed, min_speed + acceleration * elapsed),
+                direction,
+                stale_sec,
+                scan_deadline,
+                step_margin,
             )
-            twist = Twist()
-            twist.angular.z = direction * command_speed
-            self.cmd_pub.publish(twist)
-            rospy.sleep(0.05)
-
-        if rospy.is_shutdown():
-            raise Aborted("competition stopped during QR slow fallback scan")
+            self._settle_for_qr(
+                settle_sec,
+                expected_count,
+                scan_deadline,
+                stale_sec,
+                "QR round {} step {}".format(round_index, round_step),
+            )
+        return self._qr_count() >= expected_count
 
     def scan_qr_at_current_pose(self, status_state):
-        """Center once, then scan continuously; stepped scan remains optional."""
+        """Run at most two rotate-stop-keyframe rounds; never decode while moving."""
         expected_count = int(rospy.get_param("~qr_expected_count", 3))
         speed = abs(float(rospy.get_param("~qr_scan_angular_speed", 0.60)))
-        step_angle = abs(float(rospy.get_param(
-            "~qr_scan_step_angle_rad", math.radians(15.0))))
+        first_round_step_deg = float(rospy.get_param(
+            "~qr_scan_first_round_step_angle_deg", 20.0))
+        second_round_step_deg = float(rospy.get_param(
+            "~qr_scan_second_round_step_angle_deg", 10.0))
+        second_round_offset_deg = float(rospy.get_param(
+            "~qr_scan_second_round_offset_deg", 5.0))
+        step_angle = math.radians(first_round_step_deg)
+        second_round_step_angle = math.radians(second_round_step_deg)
+        second_round_offset = math.radians(second_round_offset_deg)
         direction = (
             1.0 if float(rospy.get_param("~qr_scan_direction", 1.0)) >= 0.0 else -1.0
         )
-        settle_sec = max(0.0, float(rospy.get_param("~qr_scan_settle_sec", 0.30)))
+        settle_sec = float(rospy.get_param("~qr_scan_keyframe_wait_sec", 0.30))
         warmup_sec = max(
             settle_sec,
-            float(rospy.get_param("~qr_decoder_warmup_sec", 0.40)),
+            float(rospy.get_param("~qr_decoder_warmup_sec", 0.30)),
         )
         result_grace_sec = max(
             0.0,
@@ -2403,11 +2394,18 @@ class CompetitionFlow:
         scan_timeout = max(0.0, float(rospy.get_param("~qr_scan_timeout_sec", 0.0)))
         stale_sec = float(rospy.get_param("~qr_odom_stale_sec", 0.5))
         odom_wait_sec = float(rospy.get_param("~qr_odom_wait_sec", 2.0))
-        if expected_count <= 0 or speed <= 0.0 or step_angle <= 0.0 or stale_sec <= 0.0:
+        if (expected_count <= 0 or speed <= 0.0 or first_round_step_deg <= 0.0 or
+                second_round_step_deg <= 0.0 or settle_sec <= 0.0 or
+                stale_sec <= 0.0):
             raise StageError("QR scan motion parameters must be positive")
+        if (second_round_offset_deg <= 0.0 or second_round_offset_deg >
+                min(first_round_step_deg, second_round_step_deg)):
+            raise StageError(
+                "QR second-round offset must be positive and not exceed either step angle")
 
-        # Keep the heading produced by room centering and start the 15-degree
-        # observations there; the slow fallback continues in the same direction.
+        # Keep the heading produced by room centering and start the 20-degree
+        # observations there. Every image used for decoding is selected only
+        # after odometry confirms a stop and the configured 0.30 s camera wait.
         self._center_qr_scan_pose()
         self._wait_for_qr_odom(odom_wait_sec, stale_sec)
         self._wait_for_qr_decoder_ready(decoder_ready_timeout)
@@ -2417,40 +2415,16 @@ class CompetitionFlow:
         scan_deadline = (
             time.monotonic() + scan_timeout if scan_timeout > 0.0 else float("inf")
         )
-        if bool_param("~qr_slow_only", True):
-            try:
-                self._settle_for_qr(
-                    warmup_sec,
-                    expected_count,
-                    scan_deadline,
-                    stale_sec,
-                    "QR warmup",
-                )
-                self._slow_qr_fallback_scan(
-                    expected_count,
-                    direction,
-                    stale_sec,
-                    scan_deadline,
-                    status_state,
-                    initial_scan=True,
-                )
-            finally:
-                self.safe_stop()
-            if rospy.is_shutdown():
-                raise Aborted("competition stopped during continuous slow QR scan")
-            self.publish_status(
-                "task1",
-                "qr_step_scan_completed",
-                "[QR] scan complete: {} unique URLs".format(self._qr_count()),
-            )
-            return True
-
-        completed_steps = 0
-        fast_round_steps = max(1, int(round(2.0 * math.pi / step_angle)))
+        first_round_steps = max(1, int(round(2.0 * math.pi / step_angle)))
+        second_round_steps = max(
+            1, int(round(2.0 * math.pi / second_round_step_angle)))
         self.publish_status(
             "task1",
             status_state,
-            "[QR] centered; 15-degree scan started from current heading",
+            "[QR] scan config: round1={:.1f}deg, offset={:.1f}deg, "
+            "round2={:.1f}deg, keyframe_wait={:.2f}s".format(
+                first_round_step_deg, second_round_offset_deg,
+                second_round_step_deg, settle_sec),
         )
         try:
             self._settle_for_qr(
@@ -2460,57 +2434,90 @@ class CompetitionFlow:
                 stale_sec,
                 "QR warmup",
             )
-            while self._qr_count() < expected_count and not rospy.is_shutdown():
-                self.check_abort()
-                if time.monotonic() >= scan_deadline:
-                    raise StageError(
-                        "15-degree QR scan timed out with {}/{} unique URLs".format(
-                            self._qr_count(), expected_count
-                        )
-                    )
+            self._run_qr_keyframe_round(
+                1,
+                first_round_steps,
+                step_angle,
+                speed,
+                direction,
+                settle_sec,
+                expected_count,
+                stale_sec,
+                scan_deadline,
+                step_margin,
+                status_state,
+            )
+            if self._qr_count() < expected_count:
+                self.publish_status(
+                    "task1",
+                    status_state,
+                    "[QR] keyframe round 1 complete: count={}/{}; waiting for "
+                    "URL resolution".format(
+                        self._qr_count(), expected_count
+                    ),
+                )
+                self._wait_for_qr_network_idle(
+                    result_grace_sec, expected_count, scan_deadline
+                )
+
+            if self._qr_count() < expected_count:
+                self.publish_status(
+                    "task1",
+                    status_state,
+                    "[QR] starting {:.1f}-degree-offset, {:.1f}-degree keyframe "
+                    "round 2".format(
+                        second_round_offset_deg, second_round_step_deg),
+                )
                 self._rotate_qr_step(
-                    step_angle,
+                    second_round_offset,
                     speed,
                     direction,
                     stale_sec,
                     scan_deadline,
                     step_margin,
                 )
-                completed_steps += 1
                 self._settle_for_qr(
                     settle_sec,
                     expected_count,
                     scan_deadline,
                     stale_sec,
-                    "QR step {}".format(completed_steps),
+                    "QR round 2 offset",
                 )
-                if (completed_steps >= fast_round_steps and
-                        self._qr_count() < expected_count):
+                self._run_qr_keyframe_round(
+                    2,
+                    second_round_steps,
+                    second_round_step_angle,
+                    speed,
+                    direction,
+                    settle_sec,
+                    expected_count,
+                    stale_sec,
+                    scan_deadline,
+                    step_margin,
+                    status_state,
+                )
+                if self._qr_count() < expected_count:
                     self.publish_status(
                         "task1",
                         status_state,
-                        "[QR] fast round complete: count={}/{}; waiting for URL "
-                        "resolution".format(
+                        "[QR] keyframe round 2 complete: count={}/{}; waiting "
+                        "for URL resolution".format(
                             self._qr_count(), expected_count
                         ),
                     )
                     self._wait_for_qr_network_idle(
                         result_grace_sec, expected_count, scan_deadline
                     )
-                    if self._qr_count() < expected_count:
-                        self._slow_qr_fallback_scan(
-                            expected_count,
-                            direction,
-                            stale_sec,
-                            scan_deadline,
-                            status_state,
-                        )
-                    break
+
         finally:
             self.safe_stop()
 
         if rospy.is_shutdown():
-            raise Aborted("competition stopped during 15-degree QR scan")
+            raise Aborted("competition stopped during stationary QR scan")
+        if self._qr_count() < expected_count:
+            raise StageError(
+                "two stationary QR scan rounds ended with {}/{} unique URLs"
+                .format(self._qr_count(), expected_count))
         self.publish_status(
             "task1",
             "qr_step_scan_completed",
@@ -2974,9 +2981,11 @@ class CompetitionFlow:
         try:
             self.start_child(
                 "qr_decoder", "ucar_2026_competition",
-                "qr_decoder_src6_hybrid_v1.launch")
+                "qr_decoder_src6_hybrid_v1.launch",
+                {"stationary_hold": rospy.get_param(
+                    "~qr_scan_keyframe_wait_sec", 0.30)})
             # Decoder startup overlaps room centering. Item acceptance begins
-            # when the centered 15-degree scan takes control of the base.
+            # when the centered stationary scan takes control of the base.
             self.qr_collecting = False
             completed = self.scan_qr_at_current_pose("scanning_qr_primary")
 

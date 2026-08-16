@@ -1,0 +1,17 @@
+{
+  "decode_ms": 174.64091100009682,
+  "decoded": [],
+  "image_path": "/home/ucar/instant_ws/qr_keyframes/qr_keyframe_000021_score_0.654_1786869239309.jpg",
+  "metrics": {
+    "clipped_ratio": 0.0,
+    "contrast": 0.5204931559931086,
+    "dark_ratio": 0.0032421875,
+    "frame_delta": 1.1374641927083333,
+    "score": 0.6538305174872315,
+    "sharpness": 173.23574049961306,
+    "white_ratio": 0.348251953125
+  },
+  "sequence": 21,
+  "source": "stationary_keyframe",
+  "stamp": 1786869239.3099875
+}

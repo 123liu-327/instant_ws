@@ -9,21 +9,21 @@ export SIM_BRIDGE_HOST='仿真电脑 IP'
 export TRAFFIC_X='...'
 export TRAFFIC_Y='...'
 export TRAFFIC_YAW='...'
-bash /home/ucar/instant_ws/src/startup_scripts/run_competition.sh
+bash /home/ucar/instant_ws/src/startup_scripts/start_full_flow.sh
 ```
 
 调试模式会启动 RViz：
 
 ```bash
-bash /home/ucar/instant_ws/src/startup_scripts/run_competition.sh --debug
+bash /home/ucar/instant_ws/src/startup_scripts/start_full_flow.sh debug:=true
 ```
 
 五个子任务可以独立启动：
 
 ```bash
-roslaunch ucar_2026_competition task1.launch
-roslaunch ucar_2026_competition task2.launch target_category:=food target_item:=苹果 target_workshop:=食品加工车间
-roslaunch ucar_2026_competition task3.launch target_category:=food sim_item:=苹果 sim_workshop:=食品加工车间 sim_bridge_host:=192.168.1.20
+roslaunch ucar_2026_competition start_task1.launch
+roslaunch ucar_2026_competition start_task2.launch target_category:=food target_item:=苹果 target_workshop:=食品加工车间
+roslaunch ucar_2026_competition start_task3.launch sim_category:=food sim_item:=苹果 sim_workshop:=食品加工车间 sim_bridge_host:=192.168.1.20
 roslaunch ucar_2026_competition task4.launch traffic_pose_configured:=true traffic_x:="$TRAFFIC_X" traffic_y:="$TRAFFIC_Y" traffic_yaw:="$TRAFFIC_YAW"
 roslaunch ucar_2026_competition task5.launch traffic_decision:=left
 ```

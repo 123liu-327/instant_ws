@@ -1,0 +1,23 @@
+{
+  "backend": "zbar",
+  "decode_ms": 193.53317100012646,
+  "decoded": [
+    "https://mariasdrive.cloud/api/qrcode/electronic"
+  ],
+  "hit_stage": "zbar_enhanced_2.000000",
+  "image_path": "/home/ucar/instant_ws/qr_keyframes/qr_keyframe_000006_score_0.678_1786888311911.jpg",
+  "metrics": {
+    "clipped_ratio": 0.0,
+    "contrast": 0.4632796452680927,
+    "dark_ratio": 0.005423177083333334,
+    "frame_delta": null,
+    "score": 0.6781597527797972,
+    "sharpness": 1008.3477403818342,
+    "white_ratio": 0.14849934895833333
+  },
+  "opencv_ms": 0.0,
+  "sequence": 6,
+  "source": "stationary_keyframe",
+  "stamp": 1786888311.911834,
+  "zbar_ms": 185.39080429077148
+}
