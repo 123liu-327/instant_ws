@@ -54,7 +54,7 @@ CMAKE_BINARY_DIR = /home/ucar/instant_ws/build_src_pure_runtime_v3
 include ucar_controller/CMakeFiles/_ucar_controller_generate_messages_check_deps_GetBatteryInfo.dir/progress.make
 
 ucar_controller/CMakeFiles/_ucar_controller_generate_messages_check_deps_GetBatteryInfo:
-	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_controller && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py ucar_controller /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv sensor_msgs/BatteryState:std_msgs/Header
+	cd /home/ucar/instant_ws/build_src_pure_runtime_v3/ucar_controller && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py ucar_controller /home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv std_msgs/Header:sensor_msgs/BatteryState
 
 _ucar_controller_generate_messages_check_deps_GetBatteryInfo: ucar_controller/CMakeFiles/_ucar_controller_generate_messages_check_deps_GetBatteryInfo
 _ucar_controller_generate_messages_check_deps_GetBatteryInfo: ucar_controller/CMakeFiles/_ucar_controller_generate_messages_check_deps_GetBatteryInfo.dir/build.make

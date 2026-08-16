@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+import ast
 import json
 import os
 import sys
+import threading
+import time
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -30,6 +33,55 @@ from ucar_2026_competition.logic import (
     task2_announcement_required,
     trigger_delivery_state,
 )
+
+
+def load_trigger_rearm_harness():
+    """Load the real rearm/callback methods without starting ROS."""
+    controller_path = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), "..", "scripts",
+        "competition_flow_flowend_v1.py"))
+    with open(controller_path, "r", encoding="utf-8") as handle:
+        tree = ast.parse(handle.read(), filename=controller_path)
+    flow_class = next(
+        node for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "CompetitionFlow")
+    method_names = {"_rearm_target_trigger", "_navigator_cb"}
+    methods = [
+        node for node in flow_class.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and
+        node.name in method_names
+    ]
+    if {node.name for node in methods} != method_names:
+        raise AssertionError("trigger rearm methods are missing")
+
+    harness_class = ast.ClassDef(
+        name="TriggerRearmHarness",
+        bases=[],
+        keywords=[],
+        body=methods,
+        decorator_list=[],
+    )
+    module = ast.Module(body=[harness_class], type_ignores=[])
+    ast.fix_missing_locations(module)
+
+    class FakeRospy:
+        warnings = []
+        patrol_points = [
+            {"x": float(index), "y": -float(index), "yaw": 0.1 * index}
+            for index in range(1, 10)
+        ]
+
+        @classmethod
+        def logwarn(cls, *args):
+            cls.warnings.append(args)
+
+        @classmethod
+        def get_param(cls, _name, default=None):
+            return cls.patrol_points if cls.patrol_points else default
+
+    namespace = {"rospy": FakeRospy, "time": time}
+    exec(compile(module, controller_path, "exec"), namespace)
+    return namespace["TriggerRearmHarness"], FakeRospy
 
 
 class CompetitionLogicTest(unittest.TestCase):
@@ -313,6 +365,75 @@ class CompetitionLogicTest(unittest.TestCase):
                          "$(arg coverage_goal_soft_timeout_sec)")
         self.assertEqual(args["coverage_goal_hard_timeout_sec"],
                          "$(arg coverage_goal_hard_timeout_sec)")
+
+    def _armed_trigger_harness(self):
+        harness_type, fake_rospy = load_trigger_rearm_harness()
+        flow = harness_type()
+        flow.lock = threading.RLock()
+        flow.last_coverage_anchor_index = 5
+        flow.vision_trigger_latched = True
+        flow.trigger_request_pending = True
+        flow.trigger_request_started_at = 12.5
+        flow.trigger_service_accepted = True
+        flow.trigger_acknowledged = True
+        flow.ocr_filter = TemporalTargetFilter(2, 1.5)
+        self.assertFalse(flow.ocr_filter.push("food", "food", now=10.0))
+        self.assertTrue(flow.ocr_filter.push("food", "food", now=10.5))
+        flow.coverage_observation = {
+            "state": "scanning", "anchor_index": 5}
+        flow.coverage_observation_received_at = 10.5
+        flow.coverage_observation_log_signature = (5, "scanning", 0.0, 0.0)
+        flow.ocr_last_log_signature = ("food", "food", 2)
+        flow.navigator_status = "target_centering"
+        return flow, fake_rospy
+
+    def test_centering_recovery_rearms_trigger_and_requires_fresh_anchor(self):
+        flow, fake_rospy = self._armed_trigger_harness()
+        flow._navigator_cb(type("Msg", (), {"data": "centering_recovering"})())
+
+        self.assertFalse(flow.vision_trigger_latched)
+        self.assertFalse(flow.trigger_request_pending)
+        self.assertEqual(flow.trigger_request_started_at, 0.0)
+        self.assertFalse(flow.trigger_service_accepted)
+        self.assertFalse(flow.trigger_acknowledged)
+        self.assertEqual(flow.ocr_filter.hit_count, 0)
+        self.assertIsNone(flow.coverage_observation)
+        self.assertEqual(flow.coverage_observation_received_at, 0.0)
+        self.assertEqual(flow.last_coverage_anchor_index, 5)
+        self.assertEqual(flow.navigator_status, "centering_recovering")
+        self.assertTrue(any(
+            args and "TARGET_TRIGGER_REARMED" in args[0]
+            for args in fake_rospy.warnings))
+
+    def test_centering_recovery_is_idempotent_and_unrelated_states_do_not_rearm(self):
+        flow, _fake_rospy = self._armed_trigger_harness()
+        flow._navigator_cb(type("Msg", (), {"data": "parking_docking"})())
+        self.assertTrue(flow.vision_trigger_latched)
+        self.assertEqual(flow.ocr_filter.hit_count, 2)
+
+        recovering = type("Msg", (), {"data": "centering_recovering"})()
+        flow._navigator_cb(recovering)
+        flow._navigator_cb(recovering)
+        self.assertFalse(flow.vision_trigger_latched)
+        self.assertEqual(flow.ocr_filter.hit_count, 0)
+        self.assertEqual(flow.last_coverage_anchor_index, 5)
+
+    def test_fresh_anchor_observation_allows_one_new_confirmed_trigger(self):
+        flow, _fake_rospy = self._armed_trigger_harness()
+        flow._navigator_cb(type("Msg", (), {"data": "centering_recovering"})())
+        flow._navigator_cb(type(
+            "Msg", (), {"data": "coverage_anchor_observing:5"})())
+
+        self.assertEqual(flow.coverage_observation["state"], "scanning")
+        self.assertEqual(flow.coverage_observation["anchor_index"], 5)
+        self.assertGreater(flow.coverage_observation_received_at, 0.0)
+        trigger_count = 0
+        for stamp in (20.0, 20.5, 20.8):
+            confirmed = flow.ocr_filter.push("food", "food", now=stamp)
+            if confirmed and not flow.vision_trigger_latched:
+                flow.vision_trigger_latched = True
+                trigger_count += 1
+        self.assertEqual(trigger_count, 1)
 
 
 if __name__ == "__main__":

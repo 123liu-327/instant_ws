@@ -9,13 +9,13 @@ export SIM_BRIDGE_HOST='仿真电脑 IP'
 export TRAFFIC_X='...'
 export TRAFFIC_Y='...'
 export TRAFFIC_YAW='...'
-bash run_competition.sh
+bash /home/ucar/instant_ws/src/startup_scripts/run_competition.sh
 ```
 
 调试模式会启动 RViz：
 
 ```bash
-bash run_competition.sh --debug
+bash /home/ucar/instant_ws/src/startup_scripts/run_competition.sh --debug
 ```
 
 五个子任务可以独立启动：

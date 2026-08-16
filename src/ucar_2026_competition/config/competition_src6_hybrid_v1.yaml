@@ -71,6 +71,36 @@ target_center_timeout_sec: 20.0
 camera_boresight_yaw_offset: 0.292
 camera_horizontal_fov_deg: 70.0
 camera_bearing_sign: -1.0
+
+# 厂牌物理坐标定位首阶段只旁路观察，不改变现有导航和停车触发。
+# 完成三面墙及墙角实测后，将 shadow 改为 active 才接管触发门控。
+factory_sign_localization_mode: shadow
+factory_sign_localization_topic: /factory_sign/localization_estimate
+factory_sign_camera_info_topic: /usb_cam/camera_info
+factory_sign_sync_tolerance_sec: 0.20
+factory_sign_stationary_hold_sec: 0.30
+factory_sign_localization_required_hits: 2
+factory_sign_localization_evidence_window_sec: 1.5
+factory_sign_localization_max_samples: 24
+factory_sign_min_bbox_width_ratio: 0.09
+factory_sign_min_bbox_height_ratio: 0.06
+factory_sign_min_bbox_area_ratio: 0.006
+factory_sign_bbox_edge_margin_ratio: 0.02
+factory_sign_camera_x: 0.15
+factory_sign_camera_y: 0.0
+factory_sign_laser_x: 0.08
+factory_sign_laser_y: 0.0
+factory_sign_laser_yaw: 0.0
+factory_sign_wall_half_angle_deg: 20.0
+factory_sign_wall_min_points: 12
+factory_sign_wall_min_span: 0.25
+factory_sign_wall_max_residual: 0.02
+factory_sign_non_target_min_scan_steps: 2
+factory_sign_room_corners:
+  - [-2.2311, -1.2505]
+  - [ 2.8000, -1.1940]
+  - [-2.2197, -3.2746]
+  - [ 2.7739, -3.2186]
 factory_navigation_timeout_sec: 420.0
 # Execute two physical parking operations. The actual simulator is postponed;
 # after the second parking, hold still for this interval and continue.

@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+
+import math
+import unittest
+
+from sign_memory_parking_logic_v1 import (
+    alternate_cardinal_yaw,
+    choose_lateral_dodge,
+    fit_front_wall,
+    front_obstacle_is_localized,
+    lateral_velocity_for_image_error,
+    local_forward_displacement,
+    local_lateral_displacement,
+    nearest_cardinal_yaw,
+    projected_lateral_offset,
+)
+
+
+class SignMemoryParkingLogicTest(unittest.TestCase):
+    def test_sign_on_right_moves_robot_right(self):
+        self.assertLess(lateral_velocity_for_image_error(
+            0.4, 0.2, 0.02, 0.1), 0.0)
+
+    def test_sign_on_left_moves_robot_left(self):
+        self.assertGreater(lateral_velocity_for_image_error(
+            -0.4, 0.2, 0.02, 0.1), 0.0)
+
+    def test_wall_fit_returns_right_turn_for_left_yaw(self):
+        yaw_error = 0.18
+        points = []
+        for index in range(41):
+            y = -0.5 + index * 0.025
+            x = 0.62 / math.cos(yaw_error) + math.tan(yaw_error) * y
+            points.append((x, y))
+        fit = fit_front_wall(points)
+        self.assertIsNotNone(fit)
+        self.assertAlmostEqual(fit["heading_error"], -yaw_error, places=2)
+
+    def test_short_cone_cluster_is_not_a_wall(self):
+        points = [(0.35 + index * 0.002, -0.04 + index * 0.004)
+                  for index in range(20)]
+        self.assertIsNone(fit_front_wall(points))
+
+    def test_body_frame_displacements(self):
+        start = (1.0, 2.0, math.pi * 0.5)
+        current = (0.8, 2.3, math.pi * 0.5)
+        self.assertAlmostEqual(local_forward_displacement(
+            start, current, math.pi * 0.5), 0.3, places=6)
+        self.assertAlmostEqual(local_lateral_displacement(
+            start, current, math.pi * 0.5), 0.2, places=6)
+
+    def test_nearest_cardinal(self):
+        self.assertAlmostEqual(nearest_cardinal_yaw(math.radians(82.0)),
+                               math.pi * 0.5)
+
+    def test_projected_sign_on_right_is_rightward(self):
+        offset = projected_lateral_offset(
+            0.7, 0.49, math.radians(70.0), 0.88)
+        self.assertLess(offset, 0.0)
+        self.assertAlmostEqual(offset, -0.211, places=2)
+
+    def test_clockwise_primary_retries_counterclockwise(self):
+        target, direction, correction = alternate_cardinal_yaw(
+            math.radians(35.0), 0.0)
+        self.assertLess(correction, 0.0)
+        self.assertGreater(direction, 0.0)
+        self.assertAlmostEqual(target, math.pi * 0.5)
+
+    def test_counterclockwise_primary_retries_clockwise(self):
+        target, direction, correction = alternate_cardinal_yaw(
+            math.radians(55.0), math.pi * 0.5)
+        self.assertGreater(correction, 0.0)
+        self.assertLess(direction, 0.0)
+        self.assertAlmostEqual(target, 0.0)
+
+    def test_front_cone_is_distinguished_from_far_wall(self):
+        self.assertTrue(front_obstacle_is_localized(
+            0.14, 0.48, 0.20, 0.16, 0.10))
+
+    def test_close_wall_is_not_treated_as_cone(self):
+        self.assertFalse(front_obstacle_is_localized(
+            0.14, 0.18, 0.20, 0.16, 0.10))
+
+    def test_lateral_dodge_uses_more_open_side(self):
+        self.assertEqual(choose_lateral_dodge(0.38, 0.24, 0.18), 1)
+        self.assertEqual(choose_lateral_dodge(0.20, 0.35, 0.18), -1)
+        self.assertEqual(choose_lateral_dodge(0.15, 0.16, 0.18), 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

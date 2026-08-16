@@ -18,7 +18,7 @@
 
 当前存在三种入口：
 
-1. `bash /home/ucar/instant_ws/src/run_competition.sh`：当前比赛包装脚本，组合旧 ASR、当前 TTS、Python IAT 和比赛业务。
+1. `bash /home/ucar/instant_ws/src/startup_scripts/run_competition.sh`：当前比赛包装脚本，组合旧 ASR、当前 TTS、Python IAT 和比赛业务。
 2. `roslaunch ucar_2026_competition full_competition.launch`：直接比赛 launch；默认也会启用旧外部 ASR 链。
 3. `roslaunch speech_command speech_command.launch`：语言包独立链，启动 `cloud_asr_test2` 和 Spark LLM；它不是当前比赛包装脚本使用的 ASR 链。
 
@@ -60,7 +60,7 @@
 当前脚本实际执行：
 
 ```text
-/home/ucar/instant_ws/src/run_competition.sh
+/home/ucar/instant_ws/src/startup_scripts/run_competition.sh
   ├─ 启动 roscore
   ├─ 启动旧 ASR 可执行文件
   │    /home/ucar/ucar_ws/devel/lib/speech_command/speech_command_node
@@ -425,7 +425,7 @@ ucar_2026_competition_speech/scripts/competition_announcer.py
 
 | 路径 | 大致功能 |
 |---|---|
-| `src/run_competition.sh` | 当前比赛总启动包装；显式组合旧 ASR、当前 TTS、Python IAT 和正式 launch |
+| `src/startup_scripts/run_competition.sh` | 当前比赛总启动包装；显式组合旧 ASR、当前 TTS、Python IAT 和正式 launch |
 | `ucar_2026_competition/launch/common_core.launch` | 按参数启动外部 ASR、fixed IAT、TTS、播报网关和 LLM |
 | `ucar_2026_competition/launch/full_competition.launch` | 正式全流程入口；`start_external_voice` 默认 `true` |
 | `ucar_2026_competition/scripts/external_voice_nodes.py` | 旧 `/home/ucar/ucar_ws` ASR 可执行文件的启动/看护器 |

@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="ucar_2026_smart_factory_llm"
+        type="reason_pickup_existing_spark_v1.py"
+        name="smart_factory_llm" output="log" required="true">
+    <param name="spark_timeout_s" value="25.0" />
+    <param name="max_attempts" value="2" />
+  </node>
+</launch>

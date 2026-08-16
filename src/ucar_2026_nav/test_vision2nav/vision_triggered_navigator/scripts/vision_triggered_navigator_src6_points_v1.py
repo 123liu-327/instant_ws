@@ -830,9 +830,22 @@ class VisionTriggeredNavigator(object):
     # 回调与工具函数
     # ------------------------------------------------------------------
     def _costmap_cb(self, msg):
-        """保存最新 costmap"""
+        """Save one costmap snapshot, then release the high-bandwidth stream."""
         self.costmap = msg
         self.costmap_received_at = rospy.get_time()
+        rospy.Timer(
+            rospy.Duration(0.01),
+            self._release_costmap_subscription,
+            oneshot=True)
+
+    def _release_costmap_subscription(self, _event=None):
+        sub = self.costmap_sub
+        self.costmap_sub = None
+        if sub is not None:
+            try:
+                sub.unregister()
+            except Exception:
+                pass
 
     def _ensure_costmap_subscription(self):
         if self.costmap_sub is not None:
@@ -842,11 +855,11 @@ class VisionTriggeredNavigator(object):
             OccupancyGrid,
             self._costmap_cb,
             queue_size=1,
-            buff_size=4 * 1024 * 1024,
+            buff_size=1024 * 1024,
             tcp_nodelay=True,
         )
         rospy.loginfo(
-            "[vision_triggered_navigator] costmap subscription enabled after navigation release")
+            "[vision_triggered_navigator] one-shot costmap snapshot requested")
 
     def _odom_cb(self, msg):
         """Keep a fresh odom pose for centering and final docking."""
@@ -1267,15 +1280,36 @@ class VisionTriggeredNavigator(object):
 
         x = self.coverage_entry_x
         y = self.coverage_entry_y
-        yaw = self.coverage_entry_yaw
         self._publish_status("coverage_entry_transit")
         rospy.logwarn(
-            "[ROOM NAV] entry transit target=(%.2f, %.2f, %.2f); "
-            "scan order remains unchanged",
-            x, y, yaw)
+            "[ROOM NAV] entry transit position-only target=(%.2f, %.2f) "
+            "tolerance=%.2fm; final yaw is ignored and scan order remains "
+            "unchanged",
+            x, y, self.coverage_entry_tolerance)
 
         for attempt in range(self.coverage_entry_retry_count + 1):
-            result = self.send_goal(x, y, yaw)
+            pose_before = self._get_robot_pose(self.base_frame)
+            distance_before = None
+            if pose_before is not None:
+                distance_before = math.hypot(
+                    x - pose_before[0], y - pose_before[1])
+                goal_yaw = pose_before[2]
+            else:
+                goal_yaw = self.coverage_entry_yaw
+            if (distance_before is not None and
+                    distance_before <= self.coverage_entry_tolerance):
+                self.cmd_vel_pub.publish(Twist())
+                self._publish_status("coverage_entry_reached")
+                rospy.logwarn(
+                    "[ROOM NAV] entry position already reached "
+                    "distance=%.2fm; current yaw accepted",
+                    distance_before)
+                return "reached"
+
+            result = self.send_goal(
+                x, y, goal_yaw,
+                position_only=True,
+                position_tolerance=self.coverage_entry_tolerance)
             if self.triggered:
                 rospy.logwarn(
                     "[ROOM NAV] target OCR locked during entry transit; "
@@ -1634,6 +1668,7 @@ class VisionTriggeredNavigator(object):
             rospy.logerr("[vision_triggered_navigator] 清理costmap失败: %s", str(exc))
             return False
         called_at = rospy.get_time()
+        self._ensure_costmap_subscription()
         deadline = rospy.get_time() + max(0.1, float(timeout))
         rate = rospy.Rate(20)
         while not rospy.is_shutdown() and rospy.get_time() < deadline:
@@ -1768,7 +1803,8 @@ class VisionTriggeredNavigator(object):
     # ------------------------------------------------------------------
     # 动作执行
     # ------------------------------------------------------------------
-    def send_goal(self, x, y, yaw):
+    def send_goal(self, x, y, yaw, position_only=False,
+                  position_tolerance=None):
         """
         发送导航目标并等待结果。
         等待期间启动定时器实时检查目标可行性。
@@ -1782,8 +1818,12 @@ class VisionTriggeredNavigator(object):
         self.current_goal_needs_yaw_alignment = False
         self.current_goal_near_observation = False
         self.current_goal_clearance_stop = False
+        self.current_goal_position_only_reached = False
         self.coverage_rotation_block_count = 0
         self.coverage_rotation_last_scan_at = 0.0
+        if position_tolerance is None:
+            position_tolerance = self.coverage_anchor_position_tolerance
+        position_tolerance = max(0.01, float(position_tolerance))
         if (self.coverage_search_mode and
                 not self._set_coverage_speed_profile(
                     "cruise", force=True)):
@@ -1798,7 +1838,10 @@ class VisionTriggeredNavigator(object):
         goal.target_pose.pose.position.y = y
         goal.target_pose.pose.orientation = euler_to_quaternion(yaw)
 
-        rospy.loginfo("[vision_triggered_navigator] 发送导航目标: x=%.4f y=%.4f yaw=%.4f", x, y, yaw)
+        rospy.loginfo(
+            "[vision_triggered_navigator] 发送导航目标: x=%.4f y=%.4f "
+            "yaw=%.4f position_only=%s tolerance=%.3f",
+            x, y, yaw, position_only, position_tolerance)
         self.move_base_client.send_goal(goal)
 
         timer = None
@@ -1928,6 +1971,17 @@ class VisionTriggeredNavigator(object):
                     if pose is not None:
                         latest_distance = math.hypot(x - pose[0], y - pose[1])
                         latest_yaw_error = abs(normalize_angle(yaw - pose[2]))
+                        if (position_only and
+                                latest_distance <= position_tolerance):
+                            self.current_goal_position_only_reached = True
+                            self.cmd_vel_pub.publish(Twist())
+                            rospy.logwarn(
+                                "[vision_triggered_navigator] position-only "
+                                "goal reached distance=%.3fm <= %.3fm; "
+                                "accept current yaw and cancel move_base.",
+                                latest_distance, position_tolerance)
+                            self.cancel_goal()
+                            break
                         if rotation_window_pose is None:
                             rotation_window_pose = pose
                             rotation_window_yaw = pose[2]
@@ -2061,7 +2115,8 @@ class VisionTriggeredNavigator(object):
         if (self.current_goal_timed_out or self.current_goal_rotation_stall or
                 self.current_goal_needs_yaw_alignment or
                 self.current_goal_near_observation or
-                self.current_goal_clearance_stop):
+                self.current_goal_clearance_stop or
+                self.current_goal_position_only_reached):
             self.move_base_client.wait_for_result(rospy.Duration(1.0))
         final_state = self.move_base_client.get_state()
 

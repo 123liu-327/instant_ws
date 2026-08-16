@@ -1,0 +1,59 @@
+# Eight-point scan override for the current-front + 39ff room hybrid.
+# There is no room-entry transition goal. The former P4 (-1.65, -1.77) is
+# removed completely, so navigation starts directly with P1 below.
+patrol_points:
+  # P1: -45 deg, clockwise to -120 deg.
+  - x: -0.70
+    y: -2.82
+    yaw: -0.7854
+    rotations:
+      - {direction: "right", duration: 2.6180}
+
+  # P2: -60 deg, clockwise to +120 deg.
+  - x: -1.63
+    y: -2.79
+    yaw: -1.0472
+    rotations:
+      - {direction: "right", duration: 6.2832}
+
+  # P3: 180 deg, clockwise to +90 deg.
+  - x: -1.66
+    y: -2.28
+    yaw: 3.1416
+    rotations:
+      - {direction: "right", duration: 3.1416}
+
+  # P4 (former P5).
+  - x: 0.30
+    y: -1.77
+    yaw: 0.89
+    rotations:
+      - {direction: "left", duration: 4.00}
+
+  # P5 (former P6).
+  - x: 1.26
+    y: -1.77
+    yaw: 0.85
+    rotations:
+      - {direction: "left", duration: 4.00}
+
+  # P6 (former P7).
+  - x: 2.35
+    y: -1.77
+    yaw: -0.86
+    rotations:
+      - {direction: "left", duration: 4.50}
+
+  # P7 (former P8).
+  - x: 2.34
+    y: -2.74
+    yaw: -2.18
+    rotations:
+      - {direction: "left", duration: 4.50}
+
+  # P8 (former P9).
+  - x: 1.27
+    y: -2.89
+    yaw: -1.54
+    rotations:
+      - {direction: "right", duration: 3.00}

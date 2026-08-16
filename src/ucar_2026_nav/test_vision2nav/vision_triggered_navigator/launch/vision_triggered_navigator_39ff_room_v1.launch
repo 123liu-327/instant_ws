@@ -1,0 +1,229 @@
+<launch>
+  <!-- vision_triggered_navigator 启动文件 -->
+
+  <arg name="trigger_mode" default="keyboard" />
+  <arg name="vision_topic" default="/vision/detected" />
+  <arg name="status_topic" default="/vision_triggered_navigator/status" />
+  <arg name="trigger_service" default="/vision_triggered_navigator/trigger_target" />
+  <arg name="start_paused" default="false" />
+  <arg name="start_navigation_service" default="/vision_triggered_navigator/start_navigation" />
+  <arg name="coverage_observation_topic" default="/vision_triggered_navigator/coverage_observation" />
+  <arg name="preferred_coverage_anchor" default="0" />
+  <!-- Inputs shared with the current controller. -->
+  <arg name="config_profile" default="" />
+  <arg name="non_target_topic" default="/vision/non_target_observation" />
+  <arg name="coverage_non_target_early_exit" default="false" />
+  <arg name="coverage_non_target_min_scan_steps" default="2" />
+  <arg name="coverage_preferred_odom_yaw_enabled" default="false" />
+  <arg name="coverage_preferred_odom_yaw" default="0.0" />
+  <arg name="publish_initial_pose" default="true" />
+  <arg name="navigate_to_end_after_trigger" default="true" />
+  <arg name="coverage_search_mode" default="false" />
+  <arg name="coverage_goal_soft_timeout_sec" default="25.0" />
+  <arg name="coverage_goal_hard_timeout_sec" default="40.0" />
+  <arg name="coverage_goal_progress_window_sec" default="5.0" />
+  <arg name="coverage_goal_min_progress" default="0.03" />
+  <arg name="coverage_anchor_position_tolerance" default="0.28" />
+  <arg name="coverage_anchor_yaw_tolerance_deg" default="5.0" />
+  <arg name="coverage_anchor_yaw_hold_sec" default="0.20" />
+  <arg name="coverage_anchor_yaw_timeout_sec" default="12.0" />
+  <arg name="coverage_no_progress_timeout_sec" default="5.5" />
+  <arg name="coverage_fallback_enabled" default="true" />
+  <arg name="coverage_fallback_make_plan_tolerance_m" default="0.12" />
+  <arg name="target_topic" default="/vision/target" />
+  <arg name="target_center_steering_sign" default="-1.0" />
+  <arg name="parking_recenter_lateral_sign" default="1.0" />
+  <arg name="camera_boresight_yaw_offset" default="0.0" />
+  <arg name="camera_horizontal_fov_deg" default="70.0" />
+  <arg name="camera_bearing_sign" default="-1.0" />
+  <arg name="center_only" default="false" />
+  <arg name="max_coverage_anchors" default="0" />
+  <arg name="vision_offset" default="0.4" />
+  <arg name="coverage_scan_step_deg" default="20.0" />
+  <arg name="coverage_scan_angular_speed" default="0.35" />
+  <arg name="coverage_scan_dwell_sec" default="0.65" />
+  <arg name="coverage_candidate_hold_sec" default="1.2" />
+  <arg name="coverage_scan_max_dwell_sec" default="2.0" />
+  <arg name="coverage_scan_pose_timeout_sec" default="0.5" />
+  <arg name="target_center_coarse_step_deg" default="4.0" />
+  <arg name="target_center_fine_step_deg" default="2.0" />
+  <arg name="target_center_start_speed" default="0.20" />
+  <arg name="target_center_step_max_speed" default="0.35" />
+  <arg name="target_center_timeout_sec" default="12.0" />
+  <arg name="validate_parking_box" default="false" />
+  <arg name="parking_box_width" default="0.50" />
+  <arg name="parking_box_depth" default="0.50" />
+  <arg name="parking_goal_offset" default="0.4" />
+  <arg name="parking_staging_offset" default="0.55" />
+  <arg name="parking_staging_timeout_sec" default="20.0" />
+  <arg name="parking_staging_position_tolerance" default="0.10" />
+  <arg name="parking_staging_yaw_tolerance" default="0.10" />
+  <arg name="parking_docking_timeout_sec" default="15.0" />
+  <arg name="parking_dock_max_x" default="0.12" />
+  <arg name="parking_dock_max_y" default="0.08" />
+  <arg name="parking_dock_max_yaw" default="0.22" />
+  <arg name="parking_dock_min_yaw" default="0.05" />
+  <arg name="parking_dock_normal_tolerance" default="0.035" />
+  <arg name="parking_dock_tangent_tolerance" default="0.015" />
+  <arg name="parking_dock_yaw_tolerance" default="0.05" />
+  <arg name="parking_dock_translation_yaw_gate" default="0.22" />
+  <arg name="parking_dock_forward_yaw_gate" default="0.14" />
+  <arg name="parking_dock_forward_tangent_gate" default="0.12" />
+  <arg name="parking_min_wall_distance" default="0.19" />
+  <arg name="parking_lidar_stop_distance" default="0.15" />
+  <arg name="parking_recenter_tolerance" default="0.04" />
+  <arg name="parking_recenter_timeout_sec" default="4.0" />
+  <arg name="parking_recenter_initial_wait_sec" default="1.0" />
+  <arg name="parking_recenter_lateral_kp" default="0.16" />
+  <arg name="parking_recenter_min_lateral" default="0.015" />
+  <arg name="parking_recenter_max_lateral" default="0.065" />
+  <arg name="parking_recenter_max_travel" default="0.30" />
+  <arg name="parking_recenter_yaw_kp" default="1.0" />
+  <arg name="parking_recenter_yaw_tolerance_deg" default="2.0" />
+  <arg name="parking_recenter_max_yaw" default="0.18" />
+  <arg name="parking_recenter_stable_sec" default="0.25" />
+  <arg name="parking_recenter_required_hits" default="3" />
+  <arg name="parking_recenter_side_half_angle_deg" default="25.0" />
+  <arg name="parking_recenter_side_stop_m" default="0.18" />
+  <arg name="parking_recenter_side_slow_m" default="0.28" />
+  <arg name="parking_wall_fit_half_angle_deg" default="35.0" />
+  <arg name="parking_wall_fit_min_points" default="12" />
+  <arg name="parking_wall_fit_min_span" default="0.25" />
+  <arg name="parking_wall_fit_near_min_span" default="0.18" />
+  <arg name="parking_wall_fit_max_distance_jump" default="0.05" />
+  <arg name="parking_wall_fit_max_normal_jump_deg" default="8.0" />
+  <arg name="parking_wall_fit_max_residual" default="0.015" />
+  <arg name="parking_wall_fit_max_normal_error_deg" default="20.0" />
+  <arg name="parking_wall_fit_grace_sec" default="1.5" />
+  <arg name="parking_wall_fit_filter_alpha" default="0.45" />
+  <arg name="parking_cardinal_fallback_enabled" default="true" />
+  <arg name="parking_cardinal_align_timeout_sec" default="8.0" />
+  <arg name="parking_cardinal_align_tolerance_deg" default="4.0" />
+  <arg name="parking_cardinal_align_max_yaw" default="0.20" />
+  <arg name="parking_cardinal_fallback_timeout_sec" default="20.0" />
+  <arg name="parking_cardinal_min_forward" default="0.025" />
+  <arg name="parking_cardinal_max_forward" default="0.08" />
+  <arg name="parking_cardinal_distance_tolerance_m" default="0.02" />
+  <arg name="parking_cardinal_forward_center_gate" default="0.12" />
+  <arg name="parking_normal_offset" default="0.0" />
+  <arg name="parking_tangent_offset" default="0.0" />
+  <arg name="parking_xy_tolerance" default="0.04" />
+  <arg name="parking_yaw_tolerance" default="0.06" />
+  <arg name="python_executable" default="/usr/bin/python3" />
+
+  <!-- 加载参数 -->
+  <rosparam file="$(find vision_triggered_navigator)/config/vision_triggered_navigator.yaml" command="load" ns="vision_triggered_navigator" />
+  <!-- Override the patrol list with eight points and no entry transition. -->
+  <rosparam file="$(find vision_triggered_navigator)/config/vision_triggered_navigator_39ff_room_8points_v1.yaml" command="load" ns="vision_triggered_navigator" />
+
+  <!-- 启动导航节点 -->
+  <node pkg="vision_triggered_navigator" type="vision_triggered_navigator_39ff_wall_fallback_v1.py" name="vision_triggered_navigator" output="screen" launch-prefix="$(arg python_executable)">
+    <!-- 示例：命令行覆盖触发模式或目标点
+         roslaunch vision_triggered_navigator vision_triggered_navigator.launch trigger_mode:=vision
+    -->
+    <param name="trigger_mode" value="$(arg trigger_mode)" />
+    <param name="vision_topic" value="$(arg vision_topic)" />
+    <param name="status_topic" value="$(arg status_topic)" />
+    <param name="trigger_service" value="$(arg trigger_service)" />
+    <param name="start_paused" value="$(arg start_paused)" />
+    <param name="start_navigation_service" value="$(arg start_navigation_service)" />
+    <param name="coverage_observation_topic" value="$(arg coverage_observation_topic)" />
+    <param name="preferred_coverage_anchor" value="$(arg preferred_coverage_anchor)" />
+    <param name="coverage_preferred_odom_yaw_enabled" value="$(arg coverage_preferred_odom_yaw_enabled)" />
+    <param name="coverage_preferred_odom_yaw" value="$(arg coverage_preferred_odom_yaw)" />
+    <param name="publish_initial_pose" value="$(arg publish_initial_pose)" />
+    <param name="navigate_to_end_after_trigger" value="$(arg navigate_to_end_after_trigger)" />
+    <param name="coverage_search_mode" value="$(arg coverage_search_mode)" />
+    <param name="coverage_goal_soft_timeout_sec" value="$(arg coverage_goal_soft_timeout_sec)" />
+    <param name="coverage_goal_hard_timeout_sec" value="$(arg coverage_goal_hard_timeout_sec)" />
+    <param name="coverage_goal_progress_window_sec" value="$(arg coverage_goal_progress_window_sec)" />
+    <param name="coverage_goal_min_progress" value="$(arg coverage_goal_min_progress)" />
+    <param name="coverage_anchor_position_tolerance" value="$(arg coverage_anchor_position_tolerance)" />
+    <param name="coverage_anchor_yaw_tolerance_deg" value="$(arg coverage_anchor_yaw_tolerance_deg)" />
+    <param name="coverage_anchor_yaw_hold_sec" value="$(arg coverage_anchor_yaw_hold_sec)" />
+    <param name="coverage_anchor_yaw_timeout_sec" value="$(arg coverage_anchor_yaw_timeout_sec)" />
+    <param name="coverage_no_progress_timeout_sec" value="$(arg coverage_no_progress_timeout_sec)" />
+    <param name="coverage_fallback_enabled" value="$(arg coverage_fallback_enabled)" />
+    <param name="coverage_fallback_make_plan_tolerance_m" value="$(arg coverage_fallback_make_plan_tolerance_m)" />
+    <param name="target_topic" value="$(arg target_topic)" />
+    <param name="target_center_steering_sign" value="$(arg target_center_steering_sign)" />
+    <param name="parking_recenter_lateral_sign" value="$(arg parking_recenter_lateral_sign)" />
+    <param name="camera_boresight_yaw_offset" value="$(arg camera_boresight_yaw_offset)" />
+    <param name="camera_horizontal_fov_deg" value="$(arg camera_horizontal_fov_deg)" />
+    <param name="camera_bearing_sign" value="$(arg camera_bearing_sign)" />
+    <param name="center_only" value="$(arg center_only)" />
+    <param name="max_coverage_anchors" value="$(arg max_coverage_anchors)" />
+    <param name="vision_offset" value="$(arg vision_offset)" />
+    <param name="coverage_scan_step_deg" value="$(arg coverage_scan_step_deg)" />
+    <param name="coverage_scan_angular_speed" value="$(arg coverage_scan_angular_speed)" />
+    <param name="coverage_scan_dwell_sec" value="$(arg coverage_scan_dwell_sec)" />
+    <param name="coverage_candidate_hold_sec" value="$(arg coverage_candidate_hold_sec)" />
+    <param name="coverage_scan_max_dwell_sec" value="$(arg coverage_scan_max_dwell_sec)" />
+    <param name="coverage_scan_pose_timeout_sec" value="$(arg coverage_scan_pose_timeout_sec)" />
+    <param name="target_center_coarse_step_deg" value="$(arg target_center_coarse_step_deg)" />
+    <param name="target_center_fine_step_deg" value="$(arg target_center_fine_step_deg)" />
+    <param name="target_center_start_speed" value="$(arg target_center_start_speed)" />
+    <param name="target_center_step_max_speed" value="$(arg target_center_step_max_speed)" />
+    <param name="target_center_timeout_sec" value="$(arg target_center_timeout_sec)" />
+    <param name="validate_parking_box" value="$(arg validate_parking_box)" />
+    <param name="parking_box_width" value="$(arg parking_box_width)" />
+    <param name="parking_box_depth" value="$(arg parking_box_depth)" />
+    <param name="parking_goal_offset" value="$(arg parking_goal_offset)" />
+    <param name="parking_staging_offset" value="$(arg parking_staging_offset)" />
+    <param name="parking_staging_timeout_sec" value="$(arg parking_staging_timeout_sec)" />
+    <param name="parking_staging_position_tolerance" value="$(arg parking_staging_position_tolerance)" />
+    <param name="parking_staging_yaw_tolerance" value="$(arg parking_staging_yaw_tolerance)" />
+    <param name="parking_docking_timeout_sec" value="$(arg parking_docking_timeout_sec)" />
+    <param name="parking_dock_max_x" value="$(arg parking_dock_max_x)" />
+    <param name="parking_dock_max_y" value="$(arg parking_dock_max_y)" />
+    <param name="parking_dock_max_yaw" value="$(arg parking_dock_max_yaw)" />
+    <param name="parking_dock_min_yaw" value="$(arg parking_dock_min_yaw)" />
+    <param name="parking_dock_normal_tolerance" value="$(arg parking_dock_normal_tolerance)" />
+    <param name="parking_dock_tangent_tolerance" value="$(arg parking_dock_tangent_tolerance)" />
+    <param name="parking_dock_yaw_tolerance" value="$(arg parking_dock_yaw_tolerance)" />
+    <param name="parking_dock_translation_yaw_gate" value="$(arg parking_dock_translation_yaw_gate)" />
+    <param name="parking_dock_forward_yaw_gate" value="$(arg parking_dock_forward_yaw_gate)" />
+    <param name="parking_dock_forward_tangent_gate" value="$(arg parking_dock_forward_tangent_gate)" />
+    <param name="parking_min_wall_distance" value="$(arg parking_min_wall_distance)" />
+    <param name="parking_lidar_stop_distance" value="$(arg parking_lidar_stop_distance)" />
+    <param name="parking_recenter_tolerance" value="$(arg parking_recenter_tolerance)" />
+    <param name="parking_recenter_timeout_sec" value="$(arg parking_recenter_timeout_sec)" />
+    <param name="parking_recenter_initial_wait_sec" value="$(arg parking_recenter_initial_wait_sec)" />
+    <param name="parking_recenter_lateral_kp" value="$(arg parking_recenter_lateral_kp)" />
+    <param name="parking_recenter_min_lateral" value="$(arg parking_recenter_min_lateral)" />
+    <param name="parking_recenter_max_lateral" value="$(arg parking_recenter_max_lateral)" />
+    <param name="parking_recenter_max_travel" value="$(arg parking_recenter_max_travel)" />
+    <param name="parking_recenter_yaw_kp" value="$(arg parking_recenter_yaw_kp)" />
+    <param name="parking_recenter_yaw_tolerance_deg" value="$(arg parking_recenter_yaw_tolerance_deg)" />
+    <param name="parking_recenter_max_yaw" value="$(arg parking_recenter_max_yaw)" />
+    <param name="parking_recenter_stable_sec" value="$(arg parking_recenter_stable_sec)" />
+    <param name="parking_recenter_required_hits" value="$(arg parking_recenter_required_hits)" />
+    <param name="parking_recenter_side_half_angle_deg" value="$(arg parking_recenter_side_half_angle_deg)" />
+    <param name="parking_recenter_side_stop_m" value="$(arg parking_recenter_side_stop_m)" />
+    <param name="parking_recenter_side_slow_m" value="$(arg parking_recenter_side_slow_m)" />
+    <param name="parking_wall_fit_half_angle_deg" value="$(arg parking_wall_fit_half_angle_deg)" />
+    <param name="parking_wall_fit_min_points" value="$(arg parking_wall_fit_min_points)" />
+    <param name="parking_wall_fit_min_span" value="$(arg parking_wall_fit_min_span)" />
+    <param name="parking_wall_fit_near_min_span" value="$(arg parking_wall_fit_near_min_span)" />
+    <param name="parking_wall_fit_max_distance_jump" value="$(arg parking_wall_fit_max_distance_jump)" />
+    <param name="parking_wall_fit_max_normal_jump_deg" value="$(arg parking_wall_fit_max_normal_jump_deg)" />
+    <param name="parking_wall_fit_max_residual" value="$(arg parking_wall_fit_max_residual)" />
+    <param name="parking_wall_fit_max_normal_error_deg" value="$(arg parking_wall_fit_max_normal_error_deg)" />
+    <param name="parking_wall_fit_grace_sec" value="$(arg parking_wall_fit_grace_sec)" />
+    <param name="parking_wall_fit_filter_alpha" value="$(arg parking_wall_fit_filter_alpha)" />
+    <param name="parking_cardinal_fallback_enabled" value="$(arg parking_cardinal_fallback_enabled)" />
+    <param name="parking_cardinal_align_timeout_sec" value="$(arg parking_cardinal_align_timeout_sec)" />
+    <param name="parking_cardinal_align_tolerance_deg" value="$(arg parking_cardinal_align_tolerance_deg)" />
+    <param name="parking_cardinal_align_max_yaw" value="$(arg parking_cardinal_align_max_yaw)" />
+    <param name="parking_cardinal_fallback_timeout_sec" value="$(arg parking_cardinal_fallback_timeout_sec)" />
+    <param name="parking_cardinal_min_forward" value="$(arg parking_cardinal_min_forward)" />
+    <param name="parking_cardinal_max_forward" value="$(arg parking_cardinal_max_forward)" />
+    <param name="parking_cardinal_distance_tolerance_m" value="$(arg parking_cardinal_distance_tolerance_m)" />
+    <param name="parking_cardinal_forward_center_gate" value="$(arg parking_cardinal_forward_center_gate)" />
+    <param name="parking_normal_offset" value="$(arg parking_normal_offset)" />
+    <param name="parking_tangent_offset" value="$(arg parking_tangent_offset)" />
+    <param name="parking_xy_tolerance" value="$(arg parking_xy_tolerance)" />
+    <param name="parking_yaw_tolerance" value="$(arg parking_yaw_tolerance)" />
+  </node>
+
+</launch>

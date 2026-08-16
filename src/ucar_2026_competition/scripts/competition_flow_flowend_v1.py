@@ -13,7 +13,7 @@ import subprocess
 import threading
 import time
 import uuid
-from collections import OrderedDict
+from collections import OrderedDict, deque
 
 import actionlib
 import rosnode
@@ -27,7 +27,7 @@ from move_base_msgs.msg import (
     MoveBaseGoal,
 )
 from nav_msgs.msg import OccupancyGrid, Odometry
-from sensor_msgs.msg import Image, LaserScan
+from sensor_msgs.msg import CameraInfo, Image, LaserScan
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Empty, SetBool, Trigger, TriggerResponse
 from ucar_2026_competition_speech.srv import Announce
@@ -50,6 +50,21 @@ from ucar_2026_competition.logic import (
     task4_start_action,
     traffic_decision_from_payload,
     trigger_delivery_state,
+)
+from ucar_2026_competition.factory_sign_localization import (
+    FactorySignFusion,
+    bbox_metrics,
+    build_room_walls,
+    camera_bearing,
+    fit_wall_line,
+    inverse_transform_point,
+    map_wall_fallback,
+    observation_gate,
+    observation_quality,
+    ray_wall_intersection,
+    scan_points_in_sector,
+    transform_point,
+    transform_vector,
 )
 
 
@@ -74,6 +89,25 @@ def _bounded_float(value, default=0.0, lower=0.0, upper=1.0):
     except (TypeError, ValueError):
         number = float(default)
     return max(lower, min(upper, number))
+
+
+def _message_stamp(msg, fallback=None):
+    try:
+        stamp = float(msg.header.stamp.to_sec())
+    except (AttributeError, TypeError, ValueError):
+        stamp = 0.0
+    if stamp > 0.0 and math.isfinite(stamp):
+        return stamp
+    return float(rospy.get_time() if fallback is None else fallback)
+
+
+def _nearest_stamped(samples, target_stamp, maximum_delta):
+    if not samples:
+        return None
+    target_stamp = float(target_stamp)
+    best = min(samples, key=lambda sample: abs(float(sample[0]) - target_stamp))
+    return best if abs(float(best[0]) - target_stamp) <= abs(
+        float(maximum_delta)) else None
 
 
 def ocr_observation_quality(payload):
@@ -155,6 +189,12 @@ class CompetitionFlow:
             queue_size=20,
             latch=True,
         )
+        self.workflow_pub = rospy.Publisher(
+            rospy.get_param("~workflow_topic", "/competition/workflow"),
+            String,
+            queue_size=1,
+            latch=True,
+        )
         self.result_pub = rospy.Publisher(
             rospy.get_param("~task1_result_topic", "/competition/task1_result"),
             String,
@@ -173,6 +213,13 @@ class CompetitionFlow:
         self.cmd_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=2)
         self.vision_target_pub = rospy.Publisher(
             "/vision/target", String, queue_size=10)
+        self.vision_non_target_pub = rospy.Publisher(
+            "/vision/non_target_observation", String, queue_size=10)
+        self.factory_sign_estimate_pub = rospy.Publisher(
+            rospy.get_param(
+                "~factory_sign_localization_topic",
+                "/factory_sign/localization_estimate"),
+            String, queue_size=10, latch=True)
 
         self.wakeup_received = False
         self.voice_prompt_started = False
@@ -200,6 +247,7 @@ class CompetitionFlow:
         self.qr_odom_position = None
         self.qr_odom_received_at = 0.0
         self.qr_map_yaw = None
+        self.qr_map_position = None
         self.qr_map_odom_yaw = None
         self.qr_map_received_at = 0.0
         self.qr_scan = None
@@ -219,6 +267,72 @@ class CompetitionFlow:
         self.task3_result_text = ""
         self.task3_error = ""
         self.base_twist = None
+        self.base_stopped_since = None
+        self.localization_odom_samples = deque(maxlen=80)
+        self.localization_map_samples = deque(maxlen=40)
+        self.localization_scan_samples = deque(maxlen=35)
+        self.localization_camera_info = None
+        self.localization_camera_info_at = 0.0
+        self.factory_sign_localization_mode = str(rospy.get_param(
+            "~factory_sign_localization_mode", "shadow")).strip().lower()
+        if self.factory_sign_localization_mode not in ("off", "shadow", "active"):
+            self.factory_sign_localization_mode = "shadow"
+        self.factory_sign_localization_config = {
+            "sync_tolerance": float(rospy.get_param(
+                "~factory_sign_sync_tolerance_sec", 0.20)),
+            "stationary_hold": float(rospy.get_param(
+                "~factory_sign_stationary_hold_sec", 0.30)),
+            "min_bbox_width": float(rospy.get_param(
+                "~factory_sign_min_bbox_width_ratio", 0.09)),
+            "min_bbox_height": float(rospy.get_param(
+                "~factory_sign_min_bbox_height_ratio", 0.06)),
+            "min_bbox_area": float(rospy.get_param(
+                "~factory_sign_min_bbox_area_ratio", 0.006)),
+            "edge_margin": float(rospy.get_param(
+                "~factory_sign_bbox_edge_margin_ratio", 0.02)),
+            "camera_fov": math.radians(float(rospy.get_param(
+                "~camera_horizontal_fov_deg", 70.0))),
+            "bearing_sign": float(rospy.get_param(
+                "~camera_bearing_sign", -1.0)),
+            "boresight": float(rospy.get_param(
+                "~camera_boresight_yaw_offset", 0.292)),
+            "camera_x": float(rospy.get_param(
+                "~factory_sign_camera_x", 0.15)),
+            "camera_y": float(rospy.get_param(
+                "~factory_sign_camera_y", 0.0)),
+            "laser_x": float(rospy.get_param(
+                "~factory_sign_laser_x", 0.08)),
+            "laser_y": float(rospy.get_param(
+                "~factory_sign_laser_y", 0.0)),
+            "laser_yaw": float(rospy.get_param(
+                "~factory_sign_laser_yaw", 0.0)),
+            "wall_half_angle": math.radians(float(rospy.get_param(
+                "~factory_sign_wall_half_angle_deg", 20.0))),
+            "wall_min_points": int(rospy.get_param(
+                "~factory_sign_wall_min_points", 12)),
+            "wall_min_span": float(rospy.get_param(
+                "~factory_sign_wall_min_span", 0.25)),
+            "wall_max_residual": float(rospy.get_param(
+                "~factory_sign_wall_max_residual", 0.02)),
+        }
+        room_corners = rospy.get_param("~factory_sign_room_corners", [
+            [-2.2311, -1.2505], [2.8000, -1.1940],
+            [-2.2197, -3.2746], [2.7739, -3.2186],
+        ])
+        self.factory_sign_room_walls = build_room_walls(room_corners)
+        self.factory_sign_fusion = FactorySignFusion(rospy.get_param(
+            "~factory_sign_localization_max_samples", 24))
+        self.factory_sign_estimates = {}
+        self.factory_sign_locked_categories = set()
+        self.factory_sign_non_target_announced = set()
+        self.factory_sign_estimate_log_signature = None
+        self.factory_sign_category_filters = {
+            category: TemporalTargetFilter(
+                rospy.get_param("~factory_sign_localization_required_hits", 2),
+                rospy.get_param(
+                    "~factory_sign_localization_evidence_window_sec", 1.5))
+            for category in ("food", "daily", "electronics")
+        }
         self.handoff_scan_received_at = 0.0
         self.handoff_costmap_received_at = 0.0
         self.ocr_target = None
@@ -265,6 +379,7 @@ class CompetitionFlow:
         self.ucar_image_height = 0
         self.ucar_image_encoding = ""
         self.task45_camera_switched = False
+        self.ucar_image_sub = None
 
         rospy.Subscriber("/wakeup", String, self._wakeup_cb, queue_size=5)
         rospy.Subscriber("/question", String, self._question_cb, queue_size=5)
@@ -291,9 +406,9 @@ class CompetitionFlow:
             "/scan", LaserScan, self._handoff_scan_cb,
             queue_size=1, buff_size=1024 * 1024, tcp_nodelay=True)
         rospy.Subscriber(
-            "/move_base/local_costmap/costmap", rospy.AnyMsg,
-            self._handoff_costmap_cb,
-            queue_size=1, buff_size=4 * 1024 * 1024, tcp_nodelay=True)
+            rospy.get_param(
+                "~factory_sign_camera_info_topic", "/usb_cam/camera_info"),
+            CameraInfo, self._factory_sign_camera_info_cb, queue_size=1)
         rospy.Subscriber(
             "/move_base/goal", MoveBaseActionGoal, self._qr_move_base_goal_cb, queue_size=5
         )
@@ -333,11 +448,6 @@ class CompetitionFlow:
             "/follow_end", String, self._follow_end_cb, queue_size=20
         )
         rospy.Subscriber(
-            "/ucar_camera/image_raw", Image,
-            self._ucar_image_cb, queue_size=1,
-            buff_size=8 * 1024 * 1024, tcp_nodelay=True
-        )
-        rospy.Subscriber(
             "/strict_mission/status", String, self._strict_mission_cb, queue_size=20
         )
         for _, topic, _ in TRACK_CONFIG.values():
@@ -349,6 +459,73 @@ class CompetitionFlow:
 
         self.move_base = actionlib.SimpleActionClient("/move_base", MoveBaseAction)
         self.publish_status("startup", "ready", "competition controller ready")
+        self._publish_workflow_manifest()
+
+    def _publish_workflow_manifest(self):
+        """Expose the active orchestration and camera ownership as latched JSON."""
+        sequence = list(stage_sequence(self.mode, self.enable_simulation))
+        stages = {
+            "task1": {
+                "flow": [
+                    "legacy voice command", "first-stage navigation",
+                    "QR-room centering", "three unique QR URLs",
+                    "Spark X2 reasoning", "pickup announcement",
+                ],
+                "camera_topic": "/usb_cam/image_raw",
+            },
+            "task2": {
+                "flow": [
+                    "factory OCR prewarm", "room anchor navigation",
+                    "target sign voting", "parking 1",
+                    "parking 1 announcement", "remaining-anchor search",
+                    "parking 2", "parking 2 announcement",
+                ],
+                "camera_topic": "/usb_cam/image_raw",
+            },
+            "task3": {
+                "flow": ["simulation collaboration"],
+                "enabled": bool(self.enable_simulation),
+                "camera_topic": None,
+            },
+            "task4": {
+                "flow": [
+                    "stop-line approach with usb_cam",
+                    "camera ownership switch after stop line",
+                    "traffic-light recognition",
+                ],
+                "camera_topic_before_switch": "/usb_cam/image_raw",
+                "camera_topic_after_switch": "/ucar_camera/image_raw",
+            },
+            "task5": {
+                "flow": ["flow_end visual line following", "final announcement"],
+                "camera_topic": "/ucar_camera/image_raw",
+            },
+        }
+        payload = {
+            "mode": self.mode,
+            "active_sequence": sequence,
+            "orchestrator": "competition_flow",
+            "stages": stages,
+            "camera_policy": {
+                "front_stages": "/usb_cam/image_raw only",
+                "ucar_camera_start_stage": "task4 after stop line",
+                "ucar_camera_front_stage_subscription": False,
+            },
+        }
+        self.workflow_pub.publish(String(
+            data=json.dumps(payload, ensure_ascii=False)))
+        rospy.logwarn(
+            "COMPETITION_WORKFLOW sequence=%s simulation=%s",
+            " -> ".join(sequence), str(bool(self.enable_simulation)).lower())
+        for index, stage in enumerate(sequence, 1):
+            rospy.loginfo(
+                "[WORKFLOW %d/%d] %s %s",
+                index, len(sequence), stage,
+                json.dumps(stages.get(stage, {}), ensure_ascii=False))
+        rospy.logwarn(
+            "CAMERA_POLICY task1/task2=/usb_cam/image_raw; "
+            "/ucar_camera/image_raw remains unopened until task4 reaches "
+            "the stop line")
 
     # ------------------------------ callbacks ------------------------------
     def _wakeup_cb(self, _msg):
@@ -544,18 +721,29 @@ class CompetitionFlow:
             2.0 * (q.w * q.z + q.x * q.y),
             1.0 - 2.0 * (q.y * q.y + q.z * q.z),
         )
+        pose = (
+            float(msg.pose.pose.position.x),
+            float(msg.pose.pose.position.y),
+            yaw,
+        )
+        twist = (
+            float(msg.twist.twist.linear.x),
+            float(msg.twist.twist.linear.y),
+            float(msg.twist.twist.angular.z),
+        )
+        now_monotonic = time.monotonic()
         with self.lock:
             self.qr_odom_yaw = yaw
-            self.qr_odom_position = (
-                float(msg.pose.pose.position.x),
-                float(msg.pose.pose.position.y),
-            )
-            self.qr_odom_received_at = time.monotonic()
-            self.base_twist = (
-                float(msg.twist.twist.linear.x),
-                float(msg.twist.twist.linear.y),
-                float(msg.twist.twist.angular.z),
-            )
+            self.qr_odom_position = pose[:2]
+            self.qr_odom_received_at = now_monotonic
+            self.base_twist = twist
+            self.localization_odom_samples.append(
+                (_message_stamp(msg), pose, twist))
+            if base_is_stopped(*twist):
+                if self.base_stopped_since is None:
+                    self.base_stopped_since = now_monotonic
+            else:
+                self.base_stopped_since = None
 
     def _qr_map_pose_cb(self, msg):
         q = msg.pose.pose.orientation
@@ -565,14 +753,36 @@ class CompetitionFlow:
         )
         with self.lock:
             self.qr_map_yaw = yaw
+            self.qr_map_position = (
+                float(msg.pose.pose.position.x),
+                float(msg.pose.pose.position.y),
+            )
             self.qr_map_odom_yaw = self.qr_odom_yaw
             self.qr_map_received_at = time.monotonic()
+            self.localization_map_samples.append((
+                _message_stamp(msg),
+                (self.qr_map_position[0], self.qr_map_position[1], yaw),
+            ))
 
     def _handoff_scan_cb(self, msg):
         with self.lock:
             self.qr_scan = msg
             self.qr_scan_received_at = time.monotonic()
             self.handoff_scan_received_at = time.monotonic()
+            self.localization_scan_samples.append((_message_stamp(msg), msg))
+
+    def _factory_sign_camera_info_cb(self, msg):
+        try:
+            fx = float(msg.K[0])
+            cx = float(msg.K[2])
+            width = int(msg.width)
+            valid = fx > 1.0 and width > 1 and math.isfinite(fx) and math.isfinite(cx)
+        except (AttributeError, TypeError, ValueError, IndexError):
+            valid = False
+        with self.lock:
+            self.localization_camera_info = (
+                {"fx": fx, "cx": cx, "width": width} if valid else None)
+            self.localization_camera_info_at = time.monotonic()
 
     def _handoff_costmap_cb(self, _msg):
         with self.lock:
@@ -591,6 +801,256 @@ class CompetitionFlow:
                 return
             self.qr_navigation_result = msg.status.status
 
+    def _factory_sign_payloads(self, payload, fallback_category):
+        """Return unambiguous per-category OCR payloads for localization."""
+        if bool(payload.get("frame_ambiguous")):
+            return []
+        detections = payload.get("detections")
+        if isinstance(detections, list) and detections:
+            categories = set(normalize_category(item.get("category"))
+                             for item in detections if isinstance(item, dict))
+            categories.discard(None)
+            if len(categories) > 1:
+                return []
+            results = []
+            for detection in detections:
+                if not isinstance(detection, dict):
+                    continue
+                category = normalize_category(detection.get("category"))
+                if not category:
+                    continue
+                item = dict(payload)
+                item.update(detection)
+                item["category"] = category
+                item["merged_target_bbox"] = (
+                    detection.get("target_bbox") or detection.get("bbox") or [])
+                results.append(item)
+            if results:
+                return results
+        if not fallback_category:
+            return []
+        item = dict(payload)
+        item["category"] = fallback_category
+        return [item]
+
+    def _factory_sign_sensor_context(self, image_stamp):
+        config = self.factory_sign_localization_config
+        with self.lock:
+            observation = dict(self.coverage_observation or {})
+            stopped_since = self.base_stopped_since
+            odom_samples = list(self.localization_odom_samples)
+            map_samples = list(self.localization_map_samples)
+            scan_samples = list(self.localization_scan_samples)
+            camera_info = dict(self.localization_camera_info or {})
+        state = str(observation.get("state", "")).strip().lower()
+        anchor_id = int(observation.get("anchor_index", 0) or 0)
+        stationary = (
+            stopped_since is not None and
+            time.monotonic() - stopped_since >= config["stationary_hold"])
+        if anchor_id <= 0 or state not in ("scanning", "covered") or not stationary:
+            return None
+        odom_sample = _nearest_stamped(
+            odom_samples, image_stamp, config["sync_tolerance"])
+        scan_sample = _nearest_stamped(
+            scan_samples, image_stamp, config["sync_tolerance"])
+        if odom_sample is None or scan_sample is None:
+            return None
+        map_sample = _nearest_stamped(
+            map_samples, image_stamp, config["sync_tolerance"])
+        return {
+            "anchor_id": anchor_id,
+            "coverage": observation,
+            "odom_pose": odom_sample[1],
+            "scan": scan_sample[1],
+            "map_pose": map_sample[1] if map_sample is not None else None,
+            "camera_info": camera_info,
+        }
+
+    def _factory_sign_candidate(self, payload, category, image_stamp):
+        config = self.factory_sign_localization_config
+        bbox = (payload.get("merged_target_bbox") or
+                payload.get("target_bbox") or payload.get("bbox"))
+        metrics = bbox_metrics(
+            bbox, payload.get("image_width"), payload.get("image_height"),
+            config["edge_margin"])
+        context = self._factory_sign_sensor_context(image_stamp)
+        if context is None:
+            return None
+        if not observation_gate(
+                context["anchor_id"], context["coverage"].get("state"), True,
+                metrics, config["min_bbox_width"],
+                config["min_bbox_height"], config["min_bbox_area"]):
+            return None
+
+        image_width = float(payload.get("image_width"))
+        camera_info = context["camera_info"]
+        fx = camera_info.get("fx")
+        cx = camera_info.get("cx")
+        info_width = float(camera_info.get("width", image_width) or image_width)
+        if fx is not None and cx is not None and info_width > 1.0:
+            scale = image_width / info_width
+            fx = float(fx) * scale
+            cx = float(cx) * scale
+        bearing, calibrated = camera_bearing(
+            metrics["center_x"], image_width,
+            config["bearing_sign"], config["boresight"], fx, cx,
+            config["camera_fov"])
+        scan = context["scan"]
+        points = scan_points_in_sector(
+            scan.ranges, scan.angle_min, scan.angle_increment,
+            scan.range_min, scan.range_max, bearing,
+            config["wall_half_angle"], config["laser_x"],
+            config["laser_y"], config["laser_yaw"])
+        wall_fit = fit_wall_line(
+            points, config["wall_min_points"], config["wall_min_span"],
+            config["wall_max_residual"])
+        point_base = ray_wall_intersection(
+            (config["camera_x"], config["camera_y"]), bearing, wall_fit)
+        odom_pose = context["odom_pose"]
+        map_pose = context["map_pose"]
+        association = None
+        if map_pose is not None and self.factory_sign_room_walls:
+            association = map_wall_fallback(
+                map_pose, bearing, self.factory_sign_room_walls)
+
+        source = "lidar_wall"
+        if point_base is None:
+            if map_pose is None or association is None:
+                return None
+            source = "map_wall_fallback"
+            point_base = inverse_transform_point(
+                association["point_map"], map_pose)
+        point_odom = transform_point(point_base, odom_pose)
+        point_map_tuple = (
+            transform_point(point_base, map_pose) if map_pose is not None
+            else None)
+
+        wall_id = association.get("wall_id") if association else None
+        ambiguous = bool(association.get("ambiguous")) if association else False
+        wall_normal_odom = None
+        if wall_fit is not None:
+            wall_normal_odom = transform_vector(
+                wall_fit["normal"], odom_pose[2])
+        elif association is not None and map_pose is not None:
+            wall_normal_odom = transform_vector(
+                association["normal_map"], odom_pose[2] - map_pose[2])
+
+        tangent_coordinate = None
+        if wall_id and point_map_tuple is not None:
+            wall = next((item for item in self.factory_sign_room_walls
+                         if item["id"] == wall_id), None)
+            if wall is not None:
+                dx = wall["end"][0] - wall["start"][0]
+                dy = wall["end"][1] - wall["start"][1]
+                length = math.hypot(dx, dy)
+                if length > 1e-6:
+                    tangent_coordinate = (
+                        (point_map_tuple[0] - wall["start"][0]) * dx / length +
+                        (point_map_tuple[1] - wall["start"][1]) * dy / length)
+
+        category_score = float(payload.get("category_score", 0.0) or 0.0)
+        quality = observation_quality(
+            metrics, category_score, source, wall_fit, calibrated)
+        return {
+            "category": category,
+            "source": source,
+            "point_base": {"x": point_base[0], "y": point_base[1]},
+            "point_odom": point_odom,
+            "point_map": ({"x": point_map_tuple[0], "y": point_map_tuple[1]}
+                          if point_map_tuple is not None else None),
+            "wall_id": wall_id,
+            "wall_normal": ({"frame": "odom", "x": wall_normal_odom[0],
+                             "y": wall_normal_odom[1]}
+                            if wall_normal_odom is not None else None),
+            "wall_tangent_coordinate": tangent_coordinate,
+            "wall_fit": wall_fit,
+            "metrics": metrics,
+            "quality": quality,
+            "anchor_id": context["anchor_id"],
+            "odom_pose": odom_pose,
+            "odom_yaw": odom_pose[2],
+            "map_pose": map_pose,
+            "calibrated_camera": calibrated,
+            "ambiguous": ambiguous,
+            "stamp": image_stamp,
+        }
+
+    def _process_factory_sign_localization(self, payload, fallback_category):
+        """Update shadow/active localization and return the target estimate."""
+        if self.factory_sign_localization_mode == "off":
+            return None
+        try:
+            image_stamp = float(
+                payload.get("image_stamp") or payload.get("stamp") or
+                rospy.get_time())
+        except (TypeError, ValueError):
+            image_stamp = rospy.get_time()
+        observations = self._factory_sign_payloads(payload, fallback_category)
+        observed_categories = set()
+        target_estimate = None
+        now = time.monotonic()
+        for observation in observations:
+            category = normalize_category(observation.get("category"))
+            if not category:
+                continue
+            category_filter = self.factory_sign_category_filters.get(category)
+            if category_filter is None:
+                rospy.logwarn_throttle(
+                    5.0,
+                    "[SIGN LOCALIZATION] ignoring unsupported category=%s",
+                    category)
+                continue
+            observed_categories.add(category)
+            candidate = self._factory_sign_candidate(
+                observation, category, image_stamp)
+            confirmed = category_filter.push(
+                category, category if candidate is not None else None, now)
+            if candidate is None:
+                continue
+            estimate = self.factory_sign_fusion.add(candidate)
+            if estimate is None:
+                continue
+            self.factory_sign_estimates[category] = estimate
+            if estimate["status"] == "locked":
+                self.factory_sign_locked_categories.add(category)
+            self.factory_sign_estimate_pub.publish(String(
+                data=json.dumps(estimate, ensure_ascii=False)))
+            signature = (
+                category, estimate["status"], estimate["best_anchor"],
+                estimate["consistent_observation_count"])
+            if signature != self.factory_sign_estimate_log_signature:
+                self.factory_sign_estimate_log_signature = signature
+                rospy.logwarn(
+                    "[SIGN LOCALIZATION] mode=%s category=%s status=%s "
+                    "source=%s anchor=%d count=%d uncertainty=%.3fm",
+                    self.factory_sign_localization_mode, category,
+                    estimate["status"], estimate["source"],
+                    estimate["best_anchor"],
+                    estimate["consistent_observation_count"],
+                    estimate["uncertainty_m"])
+            if category == self.ocr_target:
+                target_estimate = estimate
+            elif (self.factory_sign_localization_mode == "active" and
+                  confirmed):
+                event_key = (int(candidate["anchor_id"]), category)
+                if event_key not in self.factory_sign_non_target_announced:
+                    self.factory_sign_non_target_announced.add(event_key)
+                    event = {
+                        "category": category,
+                        "anchor": int(candidate["anchor_id"]),
+                        "score": float(candidate["quality"]),
+                        "area_ratio": float(candidate["metrics"]["area_ratio"]),
+                        "odom_yaw": float(candidate["odom_yaw"]),
+                        "confirmed": True,
+                        "physical_estimate": estimate,
+                    }
+                    self.vision_non_target_pub.publish(String(
+                        data=json.dumps(event, ensure_ascii=False)))
+        for category, category_filter in self.factory_sign_category_filters.items():
+            if category not in observed_categories:
+                category_filter.push(category, None, now)
+        return target_estimate
+
     def _ocr_cb(self, msg):
         if not self.ocr_target:
             return
@@ -601,10 +1061,29 @@ class CompetitionFlow:
             return
         now = time.monotonic()
         self.ocr_last_message_at = now
-        if category == self.ocr_target and payload.get("target_bbox"):
-            self.vision_target_pub.publish(msg)
-        confirmed = self.ocr_filter.push(
+        localization_estimate = self._process_factory_sign_localization(
+            payload, category)
+        localization_locked = bool(
+            localization_estimate and
+            localization_estimate.get("status") == "locked")
+        target_box = (payload.get("merged_target_bbox") or
+                      payload.get("target_bbox"))
+        if category == self.ocr_target and target_box:
+            if self.factory_sign_localization_mode != "active":
+                self.vision_target_pub.publish(msg)
+            elif (localization_locked or
+                  category in self.factory_sign_locked_categories):
+                active_payload = dict(payload)
+                active_payload["physical_estimate"] = (
+                    localization_estimate or
+                    self.factory_sign_estimates.get(category))
+                self.vision_target_pub.publish(String(
+                    data=json.dumps(active_payload, ensure_ascii=False)))
+        legacy_confirmed = self.ocr_filter.push(
             self.ocr_target, category, now)
+        confirmed = (
+            legacy_confirmed if self.factory_sign_localization_mode != "active"
+            else legacy_confirmed and localization_locked)
         physical_category = (
             normalize_category(self.task1_result.get("category")) or
             normalize_category(self.task1_result.get("pickup_major"))
@@ -659,7 +1138,7 @@ class CompetitionFlow:
                 self.sim_category, category, now)
             if category == self.sim_category and payload.get("target_bbox"):
                 self._remember_simulation_observation(payload, sim_confirmed)
-        if (confirmed and category == self.ocr_target and payload.get("target_bbox") and
+        if (confirmed and category == self.ocr_target and target_box and
                 not self.vision_trigger_latched):
             if self.factory_parking_index == 1:
                 with self.lock:
@@ -680,7 +1159,8 @@ class CompetitionFlow:
                 "OCR target confirmed; requesting navigator acknowledgement")
             rospy.loginfo(
                 "task2 OCR target confirmed: target=%s hits=%d/%d; "
-                "reliable trigger pending (will not retrigger)",
+                "this attempt is latched; an explicit recovery state may "
+                "rearm a fresh trigger",
                 self.ocr_target,
                 self.ocr_filter.hit_count,
                 self.ocr_filter.required,
@@ -814,8 +1294,28 @@ class CompetitionFlow:
             int(observation["sample_count"]), previous_anchor,
         )
 
+    def _rearm_target_trigger(self, reason):
+        """Roll back one failed target attempt and require fresh OCR evidence."""
+        with self.lock:
+            anchor_index = int(self.last_coverage_anchor_index)
+            self.vision_trigger_latched = False
+            self.trigger_request_pending = False
+            self.trigger_request_started_at = 0.0
+            self.trigger_service_accepted = False
+            self.trigger_acknowledged = False
+            self.ocr_filter.reset()
+            self.coverage_observation = None
+            self.coverage_observation_received_at = 0.0
+            self.coverage_observation_log_signature = None
+            self.ocr_last_log_signature = None
+        rospy.logwarn(
+            "TARGET_TRIGGER_REARMED reason=%s anchor=%d",
+            reason, anchor_index)
+
     def _navigator_cb(self, msg):
         status = msg.data.strip().lower()
+        if status == "centering_recovering":
+            self._rearm_target_trigger(status)
         observing_prefixes = (
             "coverage_anchor_observing:",
             "coverage_remembered_heading_observing:",
@@ -935,6 +1435,26 @@ class CompetitionFlow:
         self.ucar_image_width = int(msg.width)
         self.ucar_image_height = int(msg.height)
         self.ucar_image_encoding = str(msg.encoding)
+
+    def _ensure_ucar_image_subscription(self):
+        """Subscribe to the full-resolution stream only for task4/task5."""
+        if self.ucar_image_sub is not None:
+            return
+        self.ucar_image_sub = rospy.Subscriber(
+            "/ucar_camera/image_raw", Image,
+            self._ucar_image_cb, queue_size=1,
+            buff_size=4 * 1024 * 1024, tcp_nodelay=True)
+        rospy.loginfo(
+            "TASK45_CAMERA image subscription enabled on demand")
+
+    def _release_ucar_image_subscription(self):
+        sub = self.ucar_image_sub
+        self.ucar_image_sub = None
+        if sub is not None:
+            try:
+                sub.unregister()
+            except Exception:
+                pass
 
     def _strict_mission_cb(self, msg):
         try:
@@ -1061,17 +1581,16 @@ class CompetitionFlow:
             self.check_abort()
             with self.lock:
                 scan_fresh = self.handoff_scan_received_at > cleared_at
-                costmap_fresh = self.handoff_costmap_received_at > cleared_at
-            if scan_fresh and costmap_fresh:
+            if scan_fresh:
                 break
             rospy.sleep(0.05)
         else:
             raise StageError(
-                "task1->task2 costmap refresh produced no fresh scan/costmap snapshot")
+                "task1->task2 costmap refresh produced no fresh scan snapshot")
         self.safe_stop(cancel_navigation=True)
         self.publish_status(
             "task1", "task2_handoff_ready",
-            "move_base idle; fresh costmap; preserving AMCL state")
+            "move_base idle; costmaps cleared and fresh scan received; preserving AMCL state")
 
     def production_task4_handoff(self, source_stage):
         """Resume physical navigation without resetting the current factory pose."""
@@ -1121,18 +1640,17 @@ class CompetitionFlow:
             self.check_abort()
             with self.lock:
                 scan_fresh = self.handoff_scan_received_at > cleared_at
-                costmap_fresh = self.handoff_costmap_received_at > cleared_at
-            if scan_fresh and costmap_fresh:
+            if scan_fresh:
                 break
             rospy.sleep(0.05)
         else:
             raise StageError(
-                "{}->task4 costmap refresh produced no fresh scan/costmap snapshot".format(
+                "{}->task4 costmap refresh produced no fresh scan snapshot".format(
                     source_stage))
         self.safe_stop(cancel_navigation=True)
         self.publish_status(
             source_stage, "task4_handoff_ready",
-            "current AMCL pose preserved; fresh costmap; task4 may navigate")
+            "current AMCL pose preserved; costmaps cleared and fresh scan received; task4 may navigate")
 
     def start_child(self, key, package, launch_file, args=None, reuse_running=False):
         existing = self.children.get(key)
@@ -2038,6 +2556,11 @@ class CompetitionFlow:
             "trigger_mode": "vision",
             "vision_topic": "/vision/detected",
             "target_topic": "/vision/target",
+            "non_target_topic": "/vision/non_target_observation",
+            "coverage_non_target_early_exit": (
+                self.factory_sign_localization_mode == "active"),
+            "coverage_non_target_min_scan_steps": int(rospy.get_param(
+                "~factory_sign_non_target_min_scan_steps", 2)),
             "trigger_service": self.trigger_service_name,
             "start_paused": start_paused,
             "start_navigation_service": (
@@ -3273,6 +3796,7 @@ class CompetitionFlow:
         self._kill_known_camera_nodes()
         self._wait_video_device_released(
             float(rospy.get_param("~task45_camera_release_timeout_sec", 5.0)))
+        self._ensure_ucar_image_subscription()
 
         attempts = max(1, int(rospy.get_param("~task45_camera_start_attempts", 2)))
         last_error = None
@@ -3366,6 +3890,7 @@ class CompetitionFlow:
             if stop_camera:
                 self.stop_child("task45_camera")
                 self.task45_camera_switched = False
+                self._release_ucar_image_subscription()
 
     def task4(self):
         skip_approach = bool_param("~skip_task4_stop_line_approach", False)

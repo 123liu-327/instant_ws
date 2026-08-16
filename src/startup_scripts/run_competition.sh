@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="${INSTANT_WS:-/home/ucar/instant_ws}"
 ROBOT_WS="${ROBOT_WS:-/home/ucar/ucar_ws}"
 ROS_SETUP="/opt/ros/noetic/setup.bash"
 CURRENT_SETUP="$ROOT/devel/setup.bash"

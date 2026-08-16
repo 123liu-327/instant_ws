@@ -9,6 +9,7 @@ import json
 import math
 import os
 import re
+import threading
 import time
 from collections import Counter, deque
 from dataclasses import dataclass, field
@@ -233,6 +234,37 @@ def _box_bounds(box):
 def _bounds_box(bounds):
     x0, y0, x1, y1 = bounds
     return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+
+
+def factory_bbox_geometry(box, image_width, image_height,
+                          edge_margin_ratio=0.02):
+    """Return JSON-safe normalized geometry for one mapped factory-sign box."""
+    try:
+        width = float(image_width)
+        height = float(image_height)
+        points = [(float(point[0]), float(point[1])) for point in box]
+    except (TypeError, ValueError, IndexError):
+        return None
+    if width <= 1.0 or height <= 1.0 or len(points) != 4:
+        return None
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    x0, x1 = min(xs), max(xs)
+    y0, y1 = min(ys), max(ys)
+    bbox_width = x1 - x0
+    bbox_height = y1 - y0
+    if bbox_width <= 0.0 or bbox_height <= 0.0:
+        return None
+    edge_margin = min(
+        x0 / width, y0 / height,
+        (width - x1) / width, (height - y1) / height)
+    return {
+        "bbox_width_ratio": bbox_width / width,
+        "bbox_height_ratio": bbox_height / height,
+        "bbox_area_ratio": bbox_width * bbox_height / (width * height),
+        "bbox_edge_margin_ratio": edge_margin,
+        "bbox_complete": edge_margin >= max(0.0, float(edge_margin_ratio)),
+    }
 
 
 def select_factory_sign_box(texts: Sequence[OCRText],
@@ -828,6 +860,8 @@ class FactorySignPPOCRRknnNode:
             "~result_topic", "/factory_sign_ppocr_rknn_test/result")
 
         self.latest_image = None
+        self.latest_image_stamp = 0.0
+        self.latest_image_lock = threading.Lock()
         self.latest_image_seq = 0
         self.processed_image_seq = -1
         self.last_result = RecognitionResult()
@@ -911,21 +945,32 @@ class FactorySignPPOCRRknnNode:
     def _image_cb(self, msg) -> None:
         try:
             frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            self.latest_image = maybe_flip_frame(frame, self.flip_image)
-            self.latest_image_seq += 1
-            self._publish_live_debug(self.latest_image)
+            stamp = msg.header.stamp.to_sec()
+            converted = maybe_flip_frame(frame, self.flip_image)
+            with self.latest_image_lock:
+                self.latest_image = converted
+                self.latest_image_stamp = stamp if stamp > 0.0 else time.time()
+                self.latest_image_seq += 1
+            self._publish_live_debug(converted)
         except Exception as exc:
             self.rospy.logwarn_throttle(2.0, "cv_bridge conversion failed: %s", exc)
 
     def run(self) -> None:
         rate = self.rospy.Rate(self.inference_rate)
         while not self.rospy.is_shutdown():
-            if self.latest_image is not None and self.latest_image_seq != self.processed_image_seq:
-                self.processed_image_seq = self.latest_image_seq
-                self._process_once(self.latest_image.copy())
+            frame = None
+            image_stamp = 0.0
+            with self.latest_image_lock:
+                if (self.latest_image is not None and
+                        self.latest_image_seq != self.processed_image_seq):
+                    self.processed_image_seq = self.latest_image_seq
+                    frame = self.latest_image.copy()
+                    image_stamp = self.latest_image_stamp
+            if frame is not None:
+                self._process_once(frame, image_stamp)
             rate.sleep()
 
-    def _process_once(self, frame) -> None:
+    def _process_once(self, frame, image_stamp=None) -> None:
         view_scale = self.view_scales[self.view_index % len(self.view_scales)]
         self.view_index += 1
         ocr_image, debug_preprocess = self._make_ocr_image(frame, view_scale)
@@ -964,6 +1009,14 @@ class FactorySignPPOCRRknnNode:
             target_center_x = sum(point[0] for point in target_box) / len(target_box)
             target_center_y = sum(point[1] for point in target_box) / len(target_box)
         frame_height, frame_width = frame.shape[:2]
+        target_geometry = factory_bbox_geometry(
+            target_box, frame_width, frame_height) or {
+                "bbox_width_ratio": 0.0,
+                "bbox_height_ratio": 0.0,
+                "bbox_area_ratio": 0.0,
+                "bbox_edge_margin_ratio": -1.0,
+                "bbox_complete": False,
+            }
         published_detections = []
         for detection in detections:
             mapped_box = map_box_to_frame(
@@ -975,7 +1028,9 @@ class FactorySignPPOCRRknnNode:
             center_y = (
                 sum(point[1] for point in mapped_box) / len(mapped_box)
                 if mapped_box else None)
-            published_detections.append({
+            detection_geometry = factory_bbox_geometry(
+                mapped_box, frame_width, frame_height) or {}
+            published_detection = {
                 "category": detection["category"],
                 "workshop": CATEGORY_NAMES.get(detection["category"], ""),
                 "confidence": detection["category_score"],
@@ -986,7 +1041,12 @@ class FactorySignPPOCRRknnNode:
                 "target_bbox": mapped_box,
                 "target_center_x": center_x,
                 "target_center_y": center_y,
-            })
+            }
+            published_detection.update(detection_geometry)
+            published_detections.append(published_detection)
+        detected_categories = sorted(set(
+            detection["category"] for detection in published_detections
+            if detection.get("category")))
         self.result_pub.publish(self.String(data=json.dumps({
             "category": confirmed or "",
             "workshop": CATEGORY_NAMES.get(confirmed, ""),
@@ -998,11 +1058,19 @@ class FactorySignPPOCRRknnNode:
             "raw_text": result.raw_text,
             "match_debug": result.match_debug,
             "target_bbox": target_box,
+            "merged_target_bbox": target_box,
             "target_center_x": target_center_x,
             "target_center_y": target_center_y,
             "detections": published_detections,
+            "frame_ambiguous": len(detected_categories) > 1,
             "image_width": int(frame_width),
             "image_height": int(frame_height),
+            "image_stamp": float(image_stamp or time.time()),
+            "bbox_width_ratio": target_geometry["bbox_width_ratio"],
+            "bbox_height_ratio": target_geometry["bbox_height_ratio"],
+            "bbox_area_ratio": target_geometry["bbox_area_ratio"],
+            "bbox_edge_margin_ratio": target_geometry["bbox_edge_margin_ratio"],
+            "bbox_complete": target_geometry["bbox_complete"],
             "error": result.error,
             "stamp": time.time(),
         }, ensure_ascii=False)))
