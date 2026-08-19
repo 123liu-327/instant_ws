@@ -5,6 +5,9 @@ import pathlib
 import sys
 import unittest
 
+import cv2
+import numpy as np
+
 
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT / "src"))
@@ -23,6 +26,9 @@ from ucar_2026_strict_mission.logic import (  # noqa: E402
     track_launch_for_decision,
     traffic_decision_from_payload,
     valid_stop_line_geometry,
+)
+from ucar_2026_strict_mission.opencv_compat import (  # noqa: E402
+    contours_from_find_result,
 )
 
 
@@ -60,25 +66,21 @@ class OdometryProgressTests(unittest.TestCase):
             0.0,
         )
 
-    def test_competition_requires_completed_planned_final_advance(self):
+    def test_current_competition_flow_requires_strict_wait_traffic(self):
         competition_root = PACKAGE_ROOT.parent / "ucar_2026_competition"
-        config = (
-            competition_root / "config" / "competition.yaml"
-        ).read_text(encoding="utf-8")
-        self.assertIn("task4_final_progress_tolerance_m: 0.008", config)
-        self.assertIn("task4_final_stop_min_m: 0.03", config)
-        self.assertIn("task4_final_stop_max_m: 0.05", config)
-
         flow = (
-            competition_root / "scripts" / "competition_flow.py"
+            competition_root
+            / "scripts"
+            / "competition_flow_current_front_39ff_room_v1.py"
         ).read_text(encoding="utf-8")
-        self.assertIn('status.get("final_progress_m")', flow)
-        self.assertIn("final_advance_completed", flow)
-        self.assertIn("task4 final advance incomplete", flow)
-        self.assertIn('status.get("final_visual_verified"', flow)
-        self.assertIn('status.get("final_stop_line_color")', flow)
-        self.assertIn("task4 final stop not accepted", flow)
-        self.assertIn('final_stop_source == "hard_advance_timeout"', flow)
+        self.assertIn('if state == "WAIT_TRAFFIC":', flow)
+        self.assertIn('if state == "FAULT":', flow)
+        self.assertIn(
+            'raise StageError("strict stop-line approach exited unexpectedly")',
+            flow,
+        )
+        self.assertIn('self.stop_child("strict_line")', flow)
+        self.assertIn("self.safe_stop(cancel_navigation=True)", flow)
 
     def test_calibrated_advance_uses_verified_hard_stop_distance(self):
         config = json.loads(
@@ -269,6 +271,8 @@ class OdometryProgressTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("TASK4_TOLERANCE_GUARD applied", node_source)
         self.assertIn("restore_staging_tolerances", node_source)
+        self.assertIn("Reconfigure", node_source)
+        self.assertNotIn("dynamic_reconfigure.client", node_source)
 
         package_xml = (
             PACKAGE_ROOT / "package.xml"
@@ -400,6 +404,24 @@ class TrafficTests(unittest.TestCase):
 
 
 class StopLineDetectionTests(unittest.TestCase):
+    def test_system_opencv_32_find_contours_is_supported(self):
+        self.assertTrue(cv2.__version__.startswith("3.2."))
+        mask = np.zeros((80, 120), dtype=np.uint8)
+        cv2.rectangle(mask, (20, 50), (100, 60), 255, -1)
+        result = cv2.findContours(
+            mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        self.assertEqual(len(result), 3)
+        contours = contours_from_find_result(result)
+        self.assertEqual(len(contours), 1)
+
+    def test_opencv4_two_value_result_is_also_supported(self):
+        contours = [object()]
+        self.assertIs(contours_from_find_result((contours, None)), contours)
+
+    def test_unknown_find_contours_signature_is_rejected(self):
+        with self.assertRaises(ValueError):
+            contours_from_find_result((None,))
+
     def test_accepts_wide_horizontal_filled_candidate(self):
         self.assertTrue(valid_stop_line_geometry(
             width_ratio=0.72, height_ratio=0.05, fill_ratio=0.85,

@@ -25,6 +25,14 @@ def coverage_anchor_order(point_count, preferred_anchor=0, max_count=0):
     return order
 
 
+def coverage_anchor_passes(point_count, preferred_anchor=0, max_count=0):
+    """Return the forward coverage pass followed by its exact reverse pass."""
+    forward = coverage_anchor_order(point_count, preferred_anchor, max_count)
+    if not forward:
+        return []
+    return [forward, list(reversed(forward))]
+
+
 def normalize_angle(angle):
     return (float(angle) + math.pi) % (2.0 * math.pi) - math.pi
 
@@ -356,6 +364,38 @@ def coverage_timeout_decision(elapsed, window_progress,
     if float(window_progress) >= abs(float(minimum_progress)):
         return "extend"
     return "soft_timeout"
+
+
+def progressive_fallback_stages(base_tolerance, configured_radii,
+                                radius_step, max_radius,
+                                tolerance_step, max_tolerance):
+    """Build widening nearby-observation stages without duplicate radii."""
+    base_tolerance = max(0.01, float(base_tolerance))
+    radius_step = max(0.01, abs(float(radius_step)))
+    max_radius = max(radius_step, abs(float(max_radius)))
+    tolerance_step = max(0.0, abs(float(tolerance_step)))
+    max_tolerance = max(base_tolerance, abs(float(max_tolerance)))
+
+    radii = []
+    for value in configured_radii or ():
+        radius = abs(float(value))
+        if 1e-6 < radius <= max_radius + 1e-6:
+            radii.append(radius)
+    next_radius = max(radii) + radius_step if radii else radius_step
+    while next_radius < max_radius - 1e-6:
+        radii.append(next_radius)
+        next_radius += radius_step
+    radii.append(max_radius)
+
+    unique_radii = []
+    for radius in sorted(radii):
+        if not unique_radii or abs(radius - unique_radii[-1]) > 1e-6:
+            unique_radii.append(radius)
+    return [
+        (radius, min(max_tolerance,
+                     base_tolerance + tolerance_step * (index + 1)))
+        for index, radius in enumerate(unique_radii)
+    ]
 
 
 def target_sample_is_fresh(target_error, received_at, now, timeout):

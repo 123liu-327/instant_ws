@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
   tf
+  line_follower
 )
 
 find_package(OpenCV REQUIRED)
@@ -94,6 +95,8 @@ add_executable(follow_test
   src/process_image.cpp
   src/track_line.cpp
 )
+
+add_dependencies(follow_test ${catkin_EXPORTED_TARGETS})
 
 target_link_libraries(follow_test
   ${catkin_LIBRARIES}

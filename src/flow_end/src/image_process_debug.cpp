@@ -118,6 +118,7 @@ class ImageProcessDebugNode {
 public:
     ImageProcessDebugNode() : nh_("~") {
         nh_.param<std::string>("image_topic", image_topic_, "/usb_cam/image_raw");
+        nh_.param<std::string>("debug_topic", debug_topic_, "/flow_end/follow_test_debug");
         nh_.param<bool>("show_window", show_window_, true);
         nh_.param<bool>("publish_debug_image", publish_debug_image_, true);
 
@@ -125,10 +126,11 @@ public:
 
         image_sub_ = root_nh_.subscribe(image_topic_, 1, &ImageProcessDebugNode::imageCallback, this);
         if (publish_debug_image_) {
-            debug_pub_ = root_nh_.advertise<sensor_msgs::Image>("/flow_end/image_process_debug", 1);
+            debug_pub_ = root_nh_.advertise<sensor_msgs::Image>(debug_topic_, 1);
         }
 
-        ROS_WARN("flow_end image_process_debug started. It does NOT publish /cmd_vel.");
+        ROS_WARN("flow_end image_process_debug started. image=%s debug=%s; it does NOT publish /cmd_vel.",
+                 image_topic_.c_str(), debug_topic_.c_str());
     }
 
 private:
@@ -345,6 +347,7 @@ private:
     ros::Subscriber image_sub_;
     ros::Publisher debug_pub_;
     std::string image_topic_;
+    std::string debug_topic_;
     bool show_window_ = true;
     bool publish_debug_image_ = true;
 };

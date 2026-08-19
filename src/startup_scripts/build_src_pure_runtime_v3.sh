@@ -33,6 +33,7 @@ link_package "$SRC/ucar_2026_qr_speak_test"
 link_package "$SRC/ucar_qr_decoder"
 link_package "$SRC/factory_sign_ppocr_rknn_test"
 link_package "$SRC/flow_end"
+link_package "$SRC/line_follower"
 link_package "$SRC/traffic_light_vision"
 link_package "$SRC/ucar_camera"
 link_package "$SRC/yolo"
@@ -68,6 +69,7 @@ packages=(
   ucar_qr_decoder
   factory_sign_ppocr_rknn_test
   flow_end
+  line_follower
   traffic_light_vision
   ucar_camera
   yolo
@@ -120,6 +122,8 @@ required=(
   "$DEVEL/lib/ucar_2026_track_end_stop/stable_right_track_end_stop_node"
   "$DEVEL/lib/ucar_2026_strict_mission/strict_mission_node.py"
   "$DEVEL/lib/flow_end/follow_test"
+  "$DEVEL/lib/flow_end/yellow_line_detector"
+  "$DEVEL/lib/line_follower/line_follower_node"
   "$DEVEL/lib/traffic_light_vision/traffic_light_detector.py"
   "$DEVEL/lib/ucar_camera/ucar_camera.py"
   "$DEVEL/lib/ucar_2026_competition/competition_flow_flowend_v1.py"

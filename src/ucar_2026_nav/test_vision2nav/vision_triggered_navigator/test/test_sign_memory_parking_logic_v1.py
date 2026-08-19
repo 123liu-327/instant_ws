@@ -4,6 +4,7 @@ import math
 import unittest
 
 from sign_memory_parking_logic_v1 import (
+    alignment_reacquire_is_usable,
     alternate_cardinal_yaw,
     choose_lateral_dodge,
     fit_front_wall,
@@ -11,6 +12,7 @@ from sign_memory_parking_logic_v1 import (
     lateral_velocity_for_image_error,
     local_forward_displacement,
     local_lateral_displacement,
+    remembered_target_lateral_travel,
     nearest_cardinal_yaw,
     projected_lateral_offset,
     should_run_mid_recenter,
@@ -18,6 +20,16 @@ from sign_memory_parking_logic_v1 import (
 
 
 class SignMemoryParkingLogicTest(unittest.TestCase):
+    def test_alignment_reacquire_accepts_visible_sign_near_cardinal(self):
+        self.assertTrue(alignment_reacquire_is_usable(
+            -0.58, math.radians(-110.0), 0.65, math.radians(25.0)))
+
+    def test_alignment_reacquire_rejects_edge_or_skewed_view(self):
+        self.assertFalse(alignment_reacquire_is_usable(
+            -0.72, math.radians(-110.0), 0.65, math.radians(25.0)))
+        self.assertFalse(alignment_reacquire_is_usable(
+            -0.20, math.radians(-122.0), 0.65, math.radians(25.0)))
+
     def test_sign_on_right_moves_robot_right(self):
         self.assertLess(lateral_velocity_for_image_error(
             0.4, 0.2, 0.02, 0.1), 0.0)
@@ -59,6 +71,21 @@ class SignMemoryParkingLogicTest(unittest.TestCase):
             0.7, 0.49, math.radians(70.0), 0.88)
         self.assertLess(offset, 0.0)
         self.assertAlmostEqual(offset, -0.211, places=2)
+
+    def test_remembered_projection_matches_pixel_only_without_turn(self):
+        travel = remembered_target_lateral_travel(
+            (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.0,
+            0.4, 0.50, math.radians(70.0), 0.88, -1.0)
+        self.assertAlmostEqual(travel, projected_lateral_offset(
+            0.4, 0.50, math.radians(70.0), 0.88), places=6)
+
+    def test_remembered_projection_includes_cardinal_turn(self):
+        travel = remembered_target_lateral_travel(
+            (0.0, 0.0, math.pi),
+            (0.0, 0.0, math.radians(150.0)),
+            math.pi, 0.036, 0.564, math.radians(70.0), 0.88, -1.0)
+        self.assertLess(travel, -0.25)
+        self.assertGreater(travel, -0.40)
 
     def test_clockwise_primary_retries_counterclockwise(self):
         target, direction, correction = alternate_cardinal_yaw(

@@ -17,6 +17,8 @@ from ucar_2026_competition.logic import (
     base_is_stopped,
     ConsecutiveTargetFilter,
     DirectedYawAccumulator,
+    extra_distance_acceptance_bounds,
+    extra_distance_is_accepted,
     JsonLineBuffer,
     TRACK_CONFIG,
     TemporalTargetFilter,
@@ -85,6 +87,21 @@ def load_trigger_rearm_harness():
 
 
 class CompetitionLogicTest(unittest.TestCase):
+    def test_extra_distance_acceptance_bounds(self):
+        lower, upper = extra_distance_acceptance_bounds(0.150, 0.015)
+        self.assertAlmostEqual(lower, 0.135)
+        self.assertAlmostEqual(upper, 0.165)
+        self.assertFalse(extra_distance_is_accepted(0.134, lower, upper))
+        self.assertTrue(extra_distance_is_accepted(0.135, lower, upper))
+        self.assertTrue(extra_distance_is_accepted(0.165, lower, upper))
+        self.assertFalse(extra_distance_is_accepted(0.166, lower, upper))
+
+    def test_extra_distance_acceptance_rejects_invalid_tolerance(self):
+        with self.assertRaises(ValueError):
+            extra_distance_acceptance_bounds(0.150, -0.001)
+        with self.assertRaises(ValueError):
+            extra_distance_acceptance_bounds(0.150, 0.151)
+
     def test_normalize_angle(self):
         self.assertAlmostEqual(normalize_angle(3.0 * 3.141592653589793), -3.141592653589793)
         self.assertAlmostEqual(normalize_angle(-0.25), -0.25)

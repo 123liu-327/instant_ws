@@ -237,6 +237,28 @@ def split_rotation_steps(total_angle, step_angle):
     return tuple(steps)
 
 
+def extra_distance_acceptance_bounds(distance_m, tolerance_m):
+    """Return the inclusive odometry acceptance band for an extra advance."""
+    distance_m = float(distance_m)
+    tolerance_m = float(tolerance_m)
+    if not math.isfinite(distance_m) or distance_m < 0.0 or distance_m > 1.0:
+        raise ValueError("distance_m must be finite and in [0, 1]")
+    if (not math.isfinite(tolerance_m) or tolerance_m < 0.0 or
+            tolerance_m > distance_m):
+        raise ValueError("tolerance_m must be finite and in [0, distance_m]")
+    return distance_m - tolerance_m, distance_m + tolerance_m
+
+
+def extra_distance_is_accepted(progress_m, lower_bound_m, upper_bound_m):
+    """Test an inclusive distance band without rejecting decimal endpoints."""
+    progress_m = float(progress_m)
+    lower_bound_m = float(lower_bound_m)
+    upper_bound_m = float(upper_bound_m)
+    epsilon = 1e-9
+    return (math.isfinite(progress_m) and
+            lower_bound_m - epsilon <= progress_m <= upper_bound_m + epsilon)
+
+
 def qr_values_from_payload(payload):
     values = []
     for entry in payload.get("items", []):

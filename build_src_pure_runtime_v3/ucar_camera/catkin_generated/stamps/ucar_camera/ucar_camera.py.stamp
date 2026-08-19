@@ -34,6 +34,7 @@ class UcarCamera:
         self.camera_topic_name = rospy.get_param("~cam_topic_name", "/ucar_camera/image_raw")
         self.device_path = rospy.get_param("~device_path", "/dev/video0")
         self.pixel_format = str(rospy.get_param("~pixel_format", "MJPG")).upper()
+        # 还有写出YUYV格式的
         self.capture_fps = float(rospy.get_param("~capture_fps", 30.0))
         self.v4l2_ctl_command = rospy.get_param("~v4l2_ctl_command", "v4l2-ctl")
         self.low_exposure_absolute = int(rospy.get_param("~low_exposure_absolute", 150))

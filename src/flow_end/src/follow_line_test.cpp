@@ -13,8 +13,10 @@
 #include <cctype>
 #include <cmath>
 #include <ctime>
+#include <iomanip>
 #include <sstream>
 #include <string>
+#include <limits>
 
 // follow_line_test.cpp 是 follow_test 节点的具体工作逻辑文件。
 // 这里保留原 flow_end 视觉巡线算法依赖的全局变量，同时去掉原地图中的环岛和激光雷达流程。
@@ -171,9 +173,34 @@ double parking_yaw_tolerance_deg = 3.0;
 double parking_timeout = 6.0;
 double parking_odom_timeout = 0.5;
 ros::Time last_odom_time;
+ros::Time last_imu_time;
+double current_odom_position_x = 0.0;
+double current_odom_position_y = 0.0;
+double odom_total_distance = 0.0;
 double base_speed = 0.30;
 double aim_distance = 0.10;
 double aim_y_bias_m = 0.20;
+bool right_turn_assist_enabled = true;
+double right_turn_min_aim_distance = 0.06;
+double right_turn_error_start = 0.18;
+double right_turn_error_full = 0.40;
+double right_turn_min_speed = 0.08;
+double right_turn_wz_compensation = 0.12;
+double right_turn_max_wz = 0.70;
+double right_turn_odom_timeout = 0.25;
+double right_turn_odom_response_ratio = 0.60;
+int right_turn_odom_confirm_frames = 3;
+double current_odom_angular_velocity_z = 0.0;
+int right_turn_odom_underresponse_count = 0;
+std::string vision_source = "gray";
+double line_track_timeout = 0.25;
+double line_track_min_confidence = 0.20;
+int line_track_min_points = 20;
+std::mutex line_track_mutex;
+line_follower::LineTrack latest_line_track;
+ros::Time last_line_track_receive_time;
+bool has_line_track = false;
+bool external_vision_lost = false;
 bool initial_turn_enabled = true;
 double initial_turn_angle_deg = 30.0;
 double initial_turn_angular_speed = 0.35;
@@ -194,19 +221,32 @@ ros::Time lost_corner_search_start_time;
 
 bool y_branch_mode_requested = false;
 PathSelect pending_branch_path = PathSelect::MIDDLE;
-double y_approach_dist = 0.20;
 double y_turn_angle_deg = 45.0;
 double y_turn_angular_speed = 0.35;
 double y_turn_pause_sec = 0.5;
 int y_detect_min_id = 0;
-int y_detect_max_id = 100;
+int y_detect_max_id = 20;
 int y_detect_confirm_frames = 2;
-double y_center_aim_dist = 0.45;
-double y_approach_speed = 0.18;
-double y_center_max_wz = 0.25;
-int y_lost_confirm_frames = 3;
-double y_entry_min_odom = 0.08;
-double y_entry_max_odom = 0.60;
+double y_extra_forward_dist = 0.20;
+double y_hard_drive_speed = 0.15;
+double y_hard_drive_odom_timeout = 0.25;
+double y_hard_drive_max_duration = 8.0;
+int y_guided_min_points = 20;
+int y_guided_lost_confirm_frames = 2;
+double y_guided_error_threshold = 0.18;
+int y_guided_error_confirm_frames = 2;
+double y_guided_odom_timeout = 0.25;
+double y_guided_max_duration = 8.0;
+double y_hard_heading_kp = 1.2;
+double y_hard_heading_max_wz = 0.15;
+double y_hard_heading_deadband_deg = 2.0;
+double y_hard_heading_imu_timeout = 0.25;
+double y_reacquire_speed = 0.08;
+double y_reacquire_max_dist = 0.25;
+double y_reacquire_odom_timeout = 0.25;
+double y_reacquire_max_duration = 5.0;
+int y_reacquire_min_points = 20;
+int y_reacquire_confirm_frames = 2;
 double y_crossbar_seek_speed = 0.08;
 int y_crossbar_lost_confirm_frames = 3;
 double y_crossbar_target_long_m = 0.25;
@@ -216,16 +256,44 @@ int y_crossbar_confirm_frames = 2;
 double y_crossbar_seek_max_odom = 0.40;
 
 int y_detect_confirm_count = 0;
-int y_entry_lost_count = 0;
 int y_crossbar_lost_count = 0;
 int y_crossbar_confirm_count = 0;
-float y_approach_start_odom = 0.0f;
 float y_crossbar_seek_start_odom = 0.0f;
-ros::Time y_approach_start_time;
+float y_hard_drive_start_odom = 0.0f;
+double y_hard_drive_start_total_odom = 0.0;
+double y_detected_long_m = 0.0;
+double y_hard_drive_target_dist = 0.0;
+double y_hard_drive_remaining_dist = 0.0;
+float y_detected_y0_px = -1.0f;
+float y_detected_y1_px = -1.0f;
+ros::Time y_hard_drive_start_time;
+bool y_hard_drive_aborted = false;
+std::string y_hard_drive_abort_reason;
+double y_guided_target_dist = 0.0;
+double y_guided_start_total_odom = 0.0;
+double y_guided_moved_dist = 0.0;
+double y_guided_remaining_dist = 0.0;
+double y_guided_visual_error = 0.0;
+ros::Time y_guided_start_time;
+int y_guided_lost_count = 0;
+int y_guided_error_count = 0;
+double y_last_reliable_yaw_deg = 0.0;
+bool y_has_reliable_yaw = false;
+double y_hard_heading_reference_deg = 0.0;
+std::string y_hard_drive_trigger_reason;
+std::string y_guided_hold_reason;
 ros::Time y_turn_last_time;
 bool y_turn_has_last_time = false;
 double y_turn_integrated_angle_deg = 0.0;
 ros::Time y_turn_pause_start;
+double y_reacquire_start_x = 0.0;
+double y_reacquire_start_y = 0.0;
+double y_reacquire_moved_dist = 0.0;
+double y_reacquire_remaining_dist = 0.0;
+ros::Time y_reacquire_start_time;
+int y_reacquire_confirm_count = 0;
+int y_reacquire_visible_points = 0;
+std::string y_reacquire_hold_reason;
 
 std::string normalize(std::string value) {
     // 指令统一转成小写，兼容 Left/left/L 等写法。
@@ -274,11 +342,13 @@ std::string motionStateToString(MotionState state) {
         case MotionState::ALIGN_PAUSE: return "ALIGN_PAUSE";
         case MotionState::FOLLOWING: return "FOLLOWING";
         case MotionState::FOLLOWING_STRAIGHT: return "FOLLOWING_STRAIGHT";
-        case MotionState::Y_CENTER_APPROACH: return "Y_CENTER_APPROACH";
+        case MotionState::Y_GUIDED_FORWARD: return "Y_GUIDED_FORWARD";
+        case MotionState::Y_COORDINATE_FORWARD: return "Y_COORDINATE_FORWARD";
         case MotionState::Y_CROSSBAR_SEEK: return "Y_CROSSBAR_SEEK";
         case MotionState::Y_ALIGNING_LEFT: return "Y_ALIGNING_LEFT";
         case MotionState::Y_ALIGNING_RIGHT: return "Y_ALIGNING_RIGHT";
         case MotionState::Y_ALIGN_PAUSE: return "Y_ALIGN_PAUSE";
+        case MotionState::Y_BRANCH_REACQUIRE: return "Y_BRANCH_REACQUIRE";
     }
     return "UNKNOWN";
 }
@@ -288,22 +358,148 @@ void publishDebugImage(const sensor_msgs::ImageConstPtr &source_msg = sensor_msg
 
 void resetMotionController() {
     motion_controller.reset();
+    right_turn_odom_underresponse_count = 0;
+}
+
+void configureVisionSource(const std::string &source, double timeout,
+                           double min_confidence, int min_points) {
+    const std::string normalized = normalize(source);
+    if (normalized == "gray" || normalized == "line_follower") {
+        vision_source = normalized;
+    } else {
+        ROS_WARN("[VISION] Invalid vision_source '%s', fallback to gray", source.c_str());
+        vision_source = "gray";
+    }
+    line_track_timeout = std::max(0.01, timeout);
+    line_track_min_confidence = std::max(0.0, std::min(1.0, min_confidence));
+    line_track_min_points = std::max(1, min_points);
+}
+
+void updateLineTrack(const line_follower::LineTrack::ConstPtr &msg) {
+    std::lock_guard<std::mutex> lock(line_track_mutex);
+    latest_line_track = *msg;
+    last_line_track_receive_time = ros::Time::now();
+    has_line_track = true;
+}
+
+void resetExternalVisionState() {
+    std::lock_guard<std::mutex> lock(line_track_mutex);
+    has_line_track = false;
+    last_line_track_receive_time = ros::Time();
+    external_vision_lost = false;
+    right_turn_odom_underresponse_count = 0;
+}
+
+bool externalTrackSnapshot(line_follower::LineTrack &track,
+                           double &receive_age, double &source_age,
+                           std::string &reason) {
+    ros::Time receive_time;
+    {
+        std::lock_guard<std::mutex> lock(line_track_mutex);
+        if (!has_line_track) {
+            reason = "no_message";
+            return false;
+        }
+        track = latest_line_track;
+        receive_time = last_line_track_receive_time;
+    }
+
+    const ros::Time now = ros::Time::now();
+    receive_age = (now - receive_time).toSec();
+    source_age = track.header.stamp.isZero()
+                     ? std::numeric_limits<double>::infinity()
+                     : (now - track.header.stamp).toSec();
+    if (receive_age < 0.0 || receive_age > line_track_timeout) {
+        reason = "receive_timeout";
+        return false;
+    }
+    if (!std::isfinite(source_age) || source_age < -0.10 ||
+        source_age > line_track_timeout) {
+        reason = "source_timeout";
+        return false;
+    }
+    if (!track.valid) {
+        reason = "invalid_flag";
+        return false;
+    }
+    if (track.confidence < line_track_min_confidence) {
+        reason = "low_confidence";
+        return false;
+    }
+    if (track.image_width != RESULT_COL || track.image_height != RESULT_ROW) {
+        reason = "image_size";
+        return false;
+    }
+    if (track.center_x_px.size() != track.center_y_px.size() ||
+        static_cast<int>(track.center_x_px.size()) < line_track_min_points) {
+        reason = "point_count";
+        return false;
+    }
+    return true;
+}
+
+void configureRightTurnAssist(bool enabled, double min_aim_distance,
+                              double error_start, double error_full,
+                              double min_speed, double wz_compensation,
+                              double max_wz, double odom_timeout,
+                              double odom_response_ratio,
+                              int odom_confirm_frames) {
+    right_turn_assist_enabled = enabled;
+    right_turn_min_aim_distance = std::max(0.01, min_aim_distance);
+    right_turn_error_start = std::max(0.0, error_start);
+    right_turn_error_full = std::max(right_turn_error_start + 0.001, error_full);
+    right_turn_min_speed = std::max(0.0, min_speed);
+    right_turn_wz_compensation = std::max(0.0, wz_compensation);
+    right_turn_max_wz = std::max(0.0, max_wz);
+    right_turn_odom_timeout = std::max(0.0, odom_timeout);
+    right_turn_odom_response_ratio =
+        std::max(0.0, std::min(1.0, odom_response_ratio));
+    right_turn_odom_confirm_frames = std::max(1, odom_confirm_frames);
+    right_turn_odom_underresponse_count = 0;
 }
 
 void resetYBranchState() {
     y_branch_mode_requested = false;
     pending_branch_path = PathSelect::MIDDLE;
     y_detect_confirm_count = 0;
-    y_entry_lost_count = 0;
     y_crossbar_lost_count = 0;
     y_crossbar_confirm_count = 0;
-    y_approach_start_odom = odom_dist;
     y_crossbar_seek_start_odom = odom_dist;
-    y_approach_start_time = ros::Time();
+    y_hard_drive_start_odom = odom_dist;
+    y_hard_drive_start_total_odom = odom_total_distance;
+    y_detected_long_m = 0.0;
+    y_hard_drive_target_dist = 0.0;
+    y_hard_drive_remaining_dist = 0.0;
+    y_detected_y0_px = -1.0f;
+    y_detected_y1_px = -1.0f;
+    y_hard_drive_start_time = ros::Time();
+    y_hard_drive_aborted = false;
+    y_hard_drive_abort_reason.clear();
+    y_guided_target_dist = 0.0;
+    y_guided_start_total_odom = odom_total_distance;
+    y_guided_moved_dist = 0.0;
+    y_guided_remaining_dist = 0.0;
+    y_guided_visual_error = 0.0;
+    y_guided_start_time = ros::Time();
+    y_guided_lost_count = 0;
+    y_guided_error_count = 0;
+    y_last_reliable_yaw_deg = current_yaw;
+    y_has_reliable_yaw = false;
+    y_hard_heading_reference_deg = current_yaw;
+    y_hard_drive_trigger_reason.clear();
+    y_guided_hold_reason.clear();
     y_turn_last_time = ros::Time();
     y_turn_has_last_time = false;
     y_turn_integrated_angle_deg = 0.0;
     y_turn_pause_start = ros::Time();
+    y_reacquire_start_x = current_odom_position_x;
+    y_reacquire_start_y = current_odom_position_y;
+    y_reacquire_moved_dist = 0.0;
+    y_reacquire_remaining_dist = 0.0;
+    y_reacquire_start_time = ros::Time();
+    y_reacquire_confirm_count = 0;
+    y_reacquire_visible_points = 0;
+    y_reacquire_hold_reason.clear();
     forward_crossbar_result = {false, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f};
     resetMotionController();
 }
@@ -339,7 +535,6 @@ void startInitialTurnIfNeeded() {
     if (y_branch_mode_requested) {
         motion_state = MotionState::FOLLOWING_STRAIGHT;
         y_detect_confirm_count = 0;
-        y_entry_lost_count = 0;
         y_crossbar_lost_count = 0;
         y_crossbar_confirm_count = 0;
         y_turn_integrated_angle_deg = 0.0;
@@ -485,9 +680,114 @@ void detectCorners() {
     }
 }
 
+bool calculateYCoordinateTarget(double &long_m) {
+    double y_sum = 0.0;
+    int valid_count = 0;
+    y_detected_y0_px = -1.0f;
+    y_detected_y1_px = -1.0f;
+
+    if (Ypt0_found && Ypt0_rpts0s_id >= y_detect_min_id &&
+        Ypt0_rpts0s_id <= y_detect_max_id &&
+        Ypt0_rpts0s_id < rpts0s_num) {
+        y_detected_y0_px = rpts0s[Ypt0_rpts0s_id][1];
+        if (std::isfinite(y_detected_y0_px)) {
+            y_sum += y_detected_y0_px;
+            ++valid_count;
+        }
+    }
+    if (Ypt1_found && Ypt1_rpts1s_id >= y_detect_min_id &&
+        Ypt1_rpts1s_id <= y_detect_max_id &&
+        Ypt1_rpts1s_id < rpts1s_num) {
+        y_detected_y1_px = rpts1s[Ypt1_rpts1s_id][1];
+        if (std::isfinite(y_detected_y1_px)) {
+            y_sum += y_detected_y1_px;
+            ++valid_count;
+        }
+    }
+    if (valid_count == 0 || pixel_per_meter <= 1.0f) {
+        return false;
+    }
+
+    const double average_y_px = y_sum / static_cast<double>(valid_count);
+    const double ref_y = RESULT_ROW + 10.0;
+    long_m = -(average_y_px - ref_y) / pixel_per_meter;
+    // Y 点检测本身限制在约 0.8 m 的重采样边线范围内；这里留少量
+    // IPM/曲线误差余量，同时拒绝车后方或明显失真的坐标。
+    return std::isfinite(long_m) && long_m >= 0.0 && long_m <= 1.20;
+}
+
+bool calculateGrayControlError(double distance, double &error) {
+    if (rpts_num <= 0 || rpts == nullptr) {
+        return false;
+    }
+    const int aim_idx = clip(
+        static_cast<int>(std::round(distance / sample_dist)),
+        0, rpts_num - 1);
+    const float cx = RESULT_COL / 2.0f;
+    const float cy = RESULT_ROW + 10.0f;
+    const float dx = rpts[aim_idx][0] - cx;
+    const float dy = cy - rpts[aim_idx][1] +
+        aim_y_bias_m * pixel_per_meter;
+    error = -std::atan2(static_cast<double>(dx), static_cast<double>(dy));
+    return std::isfinite(error);
+}
+
+void enterYTurn() {
+    resetMotionController();
+    motion_state = pending_branch_path == PathSelect::LEFT
+        ? MotionState::Y_ALIGNING_LEFT
+        : MotionState::Y_ALIGNING_RIGHT;
+    y_turn_integrated_angle_deg = 0.0;
+    y_turn_last_time = ros::Time::now();
+    y_turn_has_last_time = true;
+    pid.reset();
+    publishStatus("Y_TURN_" + pathToString(pending_branch_path));
+}
+
+void enterYRemainingHardForward(const std::string &reason) {
+    geometry_msgs::Twist stop_msg;
+    pub.publish(stop_msg);
+    y_guided_moved_dist = std::max(
+        0.0, odom_total_distance - y_guided_start_total_odom);
+    y_guided_remaining_dist = std::max(
+        0.0, y_guided_target_dist - y_guided_moved_dist);
+    if (y_guided_remaining_dist <= 1e-3) {
+        ROS_WARN(
+            "[Y_GUIDED] Target already reached; skip hard forward | reason=%s | target=%.3fm | guided=%.3fm",
+            reason.c_str(), y_guided_target_dist, y_guided_moved_dist);
+        enterYTurn();
+        return;
+    }
+
+    resetMotionController();
+    motion_state = MotionState::Y_COORDINATE_FORWARD;
+    y_hard_drive_start_odom = odom_dist;
+    y_hard_drive_start_total_odom = odom_total_distance;
+    y_hard_drive_start_time = ros::Time::now();
+    y_hard_drive_target_dist = y_guided_remaining_dist;
+    y_hard_drive_remaining_dist = y_guided_remaining_dist;
+    y_hard_drive_aborted = false;
+    y_hard_drive_abort_reason.clear();
+    y_hard_drive_trigger_reason = reason;
+    y_hard_heading_reference_deg = y_has_reliable_yaw
+        ? y_last_reliable_yaw_deg : current_yaw;
+    publishStatus("Y_REMAINING_FORWARD_" + pathToString(pending_branch_path));
+    ROS_WARN(
+        "[Y_GUIDED] Switch to remaining hard forward | reason=%s | target=%.3fm | guided=%.3fm | remaining=%.3fm | ref_yaw=%.2fdeg | has_reliable_yaw=%d | speed=%.2fm/s",
+        reason.c_str(), y_guided_target_dist, y_guided_moved_dist,
+        y_guided_remaining_dist, y_hard_heading_reference_deg,
+        y_has_reliable_yaw, y_hard_drive_speed);
+}
+
 bool handleYBranchFlow() {
     if (motion_state == MotionState::FOLLOWING_STRAIGHT) {
-        const bool y_seen = Ypt0_found || Ypt1_found;
+        const bool y0_in_range = Ypt0_found &&
+            Ypt0_rpts0s_id >= y_detect_min_id &&
+            Ypt0_rpts0s_id <= y_detect_max_id;
+        const bool y1_in_range = Ypt1_found &&
+            Ypt1_rpts1s_id >= y_detect_min_id &&
+            Ypt1_rpts1s_id <= y_detect_max_id;
+        const bool y_seen = y0_in_range || y1_in_range;
         const bool lost_all_lines =
             (rpts_num == 0 && rptsc0e_num == 0 && rptsc1e_num == 0);
 
@@ -501,31 +801,64 @@ bool handleYBranchFlow() {
 
         ROS_WARN_THROTTLE(
             0.5,
-            "[Y_BRANCH] Searching | next_path=%s | Y0=%d(id=%d) | Y1=%d(id=%d) | y_seen=%d | y_confirm=%d/%d | lost=%d/%d",
+            "[Y_BRANCH] Searching | next_path=%s | Y0=%d(id=%d,in=%d) | Y1=%d(id=%d,in=%d) | id_range=%d~%d | y_seen=%d | y_confirm=%d/%d | lost=%d/%d",
             pathToString(pending_branch_path).c_str(),
-            Ypt0_found, Ypt0_rpts0s_id,
-            Ypt1_found, Ypt1_rpts1s_id,
+            Ypt0_found, Ypt0_rpts0s_id, y0_in_range,
+            Ypt1_found, Ypt1_rpts1s_id, y1_in_range,
+            y_detect_min_id, y_detect_max_id,
             y_seen,
             y_detect_confirm_count, y_detect_confirm_frames,
             y_crossbar_lost_count, y_crossbar_lost_confirm_frames);
 
         if (y_detect_confirm_count >= y_detect_confirm_frames) {
+            double detected_long_m = 0.0;
+            if (!calculateYCoordinateTarget(detected_long_m)) {
+                resetMotionController();
+                motion_state = MotionState::Y_CROSSBAR_SEEK;
+                y_crossbar_seek_start_odom = odom_dist;
+                y_crossbar_confirm_count = 0;
+                pid.reset();
+                publishStatus("Y_CROSSBAR_SEEK_" + pathToString(pending_branch_path));
+                ROS_ERROR(
+                    "[Y_COORD] Invalid Y coordinate, use crossbar fallback | next_path=%s | Y0=%d(id=%d,y=%.1f) | Y1=%d(id=%d,y=%.1f) | ppm=%.1f",
+                    pathToString(pending_branch_path).c_str(),
+                    Ypt0_found, Ypt0_rpts0s_id, y_detected_y0_px,
+                    Ypt1_found, Ypt1_rpts1s_id, y_detected_y1_px,
+                    pixel_per_meter);
+                return true;
+            }
+
+            y_detected_long_m = detected_long_m;
+            y_guided_target_dist =
+                y_detected_long_m + y_extra_forward_dist;
             resetMotionController();
-            motion_state = MotionState::Y_CENTER_APPROACH;
-            y_approach_start_odom = odom_dist;
-            y_approach_start_time = ros::Time::now();
-            y_entry_lost_count = 0;
+            motion_state = MotionState::Y_GUIDED_FORWARD;
+            y_guided_start_total_odom = odom_total_distance;
+            y_guided_moved_dist = 0.0;
+            y_guided_remaining_dist = y_guided_target_dist;
+            y_guided_visual_error = 0.0;
+            y_guided_start_time = ros::Time::now();
+            y_guided_lost_count = 0;
+            y_guided_error_count = 0;
+            const double imu_age = last_imu_time.isZero()
+                ? std::numeric_limits<double>::infinity()
+                : (ros::Time::now() - last_imu_time).toSec();
+            y_has_reliable_yaw = imu_age >= 0.0 &&
+                imu_age <= y_hard_heading_imu_timeout;
+            y_last_reliable_yaw_deg = current_yaw;
+            y_guided_hold_reason.clear();
             y_crossbar_lost_count = 0;
             y_crossbar_confirm_count = 0;
-            publishStatus("Y_CENTER_APPROACH_" + pathToString(pending_branch_path));
+            publishStatus("Y_GUIDED_FORWARD_" + pathToString(pending_branch_path));
             ROS_WARN(
-                "[Y_BRANCH] Center approach started | next_path=%s | Y0=%d(id=%d) | Y1=%d(id=%d) | confirm=%d/%d | odom=%.3fm",
+                "[Y_GUIDED] Middle-guided target started | next_path=%s | Y0=%d(id=%d,y=%.1f) | Y1=%d(id=%d,y=%.1f) | long=%.3fm | extra=%.3fm | target=%.3fm | total_odom=%.3fm | yaw=%.2fdeg | imu_fresh=%d",
                 pathToString(pending_branch_path).c_str(),
-                Ypt0_found, Ypt0_rpts0s_id,
-                Ypt1_found, Ypt1_rpts1s_id,
-                y_detect_confirm_count, y_detect_confirm_frames,
-                odom_dist);
-            return true;
+                Ypt0_found, Ypt0_rpts0s_id, y_detected_y0_px,
+                Ypt1_found, Ypt1_rpts1s_id, y_detected_y1_px,
+                y_detected_long_m, y_extra_forward_dist,
+                y_guided_target_dist, y_guided_start_total_odom,
+                current_yaw, y_has_reliable_yaw);
+            return false;
         }
 
         if (y_crossbar_lost_count >= y_crossbar_lost_confirm_frames) {
@@ -542,6 +875,99 @@ bool handleYBranchFlow() {
                 odom_dist);
             return true;
         }
+        return false;
+    }
+
+    if (motion_state == MotionState::Y_GUIDED_FORWARD) {
+        const ros::Time now = ros::Time::now();
+        y_guided_moved_dist = std::max(
+            0.0, odom_total_distance - y_guided_start_total_odom);
+        y_guided_remaining_dist = std::max(
+            0.0, y_guided_target_dist - y_guided_moved_dist);
+        const double odom_age = last_odom_time.isZero()
+            ? std::numeric_limits<double>::infinity()
+            : (now - last_odom_time).toSec();
+        const bool odom_fresh = odom_age >= 0.0 &&
+            odom_age <= y_guided_odom_timeout;
+        const double elapsed = y_guided_start_time.isZero()
+            ? 0.0 : (now - y_guided_start_time).toSec();
+
+        std::string hold_reason;
+        if (!odom_fresh) {
+            hold_reason = "odom_stale";
+        } else if (elapsed >= y_guided_max_duration) {
+            hold_reason = "timeout";
+        }
+        if (!hold_reason.empty()) {
+            geometry_msgs::Twist stop_msg;
+            pub.publish(stop_msg);
+            publishDebugImage();
+            if (hold_reason != y_guided_hold_reason) {
+                y_guided_hold_reason = hold_reason;
+                publishStatus("Y_GUIDED_HOLD_" + hold_reason);
+                ROS_ERROR(
+                    "[Y_GUIDED] Holding stop | reason=%s | target=%.3fm | guided=%.3fm | remaining=%.3fm | elapsed=%.2fs/%.2fs | odom_age=%.3fs",
+                    hold_reason.c_str(), y_guided_target_dist,
+                    y_guided_moved_dist, y_guided_remaining_dist,
+                    elapsed, y_guided_max_duration, odom_age);
+            }
+            return true;
+        }
+        if (!y_guided_hold_reason.empty()) {
+            y_guided_hold_reason.clear();
+            publishStatus("Y_GUIDED_FORWARD_" + pathToString(pending_branch_path));
+        }
+
+        if (y_guided_moved_dist >= y_guided_target_dist) {
+            geometry_msgs::Twist stop_msg;
+            pub.publish(stop_msg);
+            ROS_WARN(
+                "[Y_GUIDED] Target reached under normal middle control | target=%.3fm | guided=%.3fm | elapsed=%.2fs",
+                y_guided_target_dist, y_guided_moved_dist, elapsed);
+            enterYTurn();
+            return true;
+        }
+
+        double visual_error = 0.0;
+        const bool enough_points = rpts_num >= y_guided_min_points;
+        const bool error_valid = enough_points &&
+            calculateGrayControlError(aim_distance, visual_error);
+        y_guided_visual_error = error_valid ? visual_error : 0.0;
+        y_guided_lost_count = error_valid ? 0 : y_guided_lost_count + 1;
+        const bool error_exceeded = error_valid &&
+            std::abs(visual_error) > y_guided_error_threshold;
+        y_guided_error_count = error_exceeded
+            ? y_guided_error_count + 1 : 0;
+
+        const double imu_age = last_imu_time.isZero()
+            ? std::numeric_limits<double>::infinity()
+            : (now - last_imu_time).toSec();
+        const bool imu_fresh = imu_age >= 0.0 &&
+            imu_age <= y_hard_heading_imu_timeout;
+        if (error_valid && !error_exceeded && imu_fresh) {
+            y_last_reliable_yaw_deg = current_yaw;
+            y_has_reliable_yaw = true;
+        }
+
+        if (y_guided_lost_count >= y_guided_lost_confirm_frames) {
+            enterYRemainingHardForward("line_lost");
+            return true;
+        }
+        if (y_guided_error_count >= y_guided_error_confirm_frames) {
+            enterYRemainingHardForward("visual_error");
+            return true;
+        }
+
+        ROS_WARN_THROTTLE(
+            0.5,
+            "[Y_GUIDED] Middle control active | target=%.3fm | guided=%.3fm | remaining=%.3fm | points=%d/%d | error=%.3frad/%.3frad | lost=%d/%d | error_confirm=%d/%d | yaw=%.2fdeg | reliable_yaw=%.2fdeg(valid=%d) | odom_age=%.3fs | elapsed=%.2fs",
+            y_guided_target_dist, y_guided_moved_dist,
+            y_guided_remaining_dist, rpts_num, y_guided_min_points,
+            y_guided_visual_error, y_guided_error_threshold,
+            y_guided_lost_count, y_guided_lost_confirm_frames,
+            y_guided_error_count, y_guided_error_confirm_frames,
+            current_yaw, y_last_reliable_yaw_deg, y_has_reliable_yaw,
+            odom_age, elapsed);
         return false;
     }
 
@@ -609,61 +1035,104 @@ bool handleYBranchFlow() {
         return true;
     }
 
-    if (motion_state == MotionState::Y_CENTER_APPROACH) {
-        const float moved = std::abs(odom_dist - y_approach_start_odom);
-        const bool lost_entry =
-            (rpts_num == 0 && rptsc0e_num == 0 && rptsc1e_num == 0);
-        y_entry_lost_count = lost_entry ? y_entry_lost_count + 1 : 0;
+    if (motion_state == MotionState::Y_COORDINATE_FORWARD) {
+        const ros::Time now = ros::Time::now();
+        const double moved = std::max(
+            0.0, odom_total_distance - y_hard_drive_start_total_odom);
+        y_hard_drive_remaining_dist = std::max(
+            0.0, y_hard_drive_target_dist - moved);
+        const double odom_age = last_odom_time.isZero()
+            ? std::numeric_limits<double>::infinity()
+            : (now - last_odom_time).toSec();
+        const bool odom_fresh = odom_age >= 0.0 &&
+            odom_age <= y_hard_drive_odom_timeout;
+        const double imu_age = last_imu_time.isZero()
+            ? std::numeric_limits<double>::infinity()
+            : (now - last_imu_time).toSec();
+        const bool imu_fresh = imu_age >= 0.0 &&
+            imu_age <= y_hard_heading_imu_timeout;
+        const double elapsed = y_hard_drive_start_time.isZero()
+            ? 0.0 : (now - y_hard_drive_start_time).toSec();
 
-        const bool reached_by_lost_lines =
-            moved >= static_cast<float>(y_entry_min_odom) &&
-            y_entry_lost_count >= y_lost_confirm_frames;
-        const bool reached_by_max_odom =
-            moved >= static_cast<float>(y_entry_max_odom);
-        if (reached_by_lost_lines || reached_by_max_odom) {
-            resetMotionController();
-            motion_state = pending_branch_path == PathSelect::LEFT
-                ? MotionState::Y_ALIGNING_LEFT
-                : MotionState::Y_ALIGNING_RIGHT;
-            y_turn_integrated_angle_deg = 0.0;
-            y_turn_last_time = ros::Time::now();
-            y_turn_has_last_time = true;
-            pid.reset();
-            publishStatus("Y_TURN_" + pathToString(pending_branch_path));
-            ROS_WARN(
-                "[Y_BRANCH] Entry reached by %s | next_path=%s | moved=%.3fm | lost=%d/%d",
-                reached_by_lost_lines ? "lost_lines" : "max_odom",
-                pathToString(pending_branch_path).c_str(),
-                moved, y_entry_lost_count, y_lost_confirm_frames);
+        if (!y_hard_drive_aborted && !odom_fresh) {
+            y_hard_drive_aborted = true;
+            y_hard_drive_abort_reason = "odom_stale";
+            publishStatus("Y_COORDINATE_ABORTED_ODOM");
+            ROS_ERROR(
+                "[Y_COORD] Abort hard forward: odometry missing/stale | age=%.3fs | timeout=%.3fs",
+                odom_age, y_hard_drive_odom_timeout);
+        }
+        if (!y_hard_drive_aborted &&
+            elapsed > y_hard_drive_max_duration) {
+            y_hard_drive_aborted = true;
+            y_hard_drive_abort_reason = "timeout";
+            publishStatus("Y_COORDINATE_ABORTED_TIMEOUT");
+            ROS_ERROR(
+                "[Y_COORD] Abort hard forward: timeout | elapsed=%.2fs | limit=%.2fs | moved=%.3fm",
+                elapsed, y_hard_drive_max_duration, moved);
+        }
+        if (!y_hard_drive_aborted && !imu_fresh) {
+            y_hard_drive_aborted = true;
+            y_hard_drive_abort_reason = "imu_stale";
+            publishStatus("Y_COORDINATE_ABORTED_IMU");
+            ROS_ERROR(
+                "[Y_COORD] Abort remaining hard forward: IMU missing/stale | age=%.3fs | timeout=%.3fs",
+                imu_age, y_hard_heading_imu_timeout);
+        }
+
+        if (y_hard_drive_aborted) {
+            geometry_msgs::Twist stop_msg;
+            pub.publish(stop_msg);
+            publishDebugImage();
+            ROS_ERROR_THROTTLE(
+                1.0,
+                "[Y_COORD] Holding stop after abort | reason=%s | trigger=%s | moved=%.3fm/%.3fm | remaining=%.3fm | odom_age=%.3fs | imu_age=%.3fs",
+                y_hard_drive_abort_reason.c_str(),
+                y_hard_drive_trigger_reason.c_str(), moved,
+                y_hard_drive_target_dist, y_hard_drive_remaining_dist,
+                odom_age, imu_age);
             return true;
         }
 
-        MotionControlInput control_input;
-        control_input.path = rpts;
-        control_input.path_num = rpts_num;
-        control_input.path_key = static_cast<int>(PathSelect::MIDDLE);
-        control_input.path_name = "middle";
-        control_input.degraded = is_degraded_mode;
-        control_input.base_speed = y_approach_speed;
-        control_input.aim_distance = y_center_aim_dist;
-        control_input.aim_y_bias_m = 0.0;
-        control_input.sample_dist = sample_dist;
-        control_input.pixel_per_meter = pixel_per_meter;
-        control_input.image_width = RESULT_COL;
-        control_input.image_height = RESULT_ROW;
-        control_input.allow_lost_coast = false;
-        control_input.max_wz_override = y_center_max_wz;
-        const MotionControlOutput output = motion_controller.compute(control_input);
-        pub.publish(output.cmd);
-        publishDebugImage();
+        if (moved >= y_hard_drive_target_dist) {
+            geometry_msgs::Twist stop_msg;
+            pub.publish(stop_msg);
+            y_hard_drive_remaining_dist = 0.0;
+            ROS_WARN(
+                "[Y_COORD] Remaining target reached | next_path=%s | trigger=%s | overall_target=%.3fm | guided=%.3fm | hard_target=%.3fm | hard_moved=%.3fm | elapsed=%.2fs",
+                pathToString(pending_branch_path).c_str(),
+                y_hard_drive_trigger_reason.c_str(),
+                y_guided_target_dist, y_guided_moved_dist,
+                y_hard_drive_target_dist, moved, elapsed);
+            enterYTurn();
+            return true;
+        }
 
+        geometry_msgs::Twist msg;
+        msg.linear.x = y_hard_drive_speed;
+        const double heading_error_deg = normalizeAngleDeg(
+            y_hard_heading_reference_deg - current_yaw);
+        const double heading_error_rad =
+            heading_error_deg * static_cast<double>(PI) / 180.0;
+        msg.angular.z = std::abs(heading_error_deg) <=
+                y_hard_heading_deadband_deg
+            ? 0.0
+            : std::max(-y_hard_heading_max_wz,
+                       std::min(y_hard_heading_max_wz,
+                                y_hard_heading_kp * heading_error_rad));
+        pub.publish(msg);
+        publishDebugImage();
         ROS_WARN_THROTTLE(
             0.5,
-            "[Y_BRANCH] Center approaching | next_path=%s | rpts=%d | error=%.3f | moved=%.3fm | lost=%d/%d | v=%.2f | wz=%.2f",
+            "[Y_COORD] Remaining hard forward | next_path=%s | trigger=%s | overall_target=%.3fm | guided=%.3fm | hard_target=%.3fm | hard_moved=%.3fm | remaining=%.3fm | ref_yaw=%.2fdeg | yaw=%.2fdeg | yaw_error=%.2fdeg | odom_fresh=%d(age=%.3fs) | imu_fresh=%d(age=%.3fs) | v=%.2f | wz=%.3f",
             pathToString(pending_branch_path).c_str(),
-            rpts_num, output.filtered_error, moved,
-            y_entry_lost_count, y_lost_confirm_frames,
-            output.cmd.linear.x, output.cmd.angular.z);
+            y_hard_drive_trigger_reason.c_str(),
+            y_guided_target_dist, y_guided_moved_dist,
+            y_hard_drive_target_dist, moved,
+            y_hard_drive_remaining_dist,
+            y_hard_heading_reference_deg, current_yaw, heading_error_deg,
+            odom_fresh, odom_age, imu_fresh, imu_age,
+            msg.linear.x, msg.angular.z);
         return true;
     }
 
@@ -716,15 +1185,126 @@ bool handleYBranchFlow() {
             path_select = completed_branch;
             track_type = completed_branch == PathSelect::LEFT ? TRACK_LEFT : TRACK_RIGHT;
             applyPathBiasParams(completed_branch);
-            resetYBranchState();
-            motion_state = MotionState::FOLLOWING;
+            resetMotionController();
+            motion_state = MotionState::Y_BRANCH_REACQUIRE;
+            y_reacquire_start_x = current_odom_position_x;
+            y_reacquire_start_y = current_odom_position_y;
+            y_reacquire_moved_dist = 0.0;
+            y_reacquire_remaining_dist = y_reacquire_max_dist;
+            y_reacquire_start_time = ros::Time::now();
+            y_reacquire_confirm_count = 0;
+            y_reacquire_visible_points = 0;
+            y_reacquire_hold_reason.clear();
             resetParkingCornerState();
-            publishStatus("RUNNING_" + pathToString(completed_branch));
+            publishStatus("Y_REACQUIRE_" + pathToString(completed_branch));
             ROS_WARN(
-                "[Y_BRANCH] Switched to branch follow | path=%s | pause=%.2fs | bias_left=%.1f | bias_right=%.1f | Time_local=%.2f",
+                "[Y_REACQUIRE] Started | path=%s | pause=%.2fs | speed=%.2fm/s | max_dist=%.3fm | max_duration=%.2fs | min_points=%d | confirm=%d | bias_left=%.1f | bias_right=%.1f | Time_local=%.2f",
                 pathToString(completed_branch).c_str(), elapsed,
+                y_reacquire_speed, y_reacquire_max_dist,
+                y_reacquire_max_duration, y_reacquire_min_points,
+                y_reacquire_confirm_frames,
                 Dis_Bias_Left, Dis_Bias_Right, Time_local);
         }
+        return true;
+    }
+
+    if (motion_state == MotionState::Y_BRANCH_REACQUIRE) {
+        const ros::Time now = ros::Time::now();
+        const double dx = current_odom_position_x - y_reacquire_start_x;
+        const double dy = current_odom_position_y - y_reacquire_start_y;
+        y_reacquire_moved_dist = std::hypot(dx, dy);
+        y_reacquire_remaining_dist = std::max(
+            0.0, y_reacquire_max_dist - y_reacquire_moved_dist);
+        const double odom_age = last_odom_time.isZero()
+            ? std::numeric_limits<double>::infinity()
+            : (now - last_odom_time).toSec();
+        const bool odom_fresh = odom_age >= 0.0 &&
+            odom_age <= y_reacquire_odom_timeout;
+        const double elapsed = y_reacquire_start_time.isZero()
+            ? 0.0 : (now - y_reacquire_start_time).toSec();
+
+        bool line_valid = false;
+        std::string vision_reason = "gray_points";
+        if (vision_source == "line_follower") {
+            line_follower::LineTrack track;
+            double receive_age = -1.0;
+            double source_age = -1.0;
+            line_valid = externalTrackSnapshot(
+                track, receive_age, source_age, vision_reason);
+            y_reacquire_visible_points = static_cast<int>(
+                track.center_x_px.size());
+            line_valid = line_valid &&
+                y_reacquire_visible_points >= y_reacquire_min_points;
+        } else {
+            y_reacquire_visible_points = rpts_num;
+            line_valid = rpts_num >= y_reacquire_min_points;
+        }
+        if (!odom_fresh) {
+            line_valid = false;
+            vision_reason = "odom_stale";
+        }
+
+        y_reacquire_confirm_count = line_valid
+            ? y_reacquire_confirm_count + 1 : 0;
+        if (y_reacquire_confirm_count >= y_reacquire_confirm_frames) {
+            const PathSelect recovered_path = path_select;
+            const double recovered_moved = y_reacquire_moved_dist;
+            const int recovered_points = y_reacquire_visible_points;
+            resetYBranchState();
+            motion_state = MotionState::FOLLOWING;
+            pid.reset();
+            publishStatus("RUNNING_" + pathToString(recovered_path));
+            ROS_WARN(
+                "[Y_REACQUIRE] Recovered, branch follow takes control | path=%s | points=%d | moved=%.3fm | elapsed=%.2fs",
+                pathToString(recovered_path).c_str(), recovered_points,
+                recovered_moved, elapsed);
+            return false;
+        }
+
+        std::string hold_reason;
+        if (!odom_fresh) {
+            hold_reason = "odom_stale";
+        } else if (y_reacquire_moved_dist >= y_reacquire_max_dist) {
+            hold_reason = "max_distance";
+        } else if (elapsed >= y_reacquire_max_duration) {
+            hold_reason = "timeout";
+        }
+
+        geometry_msgs::Twist msg;
+        if (hold_reason.empty()) {
+            msg.linear.x = y_reacquire_speed;
+        }
+        msg.angular.z = 0.0;
+        pub.publish(msg);
+        publishDebugImage();
+
+        if (hold_reason != y_reacquire_hold_reason) {
+            y_reacquire_hold_reason = hold_reason;
+            if (!hold_reason.empty()) {
+                publishStatus("Y_REACQUIRE_HOLD_" + hold_reason);
+                ROS_WARN(
+                    "[Y_REACQUIRE] Holding stop | path=%s | reason=%s | moved=%.3fm/%.3fm | elapsed=%.2fs/%.2fs | odom_age=%.3fs",
+                    pathToString(path_select).c_str(), hold_reason.c_str(),
+                    y_reacquire_moved_dist, y_reacquire_max_dist,
+                    elapsed, y_reacquire_max_duration, odom_age);
+            } else {
+                publishStatus("Y_REACQUIRE_" + pathToString(path_select));
+                ROS_WARN("[Y_REACQUIRE] Safety hold cleared; resuming low-speed forward");
+            }
+        }
+
+        ROS_WARN_THROTTLE(
+            0.5,
+            "[Y_REACQUIRE] Searching | path=%s | vision=%s | points=%d/%d | valid=%d | confirm=%d/%d | moved=%.3fm | remaining=%.3fm | elapsed=%.2fs/%.2fs | odom_fresh=%d | odom_age=%.3fs | cmd_v=%.2f | cmd_wz=0.00 | hold=%s | vision_reason=%s",
+            pathToString(path_select).c_str(), vision_source.c_str(),
+            y_reacquire_visible_points, y_reacquire_min_points,
+            line_valid, y_reacquire_confirm_count,
+            y_reacquire_confirm_frames, y_reacquire_moved_dist,
+            y_reacquire_remaining_dist, elapsed,
+            y_reacquire_max_duration, odom_fresh, odom_age,
+            msg.linear.x,
+            y_reacquire_hold_reason.empty() ? "none" : y_reacquire_hold_reason.c_str(),
+            vision_reason.c_str());
         return true;
     }
 
@@ -1326,7 +1906,11 @@ void publishDebugImage(const sensor_msgs::ImageConstPtr &source_msg) {
 
     std::ostringstream state_line;
     state_line << "path=" << pathToString(path_select)
-               << " state=" << motionStateToString(motion_state);
+               << " state=" << motionStateToString(motion_state)
+               << " vision=" << vision_source;
+    if (external_vision_lost) {
+        state_line << " EXTERNAL_VISION_LOST";
+    }
     if (y_branch_mode_requested) {
         state_line << " next=" << pathToString(pending_branch_path);
     }
@@ -1334,6 +1918,80 @@ void publishDebugImage(const sensor_msgs::ImageConstPtr &source_msg) {
                 cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0), 3, cv::LINE_AA);
     cv::putText(debug_gray, state_line.str(), cv::Point(8, 18),
                 cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(240), 1, cv::LINE_AA);
+
+    if (motion_state == MotionState::Y_GUIDED_FORWARD) {
+        std::ostringstream guided_line;
+        guided_line << std::fixed << std::setprecision(2)
+                    << "Y_GUIDED target=" << y_guided_target_dist
+                    << " moved=" << y_guided_moved_dist
+                    << " remain=" << y_guided_remaining_dist
+                    << " err=" << y_guided_visual_error
+                    << " lost=" << y_guided_lost_count
+                    << "/" << y_guided_lost_confirm_frames
+                    << " angle=" << y_guided_error_count
+                    << "/" << y_guided_error_confirm_frames;
+        if (!y_guided_hold_reason.empty()) {
+            guided_line << " HOLD=" << y_guided_hold_reason;
+        }
+        cv::putText(debug_gray, guided_line.str(), cv::Point(8, 38),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.42, cv::Scalar(0), 3,
+                    cv::LINE_AA);
+        cv::putText(debug_gray, guided_line.str(), cv::Point(8, 38),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.42, cv::Scalar(240), 1,
+                    cv::LINE_AA);
+    }
+
+    if (motion_state == MotionState::Y_COORDINATE_FORWARD) {
+        const int target_x = RESULT_COL / 2;
+        const int target_y = static_cast<int>(std::round(
+            RESULT_ROW + 10.0 -
+            y_hard_drive_remaining_dist * pixel_per_meter));
+        if (target_y >= 0 && target_y < RESULT_ROW) {
+            cv::drawMarker(debug_gray, cv::Point(target_x, target_y),
+                           cv::Scalar(250), cv::MARKER_TILTED_CROSS, 20, 2);
+            cv::putText(debug_gray, "Y_TARGET",
+                        cv::Point(std::min(RESULT_COL - 90, target_x + 10),
+                                  std::max(18, target_y - 8)),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.38,
+                        cv::Scalar(250), 1, cv::LINE_AA);
+        }
+        std::ostringstream y_coord_line;
+        y_coord_line << std::fixed << std::setprecision(2)
+                     << "Y_REMAIN reason=" << y_hard_drive_trigger_reason
+                     << " all=" << y_guided_target_dist
+                     << " guided=" << y_guided_moved_dist
+                     << " hard=" << y_hard_drive_target_dist
+                     << " remain=" << y_hard_drive_remaining_dist;
+        if (y_hard_drive_aborted) {
+            y_coord_line << " ABORT=" << y_hard_drive_abort_reason;
+        }
+        cv::putText(debug_gray, y_coord_line.str(), cv::Point(8, 38),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.42, cv::Scalar(0), 3,
+                    cv::LINE_AA);
+        cv::putText(debug_gray, y_coord_line.str(), cv::Point(8, 38),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.42, cv::Scalar(240), 1,
+                    cv::LINE_AA);
+    }
+
+    if (motion_state == MotionState::Y_BRANCH_REACQUIRE) {
+        std::ostringstream reacquire_line;
+        reacquire_line << std::fixed << std::setprecision(2)
+                       << "Y_REACQUIRE pts=" << y_reacquire_visible_points
+                       << "/" << y_reacquire_min_points
+                       << " confirm=" << y_reacquire_confirm_count
+                       << "/" << y_reacquire_confirm_frames
+                       << " moved=" << y_reacquire_moved_dist
+                       << " remain=" << y_reacquire_remaining_dist;
+        if (!y_reacquire_hold_reason.empty()) {
+            reacquire_line << " HOLD=" << y_reacquire_hold_reason;
+        }
+        cv::putText(debug_gray, reacquire_line.str(), cv::Point(8, 38),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.42, cv::Scalar(0), 3,
+                    cv::LINE_AA);
+        cv::putText(debug_gray, reacquire_line.str(), cv::Point(8, 38),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.42, cv::Scalar(240), 1,
+                    cv::LINE_AA);
+    }
 
     if (publish_debug_image && debug_pub) {
         std_msgs::Header header;
@@ -1396,6 +2054,18 @@ int followLineTestOnce() {
     {
         std::lock_guard<std::mutex> lock(frame_mutex);
         if (frame.empty()) {
+            if (vision_source == "line_follower") {
+                geometry_msgs::Twist stop_msg;
+                pub.publish(stop_msg);
+                right_turn_odom_underresponse_count = 0;
+                if (!external_vision_lost) {
+                    external_vision_lost = true;
+                    publishStatus("EXTERNAL_VISION_LOST");
+                }
+                ROS_ERROR_THROTTLE(
+                    1.0,
+                    "[VISION] EXTERNAL_VISION_LOST reason=no_gray_auxiliary_frame; command zero");
+            }
             return -1;
         }
         local_frame = frame.clone();
@@ -1430,14 +2100,98 @@ int followLineTestOnce() {
         return 0;
     }
 
-    if (handleLostCornerSearch()) {
+    const bool external_control = vision_source == "line_follower" &&
+                                  motion_state == MotionState::FOLLOWING &&
+                                  !y_branch_mode_requested;
+    if (!external_control && handleLostCornerSearch()) {
         return 0;
     }
 
     float error = 0.0f;
     float v = 0.0f;
-    if (rpts_num == 0) {
+    double effective_aim_distance = aim_distance;
+    double right_assist_strength = 0.0;
+    double right_wz_compensation = 0.0;
+    double odom_age = -1.0;
+    bool odom_fresh = false;
+    bool right_wz_compensation_active = false;
+    if (external_control) {
+        line_follower::LineTrack track;
+        double receive_age = -1.0;
+        double source_age = -1.0;
+        std::string invalid_reason;
+        if (!externalTrackSnapshot(track, receive_age, source_age, invalid_reason)) {
+            geometry_msgs::Twist stop_msg;
+            pub.publish(stop_msg);
+            right_turn_odom_underresponse_count = 0;
+            if (!external_vision_lost) {
+                external_vision_lost = true;
+                publishStatus("EXTERNAL_VISION_LOST");
+            }
+            ROS_ERROR_THROTTLE(
+                1.0,
+                "[VISION] EXTERNAL_VISION_LOST reason=%s receive_age=%.3fs source_age=%.3fs; command zero, no gray fallback",
+                invalid_reason.c_str(), receive_age, source_age);
+            publishDebugImage();
+            return 0;
+        }
+
+        if (external_vision_lost) {
+            external_vision_lost = false;
+            publishStatus("RUNNING_" + pathToString(path_select));
+            ROS_WARN("[VISION] External line track recovered");
+        }
+
+        size_t nominal_index = 0;
+        double best_distance_sq = std::numeric_limits<double>::infinity();
+        for (size_t i = 0; i < track.center_x_px.size(); ++i) {
+            const double dx = track.center_x_px[i] - track.lookahead_x_px;
+            const double dy = track.center_y_px[i] - track.lookahead_y_px;
+            const double distance_sq = dx * dx + dy * dy;
+            if (distance_sq < best_distance_sq) {
+                best_distance_sq = distance_sq;
+                nominal_index = i;
+            }
+        }
+
+        const auto calculate_external_error = [&](size_t index) {
+            const double cx = track.image_width * 0.5;
+            const double dx = track.center_x_px[index] - cx;
+            const double dy = std::max(1.0,
+                static_cast<double>(track.image_height) - track.center_y_px[index]);
+            return static_cast<float>(-std::atan2(dx, dy));
+        };
+
+        const float nominal_error = calculate_external_error(nominal_index);
+        if (right_turn_assist_enabled && path_select == PathSelect::RIGHT) {
+            right_assist_strength = std::max(
+                0.0, std::min(1.0,
+                              (std::abs(static_cast<double>(nominal_error)) -
+                               right_turn_error_start) /
+                                  (right_turn_error_full - right_turn_error_start)));
+            const double min_aim = std::min(aim_distance, right_turn_min_aim_distance);
+            effective_aim_distance =
+                aim_distance + right_assist_strength * (min_aim - aim_distance);
+        }
+
+        const double aim_ratio = aim_distance > 1e-6
+                                     ? effective_aim_distance / aim_distance
+                                     : 1.0;
+        const size_t effective_index = std::min(
+            track.center_x_px.size() - 1,
+            static_cast<size_t>(std::lround(nominal_index * aim_ratio)));
+        error = calculate_external_error(effective_index);
+        v = static_cast<float>(base_speed - std::abs(error) * base_speed);
+        v = std::max(0.05f, v);
+
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[VISION] source=line_follower valid=1 confidence=%.2f points=%zu nominal_idx=%zu effective_idx=%zu heading_msg=%.3f heading_used=%.3f",
+            track.confidence, track.center_x_px.size(), nominal_index,
+            effective_index, track.heading_error_rad, error);
+    } else if (rpts_num == 0) {
         // 连续丢线时逐步停车；偶发一帧丢线时仍低速前进，减少图像抖动影响。
+        right_turn_odom_underresponse_count = 0;
         zeroCount++;
         if (zeroCount >= 2) {
             zero_flag = true;
@@ -1447,30 +2201,97 @@ int followLineTestOnce() {
     } else {
         zeroCount = 0;
         zero_flag = false;
-        // 取前方 aim_distance 处的路径点作为瞄准点。
-        // dx/dy 转成 atan2 角度误差，再用误差大小降低线速度。
-        const int aim_idx = clip(round(aim_distance / sample_dist), 0, rpts_num - 1);
-        const float cx = RESULT_COL / 2.0f;
-        const float cy = RESULT_ROW + 10.0f;
-        const float dx = rpts[aim_idx][0] - cx;
-        const float dy = cy - rpts[aim_idx][1] + aim_y_bias_m * pixel_per_meter;
-        error = -atan2f(dx, dy);
+        // 保持原控制几何，仅在普通 Right 模式的大偏差区间动态缩短前视距离。
+        double nominal_error_value = 0.0;
+        calculateGrayControlError(aim_distance, nominal_error_value);
+        const float nominal_error = static_cast<float>(nominal_error_value);
+        if (right_turn_assist_enabled && path_select == PathSelect::RIGHT) {
+            right_assist_strength = std::max(
+                0.0, std::min(1.0,
+                              (std::abs(static_cast<double>(nominal_error)) -
+                               right_turn_error_start) /
+                                  (right_turn_error_full - right_turn_error_start)));
+            const double min_aim = std::min(aim_distance, right_turn_min_aim_distance);
+            effective_aim_distance =
+                aim_distance + right_assist_strength * (min_aim - aim_distance);
+        }
+
+        double effective_error_value = 0.0;
+        calculateGrayControlError(effective_aim_distance,
+                                  effective_error_value);
+        error = static_cast<float>(effective_error_value);
         v = static_cast<float>(base_speed - std::abs(error) * base_speed);
         v = std::max(0.05f, v);
+
+    }
+
+    if (right_turn_assist_enabled && path_select == PathSelect::RIGHT) {
+        const double speed_limit =
+            base_speed + right_assist_strength * (right_turn_min_speed - base_speed);
+        v = std::min(v, static_cast<float>(speed_limit));
+
+        const ros::Time now = ros::Time::now();
+        if (!last_odom_time.isZero()) {
+            odom_age = (now - last_odom_time).toSec();
+            odom_fresh = odom_age >= 0.0 && odom_age <= right_turn_odom_timeout;
+        }
+
+        const double turn_sign = error >= 0.0f ? 1.0 : -1.0;
+        const double directional_odom_wz = turn_sign * current_odom_angular_velocity_z;
+        const bool odom_underresponding =
+            right_assist_strength > 0.0 && odom_fresh &&
+            directional_odom_wz <
+                std::abs(static_cast<double>(error)) * right_turn_odom_response_ratio;
+
+        if (odom_underresponding) {
+            ++right_turn_odom_underresponse_count;
+        } else {
+            right_turn_odom_underresponse_count = 0;
+        }
+
+        if (right_turn_odom_underresponse_count >= right_turn_odom_confirm_frames) {
+            right_wz_compensation =
+                turn_sign * right_turn_wz_compensation * right_assist_strength;
+            right_wz_compensation_active = true;
+        }
+
+        if (right_assist_strength > 0.0 && !odom_fresh) {
+            ROS_WARN_THROTTLE(
+                1.0,
+                "[RIGHT_ASSIST] odom unavailable/stale; keep adaptive aim and speed limit without wz compensation | odom_age=%.3fs",
+                odom_age);
+        }
+    } else {
+        right_turn_odom_underresponse_count = 0;
     }
 
     geometry_msgs::Twist msg;
     msg.linear.x = v;
-    msg.angular.z = error;//这里的error具体作用，如果为0，则小车会原地转圈，如果为正，则小车会向左转，如果为负，则小车会向右转
+    const double raw_wz = static_cast<double>(error) + right_wz_compensation;
+    msg.angular.z = right_turn_assist_enabled && path_select == PathSelect::RIGHT
+                        ? std::max(-right_turn_max_wz,
+                                   std::min(right_turn_max_wz, raw_wz))
+                        : static_cast<double>(error);
 
     pub.publish(msg);
     publishDebugImage();
 // 主循环调试信息：输出当前选用的路径、路径点数量、是否退化、误差和速度，以及角点检测状态和丢线计数。
-ROS_WARN_THROTTLE(1.0, "[FOLLOW] Running | path=%s | rpts=%d | degraded=%d | error=%.3f rad | v=%.3f m/s | L0=%d | L1=%d | Y0=%d | Y1=%d | lost_line_count=%d | zero_flag=%d",
-                  pathToString(path_select).c_str(), rpts_num, is_degraded_mode,
+    ROS_WARN_THROTTLE(1.0, "[FOLLOW] Running | vision=%s | path=%s | rpts=%d | degraded=%d | error=%.3f rad | v=%.3f m/s | L0=%d | L1=%d | Y0=%d | Y1=%d | lost_line_count=%d | zero_flag=%d",
+                  vision_source.c_str(), pathToString(path_select).c_str(), rpts_num, is_degraded_mode,
                   error, v,
                   Lpt0_found, Lpt1_found, Ypt0_found, Ypt1_found,
                   zeroCount, zero_flag);
+
+    if (right_turn_assist_enabled && path_select == PathSelect::RIGHT) {
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[RIGHT_ASSIST] aim=%.3fm/%.3fm | strength=%.2f | error=%.3f | v=%.3f | base_wz=%.3f | odom_wz=%.3f | odom_fresh=%d | under=%d/%d | compensation=%.3f(active=%d) | cmd_wz=%.3f",
+            effective_aim_distance, aim_distance, right_assist_strength,
+            error, msg.linear.x, error, current_odom_angular_velocity_z,
+            odom_fresh, right_turn_odom_underresponse_count,
+            right_turn_odom_confirm_frames, right_wz_compensation,
+            right_wz_compensation_active, msg.angular.z);
+    }
 
     return 0;
 }
@@ -1533,13 +2354,29 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
     lost_corner_search_linear_speed = std::max(0.0, lost_corner_linear_speed);
 }
 
-void configureYBranch(double approach_dist, double turn_angle_deg,
+void configureYBranch(double turn_angle_deg,
                       double turn_angular_speed, double turn_pause_sec,
                       int detect_min_id, int detect_max_id,
                       int detect_confirm_frames,
-                      double center_aim_dist, double approach_speed,
-                      double center_max_wz, int lost_confirm_frames,
-                      double entry_min_odom, double entry_max_odom,
+                      double extra_forward_dist, double hard_drive_speed,
+                      double hard_drive_odom_timeout,
+                      double hard_drive_max_duration,
+                      int guided_min_points,
+                      int guided_lost_confirm_frames,
+                      double guided_error_threshold,
+                      int guided_error_confirm_frames,
+                      double guided_odom_timeout,
+                      double guided_max_duration,
+                      double hard_heading_kp,
+                      double hard_heading_max_wz,
+                      double hard_heading_deadband_deg,
+                      double hard_heading_imu_timeout,
+                      double reacquire_speed,
+                      double reacquire_max_dist,
+                      double reacquire_odom_timeout,
+                      double reacquire_max_duration,
+                      int reacquire_min_points,
+                      int reacquire_confirm_frames,
                       double crossbar_seek_speed,
                       int crossbar_lost_confirm_frames,
                       double crossbar_target_long_m,
@@ -1547,19 +2384,32 @@ void configureYBranch(double approach_dist, double turn_angle_deg,
                       double crossbar_max_abs_lat_m,
                       int crossbar_confirm_frames,
                       double crossbar_seek_max_odom) {
-    y_approach_dist = std::max(0.0, approach_dist);
     y_turn_angle_deg = std::max(0.0, turn_angle_deg);
     y_turn_angular_speed = std::abs(turn_angular_speed);
     y_turn_pause_sec = std::max(0.0, turn_pause_sec);
     y_detect_min_id = std::max(0, detect_min_id);
     y_detect_max_id = std::max(y_detect_min_id, detect_max_id);
     y_detect_confirm_frames = std::max(1, detect_confirm_frames);
-    y_center_aim_dist = std::max(0.01, center_aim_dist);
-    y_approach_speed = std::max(0.0, approach_speed);
-    y_center_max_wz = std::max(0.0, center_max_wz);
-    y_lost_confirm_frames = std::max(1, lost_confirm_frames);
-    y_entry_min_odom = std::max(0.0, entry_min_odom);
-    y_entry_max_odom = std::max(y_entry_min_odom, entry_max_odom);
+    y_extra_forward_dist = std::max(0.0, extra_forward_dist);
+    y_hard_drive_speed = std::max(0.0, hard_drive_speed);
+    y_hard_drive_odom_timeout = std::max(0.05, hard_drive_odom_timeout);
+    y_hard_drive_max_duration = std::max(0.1, hard_drive_max_duration);
+    y_guided_min_points = std::max(1, guided_min_points);
+    y_guided_lost_confirm_frames = std::max(1, guided_lost_confirm_frames);
+    y_guided_error_threshold = std::max(0.0, guided_error_threshold);
+    y_guided_error_confirm_frames = std::max(1, guided_error_confirm_frames);
+    y_guided_odom_timeout = std::max(0.05, guided_odom_timeout);
+    y_guided_max_duration = std::max(0.1, guided_max_duration);
+    y_hard_heading_kp = std::max(0.0, hard_heading_kp);
+    y_hard_heading_max_wz = std::max(0.0, hard_heading_max_wz);
+    y_hard_heading_deadband_deg = std::max(0.0, hard_heading_deadband_deg);
+    y_hard_heading_imu_timeout = std::max(0.05, hard_heading_imu_timeout);
+    y_reacquire_speed = std::max(0.0, reacquire_speed);
+    y_reacquire_max_dist = std::max(0.0, reacquire_max_dist);
+    y_reacquire_odom_timeout = std::max(0.05, reacquire_odom_timeout);
+    y_reacquire_max_duration = std::max(0.1, reacquire_max_duration);
+    y_reacquire_min_points = std::max(1, reacquire_min_points);
+    y_reacquire_confirm_frames = std::max(1, reacquire_confirm_frames);
     y_crossbar_seek_speed = std::max(0.0, crossbar_seek_speed);
     y_crossbar_lost_confirm_frames = std::max(1, crossbar_lost_confirm_frames);
     y_crossbar_target_long_m = std::max(0.0, crossbar_target_long_m);

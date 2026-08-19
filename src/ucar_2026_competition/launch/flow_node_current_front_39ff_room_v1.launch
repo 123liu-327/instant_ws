@@ -15,7 +15,13 @@
   <arg name="traffic_x" default="0.0" />
   <arg name="traffic_y" default="0.0" />
   <arg name="traffic_yaw" default="0.0" />
+  <arg name="task4_final_xy_goal_tolerance" default="0.04" />
+  <arg name="task4_final_yaw_goal_tolerance" default="0.08" />
   <arg name="traffic_decision" default="" />
+  <arg name="task4_post_navigation_advance_m" default="0.35" />
+  <arg name="task4_post_navigation_advance_tolerance_m" default="0.01" />
+  <arg name="task4_post_navigation_advance_speed_mps" default="0.12" />
+  <arg name="task4_post_navigation_advance_timeout_sec" default="6.0" />
   <arg name="skip_task4_stop_line_approach" default="false" />
   <arg name="navigator_publish_initial_pose" default="false" />
   <arg name="task2_center_only" default="false" />
@@ -46,7 +52,7 @@
   <arg name="parking_staging_timeout_sec" default="20.0" />
   <arg name="parking_staging_position_tolerance" default="0.10" />
   <arg name="parking_staging_yaw_tolerance" default="0.10" />
-  <arg name="parking_docking_timeout_sec" default="35.0" />
+  <arg name="parking_docking_timeout_sec" default="20.0" />
   <arg name="parking_dock_max_x" default="0.10" />
   <arg name="parking_dock_max_y" default="0.06" />
   <arg name="parking_dock_max_yaw" default="0.15" />
@@ -92,6 +98,16 @@
   <arg name="stage_exclusive_resources" default="true" />
   <arg name="task2_prewarm_enabled" default="true" />
   <arg name="second_parking_prewarm_enabled" default="true" />
+  <arg name="task45_extra_distance_m" default="0.20" />
+  <arg name="task45_extra_distance_tolerance_m" default="0.015" />
+  <arg name="task45_extra_distance_speed_mps" default="0.12" />
+  <arg name="task45_extra_distance_timeout_sec" default="10.0" />
+  <arg name="task45_camera_image_width" default="640" />
+  <arg name="task45_camera_image_height" default="480" />
+  <arg name="task45_camera_pixel_format" default="YUYV" />
+  <arg name="task45_camera_capture_fps" default="30" />
+  <arg name="task45_camera_publish_rate" default="15" />
+  <arg name="task45_camera_ros_encoding" default="rgb8" />
   <arg name="controller_python_executable" default="/usr/bin/python3" />
 
   <node pkg="ucar_2026_competition" type="competition_flow_current_front_39ff_room_v1.py"
@@ -117,7 +133,13 @@
     <param name="traffic_x" value="$(arg traffic_x)" />
     <param name="traffic_y" value="$(arg traffic_y)" />
     <param name="traffic_yaw" value="$(arg traffic_yaw)" />
+    <param name="task4_final_xy_goal_tolerance" value="$(arg task4_final_xy_goal_tolerance)" />
+    <param name="task4_final_yaw_goal_tolerance" value="$(arg task4_final_yaw_goal_tolerance)" />
     <param name="traffic_decision" value="$(arg traffic_decision)" />
+    <param name="task4_post_navigation_advance_m" value="$(arg task4_post_navigation_advance_m)" />
+    <param name="task4_post_navigation_advance_tolerance_m" value="$(arg task4_post_navigation_advance_tolerance_m)" />
+    <param name="task4_post_navigation_advance_speed_mps" value="$(arg task4_post_navigation_advance_speed_mps)" />
+    <param name="task4_post_navigation_advance_timeout_sec" value="$(arg task4_post_navigation_advance_timeout_sec)" />
     <param name="skip_task4_stop_line_approach" value="$(arg skip_task4_stop_line_approach)" />
     <param name="navigator_publish_initial_pose" value="$(arg navigator_publish_initial_pose)" />
     <param name="task2_center_only" value="$(arg task2_center_only)" />
@@ -194,5 +216,15 @@
     <param name="stage_exclusive_resources" value="$(arg stage_exclusive_resources)" />
     <param name="task2_prewarm_enabled" value="$(arg task2_prewarm_enabled)" />
     <param name="second_parking_prewarm_enabled" value="$(arg second_parking_prewarm_enabled)" />
+    <param name="task45_extra_distance_m" value="$(arg task45_extra_distance_m)" />
+    <param name="task45_extra_distance_tolerance_m" value="$(arg task45_extra_distance_tolerance_m)" />
+    <param name="task45_extra_distance_speed_mps" value="$(arg task45_extra_distance_speed_mps)" />
+    <param name="task45_extra_distance_timeout_sec" value="$(arg task45_extra_distance_timeout_sec)" />
+    <param name="task45_camera_image_width" value="$(arg task45_camera_image_width)" />
+    <param name="task45_camera_image_height" value="$(arg task45_camera_image_height)" />
+    <param name="task45_camera_pixel_format" value="$(arg task45_camera_pixel_format)" />
+    <param name="task45_camera_capture_fps" value="$(arg task45_camera_capture_fps)" />
+    <param name="task45_camera_publish_rate" value="$(arg task45_camera_publish_rate)" />
+    <param name="task45_camera_ros_encoding" value="$(arg task45_camera_ros_encoding)" />
   </node>
 </launch>

@@ -66,6 +66,20 @@ void refreshRuntimeParams() {
     double speed = follow_test::base_speed;
     double distance = follow_test::aim_distance;
     double y_bias_m = follow_test::aim_y_bias_m;
+    bool enable_right_turn_assist = follow_test::right_turn_assist_enabled;
+    double right_min_aim_distance = follow_test::right_turn_min_aim_distance;
+    double right_error_start = follow_test::right_turn_error_start;
+    double right_error_full = follow_test::right_turn_error_full;
+    double right_min_speed = follow_test::right_turn_min_speed;
+    double right_wz_compensation = follow_test::right_turn_wz_compensation;
+    double right_max_wz = follow_test::right_turn_max_wz;
+    double right_odom_timeout = follow_test::right_turn_odom_timeout;
+    double right_odom_response_ratio = follow_test::right_turn_odom_response_ratio;
+    int right_odom_confirm_frames = follow_test::right_turn_odom_confirm_frames;
+    std::string vision_source = follow_test::vision_source;
+    double line_track_timeout = follow_test::line_track_timeout;
+    double line_track_min_confidence = follow_test::line_track_min_confidence;
+    int line_track_min_points = follow_test::line_track_min_points;
     bool enable_initial_turn = follow_test::initial_turn_enabled;
     double turn_angle_deg = follow_test::initial_turn_angle_deg;
     double turn_angular_speed = follow_test::initial_turn_angular_speed;
@@ -76,19 +90,32 @@ void refreshRuntimeParams() {
     double lost_corner_timeout = follow_test::lost_corner_search_timeout;
     double lost_corner_angular_speed = follow_test::lost_corner_search_angular_speed;
     double lost_corner_linear_speed = follow_test::lost_corner_search_linear_speed;
-    double branch_approach_dist = follow_test::y_approach_dist;
     double branch_turn_angle_deg = follow_test::y_turn_angle_deg;
     double branch_turn_angular_speed = follow_test::y_turn_angular_speed;
     double branch_turn_pause_sec = follow_test::y_turn_pause_sec;
     int branch_detect_min_id = follow_test::y_detect_min_id;
     int branch_detect_max_id = follow_test::y_detect_max_id;
     int branch_detect_confirm_frames = follow_test::y_detect_confirm_frames;
-    double branch_center_aim_dist = follow_test::y_center_aim_dist;
-    double branch_approach_speed = follow_test::y_approach_speed;
-    double branch_center_max_wz = follow_test::y_center_max_wz;
-    int branch_lost_confirm_frames = follow_test::y_lost_confirm_frames;
-    double branch_entry_min_odom = follow_test::y_entry_min_odom;
-    double branch_entry_max_odom = follow_test::y_entry_max_odom;
+    double branch_extra_forward_dist = follow_test::y_extra_forward_dist;
+    double branch_hard_drive_speed = follow_test::y_hard_drive_speed;
+    double branch_hard_drive_odom_timeout = follow_test::y_hard_drive_odom_timeout;
+    double branch_hard_drive_max_duration = follow_test::y_hard_drive_max_duration;
+    int branch_guided_min_points = follow_test::y_guided_min_points;
+    int branch_guided_lost_confirm_frames = follow_test::y_guided_lost_confirm_frames;
+    double branch_guided_error_threshold = follow_test::y_guided_error_threshold;
+    int branch_guided_error_confirm_frames = follow_test::y_guided_error_confirm_frames;
+    double branch_guided_odom_timeout = follow_test::y_guided_odom_timeout;
+    double branch_guided_max_duration = follow_test::y_guided_max_duration;
+    double branch_hard_heading_kp = follow_test::y_hard_heading_kp;
+    double branch_hard_heading_max_wz = follow_test::y_hard_heading_max_wz;
+    double branch_hard_heading_deadband_deg = follow_test::y_hard_heading_deadband_deg;
+    double branch_hard_heading_imu_timeout = follow_test::y_hard_heading_imu_timeout;
+    double branch_reacquire_speed = follow_test::y_reacquire_speed;
+    double branch_reacquire_max_dist = follow_test::y_reacquire_max_dist;
+    double branch_reacquire_odom_timeout = follow_test::y_reacquire_odom_timeout;
+    double branch_reacquire_max_duration = follow_test::y_reacquire_max_duration;
+    int branch_reacquire_min_points = follow_test::y_reacquire_min_points;
+    int branch_reacquire_confirm_frames = follow_test::y_reacquire_confirm_frames;
     double branch_crossbar_seek_speed = follow_test::y_crossbar_seek_speed;
     int branch_crossbar_lost_confirm_frames = follow_test::y_crossbar_lost_confirm_frames;
     double branch_crossbar_target_long_m = follow_test::y_crossbar_target_long_m;
@@ -116,6 +143,35 @@ void refreshRuntimeParams() {
     private_nh.param<double>("base_speed", speed, speed);
     private_nh.param<double>("aim_distance", distance, distance);
     private_nh.param<double>("aim_y_bias_m", y_bias_m, y_bias_m);
+    private_nh.param<bool>("right_turn_assist_enabled", enable_right_turn_assist,
+                           enable_right_turn_assist);
+    private_nh.param<double>("right_turn_min_aim_distance", right_min_aim_distance,
+                             right_min_aim_distance);
+    private_nh.param<double>("right_turn_error_start", right_error_start,
+                             right_error_start);
+    private_nh.param<double>("right_turn_error_full", right_error_full,
+                             right_error_full);
+    private_nh.param<double>("right_turn_min_speed", right_min_speed,
+                             right_min_speed);
+    private_nh.param<double>("right_turn_wz_compensation", right_wz_compensation,
+                             right_wz_compensation);
+    private_nh.param<double>("right_turn_max_wz", right_max_wz,
+                             right_max_wz);
+    private_nh.param<double>("right_turn_odom_timeout", right_odom_timeout,
+                             right_odom_timeout);
+    private_nh.param<double>("right_turn_odom_response_ratio",
+                             right_odom_response_ratio,
+                             right_odom_response_ratio);
+    private_nh.param<int>("right_turn_odom_confirm_frames",
+                          right_odom_confirm_frames,
+                          right_odom_confirm_frames);
+    private_nh.param<std::string>("vision_source", vision_source, vision_source);
+    private_nh.param<double>("line_track_timeout", line_track_timeout,
+                             line_track_timeout);
+    private_nh.param<double>("line_track_min_confidence", line_track_min_confidence,
+                             line_track_min_confidence);
+    private_nh.param<int>("line_track_min_points", line_track_min_points,
+                          line_track_min_points);
     private_nh.param<bool>("initial_turn_enabled", enable_initial_turn, enable_initial_turn);
     private_nh.param<double>("initial_turn_angle_deg", turn_angle_deg, turn_angle_deg);
     private_nh.param<double>("initial_turn_angular_speed", turn_angular_speed, turn_angular_speed);
@@ -126,19 +182,52 @@ void refreshRuntimeParams() {
     private_nh.param<double>("lost_corner_search_timeout", lost_corner_timeout, lost_corner_timeout);
     private_nh.param<double>("lost_corner_search_angular_speed", lost_corner_angular_speed, lost_corner_angular_speed);
     private_nh.param<double>("lost_corner_search_linear_speed", lost_corner_linear_speed, lost_corner_linear_speed);
-    private_nh.param<double>("y_approach_dist", branch_approach_dist, branch_approach_dist);
     private_nh.param<double>("y_turn_angle_deg", branch_turn_angle_deg, branch_turn_angle_deg);
     private_nh.param<double>("y_turn_angular_speed", branch_turn_angular_speed, branch_turn_angular_speed);
     private_nh.param<double>("y_turn_pause_sec", branch_turn_pause_sec, branch_turn_pause_sec);
     private_nh.param<int>("y_detect_min_id", branch_detect_min_id, branch_detect_min_id);
     private_nh.param<int>("y_detect_max_id", branch_detect_max_id, branch_detect_max_id);
     private_nh.param<int>("y_detect_confirm_frames", branch_detect_confirm_frames, branch_detect_confirm_frames);
-    private_nh.param<double>("y_center_aim_dist", branch_center_aim_dist, branch_center_aim_dist);
-    private_nh.param<double>("y_approach_speed", branch_approach_speed, branch_approach_speed);
-    private_nh.param<double>("y_center_max_wz", branch_center_max_wz, branch_center_max_wz);
-    private_nh.param<int>("y_lost_confirm_frames", branch_lost_confirm_frames, branch_lost_confirm_frames);
-    private_nh.param<double>("y_entry_min_odom", branch_entry_min_odom, branch_entry_min_odom);
-    private_nh.param<double>("y_entry_max_odom", branch_entry_max_odom, branch_entry_max_odom);
+    private_nh.param<double>("y_extra_forward_dist", branch_extra_forward_dist,
+                             branch_extra_forward_dist);
+    private_nh.param<double>("y_hard_drive_speed", branch_hard_drive_speed,
+                             branch_hard_drive_speed);
+    private_nh.param<double>("y_hard_drive_odom_timeout", branch_hard_drive_odom_timeout,
+                             branch_hard_drive_odom_timeout);
+    private_nh.param<double>("y_hard_drive_max_duration", branch_hard_drive_max_duration,
+                             branch_hard_drive_max_duration);
+    private_nh.param<int>("y_guided_min_points", branch_guided_min_points,
+                          branch_guided_min_points);
+    private_nh.param<int>("y_guided_lost_confirm_frames", branch_guided_lost_confirm_frames,
+                          branch_guided_lost_confirm_frames);
+    private_nh.param<double>("y_guided_error_threshold", branch_guided_error_threshold,
+                             branch_guided_error_threshold);
+    private_nh.param<int>("y_guided_error_confirm_frames", branch_guided_error_confirm_frames,
+                          branch_guided_error_confirm_frames);
+    private_nh.param<double>("y_guided_odom_timeout", branch_guided_odom_timeout,
+                             branch_guided_odom_timeout);
+    private_nh.param<double>("y_guided_max_duration", branch_guided_max_duration,
+                             branch_guided_max_duration);
+    private_nh.param<double>("y_hard_heading_kp", branch_hard_heading_kp,
+                             branch_hard_heading_kp);
+    private_nh.param<double>("y_hard_heading_max_wz", branch_hard_heading_max_wz,
+                             branch_hard_heading_max_wz);
+    private_nh.param<double>("y_hard_heading_deadband_deg", branch_hard_heading_deadband_deg,
+                             branch_hard_heading_deadband_deg);
+    private_nh.param<double>("y_hard_heading_imu_timeout", branch_hard_heading_imu_timeout,
+                             branch_hard_heading_imu_timeout);
+    private_nh.param<double>("y_reacquire_speed", branch_reacquire_speed,
+                             branch_reacquire_speed);
+    private_nh.param<double>("y_reacquire_max_dist", branch_reacquire_max_dist,
+                             branch_reacquire_max_dist);
+    private_nh.param<double>("y_reacquire_odom_timeout", branch_reacquire_odom_timeout,
+                             branch_reacquire_odom_timeout);
+    private_nh.param<double>("y_reacquire_max_duration", branch_reacquire_max_duration,
+                             branch_reacquire_max_duration);
+    private_nh.param<int>("y_reacquire_min_points", branch_reacquire_min_points,
+                          branch_reacquire_min_points);
+    private_nh.param<int>("y_reacquire_confirm_frames", branch_reacquire_confirm_frames,
+                          branch_reacquire_confirm_frames);
     private_nh.param<double>("y_crossbar_seek_speed", branch_crossbar_seek_speed, branch_crossbar_seek_speed);
     private_nh.param<int>("y_crossbar_lost_confirm_frames", branch_crossbar_lost_confirm_frames, branch_crossbar_lost_confirm_frames);
     private_nh.param<double>("y_crossbar_target_long_m", branch_crossbar_target_long_m, branch_crossbar_target_long_m);
@@ -184,14 +273,29 @@ void refreshRuntimeParams() {
                            parking_timeout_sec, parking_odom_timeout_sec,
                            enable_lost_corner_search, lost_corner_timeout,
                            lost_corner_angular_speed, lost_corner_linear_speed);
+    follow_test::configureRightTurnAssist(
+        enable_right_turn_assist, right_min_aim_distance,
+        right_error_start, right_error_full, right_min_speed,
+        right_wz_compensation, right_max_wz, right_odom_timeout,
+        right_odom_response_ratio, right_odom_confirm_frames);
+    follow_test::configureVisionSource(vision_source, line_track_timeout,
+                                       line_track_min_confidence,
+                                       line_track_min_points);
     follow_test::configureYBranch(
-        branch_approach_dist, branch_turn_angle_deg,
+        branch_turn_angle_deg,
         branch_turn_angular_speed, branch_turn_pause_sec,
         branch_detect_min_id, branch_detect_max_id,
         branch_detect_confirm_frames,
-        branch_center_aim_dist, branch_approach_speed,
-        branch_center_max_wz, branch_lost_confirm_frames,
-        branch_entry_min_odom, branch_entry_max_odom,
+        branch_extra_forward_dist, branch_hard_drive_speed,
+        branch_hard_drive_odom_timeout, branch_hard_drive_max_duration,
+        branch_guided_min_points, branch_guided_lost_confirm_frames,
+        branch_guided_error_threshold, branch_guided_error_confirm_frames,
+        branch_guided_odom_timeout, branch_guided_max_duration,
+        branch_hard_heading_kp, branch_hard_heading_max_wz,
+        branch_hard_heading_deadband_deg, branch_hard_heading_imu_timeout,
+        branch_reacquire_speed, branch_reacquire_max_dist,
+        branch_reacquire_odom_timeout, branch_reacquire_max_duration,
+        branch_reacquire_min_points, branch_reacquire_confirm_frames,
         branch_crossbar_seek_speed, branch_crossbar_lost_confirm_frames,
         branch_crossbar_target_long_m, branch_crossbar_long_tolerance_m,
         branch_crossbar_max_abs_lat_m, branch_crossbar_confirm_frames,
@@ -234,6 +338,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg) {
     current_yaw = yaw * 180.0 / M_PI;
     curent_wz = msg->angular_velocity.z;
     current_angular_velocity_z = msg->angular_velocity.z;
+    follow_test::last_imu_time = ros::Time::now();
 }
 
 void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
@@ -244,7 +349,28 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
     const float x_now = msg->pose.pose.position.x;
     const float y_now = msg->pose.pose.position.y;
     current_linear_velocity_x = msg->twist.twist.linear.x;
+    follow_test::current_odom_angular_velocity_z = msg->twist.twist.angular.z;
+    follow_test::current_odom_position_x = x_now;
+    follow_test::current_odom_position_y = y_now;
     follow_test::last_odom_time = ros::Time::now();
+
+    static bool has_total_origin = false;
+    static double total_last_x = 0.0;
+    static double total_last_y = 0.0;
+    if (has_total_origin) {
+        const double step = std::hypot(
+            static_cast<double>(x_now) - total_last_x,
+            static_cast<double>(y_now) - total_last_y);
+        if (std::isfinite(step) && step <= 0.50) {
+            follow_test::odom_total_distance += step;
+        } else {
+            ROS_WARN_THROTTLE(
+                1.0, "[ODOM] Ignore invalid cumulative-distance step %.3fm", step);
+        }
+    }
+    total_last_x = x_now;
+    total_last_y = y_now;
+    has_total_origin = true;
 
     if (!has_origin) {
         x0 = x_now;
@@ -268,6 +394,7 @@ void beginCallback(const std_msgs::String::ConstPtr &msg) {
         follow_test::initial_turn_has_last_time = false;
         follow_test::resetYBranchState();
         follow_test::resetParkingCornerState();
+        follow_test::resetExternalVisionState();
         follow_test::publishStop();
         follow_test::publishStatus("IDLE");
         ROS_WARN("[CMD] 停车指令 | command=%s | 状态=IDLE", msg->data.c_str());
@@ -284,6 +411,7 @@ void beginCallback(const std_msgs::String::ConstPtr &msg) {
     zeroCount = 0;
     zero_flag = false;
     follow_test::resetParkingCornerState();
+    follow_test::resetExternalVisionState();
     follow_test::startInitialTurnIfNeeded();
     
     // 启动调试信息
@@ -308,9 +436,14 @@ void beginCallback(const std_msgs::String::ConstPtr &msg) {
          follow_test::min_pid_speed);
 }
 
+void lineTrackCallback(const line_follower::LineTrack::ConstPtr &msg) {
+    follow_test::updateLineTrack(msg);
+}
+
 void subscribeTopics(ros::NodeHandle &nh, const std::string &image_topic,
                      const std::string &imu_topic, const std::string &odom_topic,
-                     const std::string &begin_topic) {
+                     const std::string &begin_topic,
+                     const std::string &line_track_topic) {
     refreshRuntimeParams();
 
     ros::NodeHandle private_nh("~");
@@ -335,6 +468,7 @@ void subscribeTopics(ros::NodeHandle &nh, const std::string &image_topic,
     subscribers.push_back(nh.subscribe(imu_topic, imu_queue_size, imuCallback));
     subscribers.push_back(nh.subscribe(odom_topic, odom_queue_size, odomCallback));
     subscribers.push_back(nh.subscribe(begin_topic, begin_queue_size, beginCallback));
+    subscribers.push_back(nh.subscribe(line_track_topic, image_queue_size, lineTrackCallback));
 }
 
 }  // namespace callback_test

@@ -24,6 +24,8 @@
   <arg name="end_topic" default="/follow_end" />
   <arg name="status_topic" default="/flow_end/follow_test_status" />
   <arg name="debug_topic" default="/flow_end/follow_test_debug" />
+  <arg name="vision_source" default="gray" />
+  <arg name="line_track_topic" default="/line_follower/track" />
 
   <!-- 默认路径选择：left / middle / right。 -->
   <arg name="path_select" default="right" />
@@ -83,6 +85,8 @@
     <arg name="end_topic" value="$(arg end_topic)" />
     <arg name="status_topic" value="$(arg status_topic)" />
     <arg name="debug_topic" value="$(arg debug_topic)" />
+    <arg name="vision_source" value="$(arg vision_source)" />
+    <arg name="line_track_topic" value="$(arg line_track_topic)" />
     <arg name="path_select" value="$(arg path_select)" />
     <arg name="default_dis_bias_left" value="$(arg default_dis_bias_left)" />
     <arg name="default_dis_bias_right" value="$(arg default_dis_bias_right)" />

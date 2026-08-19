@@ -57,6 +57,10 @@ ocr_ready_timeout_sec: 12.0
 simulation_cache_required_hits: 2
 simulation_cache_window_sec: 1.8
 simulation_cache_observation_max_age_sec: 60.0
+# Cache clear observations while the base is stopped or rotating at a scan
+# point. Translational motion to the next point remains excluded.
+simulation_cache_max_linear_speed: 0.05
+simulation_cache_max_angular_speed: 0.80
 coverage_observation_topic: /vision_triggered_navigator/coverage_observation
 # 图像横向误差为正时的转向符号。首次低速居中测试必须确认方向。
 target_center_steering_sign: -1.0
@@ -100,6 +104,11 @@ factory_sign_room_corners:
   - [-2.2197, -3.2746]
   - [ 2.7739, -3.2186]
 factory_navigation_timeout_sec: 420.0
+# Once target parking starts, avoidance/recentering may not extend this hard
+# deadline. The controller safely stops and announces completion on expiry.
+parking_fail_open_hard_timeout_sec: 35.0
+parking_fail_open_stall_timeout_sec: 45.0
+parking_fail_open_total_timeout_sec: 90.0
 # Execute two physical parking operations. The actual simulator is postponed;
 # after the second parking, hold still for this interval and continue.
 simulation_placeholder_hold_sec: 0.0
@@ -178,7 +187,7 @@ coverage_rotation_watchdog_window_sec: 5.0
 coverage_rotation_min_progress: 0.03
 coverage_rotation_max_yaw_deg: 90.0
 coverage_goal_retry_count: 1
-coverage_anchor_position_tolerance: 0.28
+coverage_anchor_position_tolerance: 0.20
 coverage_anchor_yaw_tolerance_deg: 5.0
 coverage_anchor_yaw_hold_sec: 0.20
 coverage_anchor_yaw_timeout_sec: 12.0
@@ -200,5 +209,9 @@ traffic_yaw: 0.0
 traffic_timeout_sec: 180.0
 
 track_timeout_sec: 420.0
+task45_extra_distance_m: 0.20
+task45_extra_distance_tolerance_m: 0.015
+task45_extra_distance_speed_mps: 0.12
+task45_extra_distance_timeout_sec: 10.0
 status_topic: /competition/status
 task1_result_topic: /competition/task1_result

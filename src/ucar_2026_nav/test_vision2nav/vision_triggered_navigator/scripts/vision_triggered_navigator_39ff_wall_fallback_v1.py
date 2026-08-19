@@ -27,7 +27,7 @@ if SCRIPT_DIR not in sys.path:
 
 from navigator_logic import (
     build_quadrilateral_walls,
-    coverage_anchor_order,
+    coverage_anchor_passes,
     coverage_motion_is_rotation_stall,
     coverage_position_needs_yaw_alignment,
     coverage_timeout_decision,
@@ -45,6 +45,7 @@ from navigator_logic import (
     normalize_angle,
     parking_footprint_margins,
     parking_goal_from_wall,
+    progressive_fallback_stages,
     ray_segment_intersection,
     scan_dwell_deadline,
     sensor_is_fresh,
@@ -59,7 +60,6 @@ from navigator_logic import (
     wall_normal_distance,
 )
 from sign_memory_parking_logic_v1 import (
-    alternate_cardinal_yaw,
     choose_lateral_dodge,
     clamp as memory_clamp,
     front_obstacle_is_localized,
@@ -68,6 +68,7 @@ from sign_memory_parking_logic_v1 import (
     local_lateral_displacement,
     nearest_cardinal_yaw as memory_nearest_cardinal_yaw,
     projected_lateral_offset,
+    remembered_target_lateral_travel,
     should_run_mid_recenter,
 )
 
@@ -247,6 +248,12 @@ class VisionTriggeredNavigator(object):
             "~coverage_preferred_odom_yaw_enabled", False))
         self.coverage_preferred_odom_yaw = normalize_angle(float(
             rospy.get_param("~coverage_preferred_odom_yaw", 0.0)))
+        self.coverage_preferred_odom_pose_enabled = bool(rospy.get_param(
+            "~coverage_preferred_odom_pose_enabled", False))
+        self.coverage_preferred_odom_x = float(rospy.get_param(
+            "~coverage_preferred_odom_x", 0.0))
+        self.coverage_preferred_odom_y = float(rospy.get_param(
+            "~coverage_preferred_odom_y", 0.0))
         self.coverage_preferred_view_consumed = False
         self.navigation_start_event = threading.Event()
         if not self.start_paused:
@@ -301,6 +308,17 @@ class VisionTriggeredNavigator(object):
             "~coverage_fallback_make_plan_service", "/move_base/make_plan")
         self.coverage_fallback_make_plan_tolerance = max(0.0, float(
             rospy.get_param("~coverage_fallback_make_plan_tolerance_m", 0.12)))
+        self.coverage_fallback_max_radius = max(0.10, float(rospy.get_param(
+            "~coverage_fallback_max_radius_m", 0.72)))
+        self.coverage_fallback_radius_step = max(0.05, float(rospy.get_param(
+            "~coverage_fallback_radius_step_m", 0.12)))
+        self.coverage_fallback_tolerance_step = max(0.01, float(
+            rospy.get_param("~coverage_fallback_tolerance_step_m", 0.08)))
+        self.coverage_fallback_max_position_tolerance = max(
+            self.coverage_anchor_position_tolerance, float(rospy.get_param(
+                "~coverage_fallback_max_position_tolerance_m", 0.52)))
+        self.coverage_fallback_attempts_per_stage = max(1, int(
+            rospy.get_param("~coverage_fallback_attempts_per_stage", 2)))
         self.max_coverage_anchors = int(rospy.get_param("~max_coverage_anchors", 0))
         self.center_only = rospy.get_param("~center_only", False)
         self.coverage_scan_settle = rospy.get_param("~coverage_scan_settle_sec", 0.35)
@@ -371,7 +389,13 @@ class VisionTriggeredNavigator(object):
         self.memory_parking_align_timeout = max(2.0, float(rospy.get_param(
             "~memory_parking_align_timeout_sec", 7.0)))
         self.memory_parking_align_tolerance = math.radians(abs(float(
-            rospy.get_param("~memory_parking_align_tolerance_deg", 4.5))))
+            rospy.get_param("~memory_parking_align_tolerance_deg", 2.0))))
+        self.memory_parking_align_relaxed_tolerance = math.radians(abs(float(
+            rospy.get_param(
+                "~memory_parking_align_relaxed_tolerance_deg", 3.0))))
+        self.memory_parking_motion_heading_gate = math.radians(abs(float(
+            rospy.get_param(
+                "~memory_parking_motion_heading_gate_deg", 3.0))))
         self.memory_parking_align_kp = abs(float(rospy.get_param(
             "~memory_parking_align_kp", 1.55)))
         self.memory_parking_align_min_wz = abs(float(rospy.get_param(
@@ -380,6 +404,18 @@ class VisionTriggeredNavigator(object):
             "~memory_parking_align_max_wz", 0.26)))
         self.memory_parking_align_stable = max(0.1, float(rospy.get_param(
             "~memory_parking_align_stable_sec", 0.22)))
+        self.memory_parking_align_reacquire_enabled = bool(rospy.get_param(
+            "~memory_parking_align_reacquire_enabled", True))
+        self.memory_parking_align_reacquire_max_error = abs(float(
+            rospy.get_param(
+                "~memory_parking_align_reacquire_max_image_error", 0.65)))
+        self.memory_parking_align_reacquire_max_cardinal_offset = (
+            math.radians(abs(float(rospy.get_param(
+                "~memory_parking_align_reacquire_max_cardinal_offset_deg",
+                25.0)))))
+        self.memory_parking_align_reacquire_hits = max(2, int(
+            rospy.get_param(
+                "~memory_parking_align_reacquire_required_hits", 2)))
         self.memory_parking_target_stale = max(0.4, float(rospy.get_param(
             "~memory_parking_target_stale_sec", 1.2)))
         self.memory_parking_center_tolerance = abs(float(rospy.get_param(
@@ -407,6 +443,12 @@ class VisionTriggeredNavigator(object):
         self.memory_parking_sign_reacquire_timeout = max(3.0, float(
             rospy.get_param(
                 "~memory_parking_sign_reacquire_timeout_sec", 10.0)))
+        self.memory_parking_prediction_hold = max(0.4, float(
+            rospy.get_param(
+                "~memory_parking_prediction_reacquire_hold_sec", 1.2)))
+        self.memory_parking_min_reacquire_search = max(0.04, float(
+            rospy.get_param(
+                "~memory_parking_min_reacquire_search_m", 0.10)))
         self.memory_parking_max_lateral_travel = max(0.20, float(
             rospy.get_param("~memory_parking_max_lateral_travel_m", 0.55)))
         self.memory_parking_projection_gain = min(1.2, max(0.5, float(
@@ -424,9 +466,9 @@ class VisionTriggeredNavigator(object):
             self.memory_parking_side_stop + 0.02,
             abs(float(rospy.get_param("~memory_parking_side_slow_m", 0.22))))
         self.memory_parking_escape_step = max(0.02, float(rospy.get_param(
-            "~memory_parking_escape_step_m", 0.055)))
+            "~memory_parking_escape_step_m", 0.12)))
         self.memory_parking_escape_speed = abs(float(rospy.get_param(
-            "~memory_parking_escape_speed", 0.04)))
+            "~memory_parking_escape_speed", 0.08)))
         self.memory_parking_escape_timeout = max(0.5, float(rospy.get_param(
             "~memory_parking_escape_timeout_sec", 1.8)))
         self.memory_parking_rear_stop = abs(float(rospy.get_param(
@@ -440,7 +482,7 @@ class VisionTriggeredNavigator(object):
                 "~memory_parking_front_cone_lateral_step_m", 0.08)))
         self.memory_parking_front_cone_lateral_speed = abs(float(
             rospy.get_param(
-                "~memory_parking_front_cone_lateral_speed", 0.055)))
+                "~memory_parking_front_cone_lateral_speed", 0.08)))
         self.memory_parking_front_cone_max_avoids = max(1, int(
             rospy.get_param("~memory_parking_front_cone_max_avoids", 3)))
         self.memory_parking_mid_recenter_distance = max(0.28, float(
@@ -453,7 +495,7 @@ class VisionTriggeredNavigator(object):
             rospy.get_param(
                 "~memory_parking_mid_recenter_reacquire_timeout_sec", 2.5)))
         self.memory_parking_front_stop = abs(float(rospy.get_param(
-            "~memory_parking_front_stop_m", 0.20)))
+            "~memory_parking_front_stop_m", 0.16)))
         self.memory_parking_front_hard_stop = min(
             self.memory_parking_front_stop,
             abs(float(rospy.get_param("~memory_parking_front_hard_stop_m", 0.16))))
@@ -462,7 +504,7 @@ class VisionTriggeredNavigator(object):
         self.memory_parking_forward_kp = abs(float(rospy.get_param(
             "~memory_parking_forward_kp", 0.55)))
         self.memory_parking_min_vx = abs(float(rospy.get_param(
-            "~memory_parking_min_vx", 0.025)))
+            "~memory_parking_min_vx", 0.04)))
         self.memory_parking_max_vx = abs(float(rospy.get_param(
             "~memory_parking_max_vx", 0.09)))
         self.memory_parking_mid_vx = abs(float(rospy.get_param(
@@ -717,6 +759,11 @@ class VisionTriggeredNavigator(object):
         self.target_sequence = 0
         self.target_image_stamp = 0.0
         self.target_capture_pose = None
+        # One-based scan anchor that produced the active parking trigger.
+        # It remains stable while parking so point-specific cardinal rules do
+        # not get lost when the coverage state machine is interrupted.
+        self.active_coverage_anchor = 0
+        self.target_lock = threading.Lock()
         if self.coverage_search_mode:
             rospy.Subscriber(self.target_topic, String, self._target_cb, queue_size=10)
 
@@ -868,6 +915,7 @@ class VisionTriggeredNavigator(object):
 
     def _publish_coverage_observation(self, state, anchor_index, point):
         """Publish the active calibrated anchor for a later direct revisit."""
+        self.active_coverage_anchor = int(anchor_index) + 1
         payload = {
             "state": str(state),
             "anchor_index": int(anchor_index) + 1,
@@ -920,25 +968,30 @@ class VisionTriggeredNavigator(object):
             image_width = float(payload.get("image_width"))
             if image_width <= 1.0:
                 return
-            self.target_error = (center_x - image_width * 0.5) / (image_width * 0.5)
-            self.target_payload_at = rospy.get_time()
-            self.last_target_payload = payload
-            self.target_sequence += 1
+            target_error = ((center_x - image_width * 0.5) /
+                            (image_width * 0.5))
+            payload_at = rospy.get_time()
             try:
                 image_stamp = float(
                     payload.get("image_stamp") or payload.get("stamp") or
-                    self.target_payload_at)
+                    payload_at)
             except (TypeError, ValueError):
-                image_stamp = self.target_payload_at
-            self.target_image_stamp = image_stamp
-            self.target_capture_pose = None
+                image_stamp = payload_at
+            capture_pose = None
             history = list(self.odom_history)
             if history:
                 closest_stamp, closest_pose = min(
                     history, key=lambda sample: abs(sample[0] - image_stamp))
                 if abs(closest_stamp - image_stamp) <= (
                         self.memory_parking_odom_sync_tolerance):
-                    self.target_capture_pose = tuple(closest_pose)
+                    capture_pose = tuple(closest_pose)
+            with self.target_lock:
+                self.target_error = target_error
+                self.target_payload_at = payload_at
+                self.last_target_payload = payload
+                self.target_image_stamp = image_stamp
+                self.target_capture_pose = capture_pose
+                self.target_sequence += 1
         except (TypeError, ValueError, KeyError):
             return
 
@@ -1136,7 +1189,8 @@ class VisionTriggeredNavigator(object):
             previous = current
         return length
 
-    def _select_coverage_fallback(self, x, y, yaw):
+    def _select_coverage_fallback(self, x, y, yaw, radii=None,
+                                  rejected=None):
         """Choose one nearby footprint-safe point that move_base can actually plan to."""
         if not self.coverage_fallback_enabled:
             return None
@@ -1144,8 +1198,13 @@ class VisionTriggeredNavigator(object):
         if pose is None:
             return None
         candidates = coverage_fallback_candidates(
-            x, y, pose[0], pose[1], self.coverage_fallback_radii)
+            x, y, pose[0], pose[1],
+            self.coverage_fallback_radii if radii is None else radii)
+        rejected = rejected or set()
         for candidate_x, candidate_y in candidates:
+            candidate_key = (round(candidate_x, 3), round(candidate_y, 3))
+            if candidate_key in rejected:
+                continue
             if not self._coverage_point_inside_room(candidate_x, candidate_y):
                 continue
             known, max_cost, _blocked = self._coverage_pose_cost(
@@ -1277,6 +1336,39 @@ class VisionTriggeredNavigator(object):
                 patrol_idx + 1, str(exc))
             return None
 
+    def _preferred_anchor_map_pose(self, patrol_idx):
+        """Project the cached real odom observation pose into the current map."""
+        if (not self.coverage_preferred_odom_pose_enabled or
+                self.coverage_preferred_view_consumed or
+                patrol_idx + 1 != self.preferred_coverage_anchor):
+            return None
+        odom_frame = self.odom_frame_from_msg or self.odom_frame
+        source = PoseStamped()
+        source.header.frame_id = odom_frame
+        source.header.stamp = rospy.Time(0)
+        source.pose.position.x = self.coverage_preferred_odom_x
+        source.pose.position.y = self.coverage_preferred_odom_y
+        source.pose.orientation = euler_to_quaternion(
+            self.coverage_preferred_odom_yaw)
+        try:
+            self.tf_listener.waitForTransform(
+                self.map_frame, odom_frame, rospy.Time(0), rospy.Duration(0.5))
+            transformed = self.tf_listener.transformPose(self.map_frame, source)
+            return (
+                float(transformed.pose.position.x),
+                float(transformed.pose.position.y),
+                normalize_angle(quaternion_to_yaw(
+                    transformed.pose.orientation)),
+            )
+        except (tf.LookupException, tf.ConnectivityException,
+                tf.ExtrapolationException) as exc:
+            rospy.logwarn(
+                "MEMORY_VIEW_EXACT_POSE_UNAVAILABLE anchor=%d odom=(%.3f,%.3f); "
+                "falling back to configured anchor: %s",
+                patrol_idx + 1, self.coverage_preferred_odom_x,
+                self.coverage_preferred_odom_y, str(exc))
+            return None
+
     def _check_current_goal_cb(self, event):
         """定时器回调：检查当前导航目标是否仍然可行"""
         if self.current_goal_infeasible:
@@ -1291,7 +1383,7 @@ class VisionTriggeredNavigator(object):
     # ------------------------------------------------------------------
     # 动作执行
     # ------------------------------------------------------------------
-    def send_goal(self, x, y, yaw):
+    def send_goal(self, x, y, yaw, position_tolerance=None):
         """
         发送导航目标并等待结果。
         等待期间启动定时器实时检查目标可行性。
@@ -1303,6 +1395,13 @@ class VisionTriggeredNavigator(object):
         self.current_goal_timed_out = False
         self.current_goal_rotation_stall = False
         self.current_goal_needs_yaw_alignment = False
+        self.current_goal_pose_accepted = False
+        self.current_goal_no_progress = False
+        acceptance_tolerance = (
+            self.coverage_anchor_position_tolerance
+            if position_tolerance is None else
+            max(self.coverage_anchor_position_tolerance,
+                float(position_tolerance)))
 
         goal = MoveBaseGoal()
         goal.target_pose.header.frame_id = self.map_frame
@@ -1373,7 +1472,7 @@ class VisionTriggeredNavigator(object):
                             no_progress_distance = latest_distance
                         elif (now - no_progress_started >=
                               self.coverage_no_progress_timeout and
-                              latest_distance > self.coverage_anchor_position_tolerance):
+                              latest_distance > acceptance_tolerance):
                             self.current_goal_no_progress = True
                             self._publish_status("coverage_goal_no_progress")
                             rospy.logwarn(
@@ -1382,7 +1481,7 @@ class VisionTriggeredNavigator(object):
                                 now - no_progress_started, latest_distance)
                             self.cancel_goal()
                             break
-                        if latest_distance <= self.coverage_anchor_position_tolerance:
+                        if latest_distance <= acceptance_tolerance:
                             if anchor_close_since is None:
                                 anchor_close_since = now
                             elif now - anchor_close_since >= self.coverage_anchor_yaw_hold:
@@ -1462,7 +1561,7 @@ class VisionTriggeredNavigator(object):
                 if decision in ("soft_timeout", "hard_timeout"):
                     self.current_goal_timed_out = True
                     rospy.logwarn(
-                        "[vision_triggered_navigator] 精确观察点(%.4f, %.4f, %.4f)%s: elapsed=%.1fs distance=%.3fm window_progress=%.3fm，取消并进入下一原始锚点.",
+                        "[vision_triggered_navigator] 精确观察点(%.4f, %.4f, %.4f)%s: elapsed=%.1fs distance=%.3fm window_progress=%.3fm，取消并进入递增容差附近点恢复.",
                         x, y, yaw,
                         "达到硬时限" if decision == "hard_timeout" else "软时限无有效进展",
                         elapsed, latest_distance, window_progress)
@@ -1669,10 +1768,18 @@ class VisionTriggeredNavigator(object):
         self.current_goal_pose_accepted = False
         self.current_goal_no_progress = False
         x, y, configured_yaw = exact_observation_target(point)
-        preferred_view_yaw = self._preferred_anchor_map_yaw(patrol_idx)
+        preferred_view_pose = self._preferred_anchor_map_pose(patrol_idx)
+        if preferred_view_pose is not None:
+            x, y, preferred_view_yaw = preferred_view_pose
+        else:
+            preferred_view_yaw = self._preferred_anchor_map_yaw(patrol_idx)
         yaw = (preferred_view_yaw if preferred_view_yaw is not None
                else configured_yaw)
-        self._publish_coverage_observation("navigating", patrol_idx, point)
+        active_point = dict(point)
+        active_point.update({"x": x, "y": y, "yaw": yaw})
+        requested_x, requested_y, requested_yaw = x, y, yaw
+        self._publish_coverage_observation(
+            "navigating", patrol_idx, active_point)
         if self.triggered:
             return "triggered"
 
@@ -1687,12 +1794,18 @@ class VisionTriggeredNavigator(object):
 
         result = None
         navigation_reached = False
-        active_point = dict(point)
-        active_point["yaw"] = yaw
-        if preferred_view_yaw is not None:
+        if preferred_view_pose is not None:
+            rospy.logwarn(
+                "MEMORY_VIEW_EXACT_POSE anchor=%d map=(%.3f,%.3f,%.1fdeg) "
+                "from cached odom=(%.3f,%.3f,%.1fdeg)",
+                patrol_idx + 1, x, y, math.degrees(yaw),
+                self.coverage_preferred_odom_x,
+                self.coverage_preferred_odom_y,
+                math.degrees(self.coverage_preferred_odom_yaw))
+        elif preferred_view_yaw is not None:
             rospy.logwarn(
                 "MEMORY_VIEW_DIRECT anchor=%d map_yaw=%.1fdeg; "
-                "navigating directly to the best cached simulation view",
+                "cached position unavailable, using anchor coordinates",
                 patrol_idx + 1, math.degrees(preferred_view_yaw))
         if not exact_blocked:
             rospy.loginfo(
@@ -1736,42 +1849,134 @@ class VisionTriggeredNavigator(object):
                 break
 
         if not navigation_reached and not self.triggered:
-            if not self._wait_navigation_idle():
-                self.cmd_vel_pub.publish(Twist())
-            fallback = self._select_coverage_fallback(x, y, yaw)
-            if fallback is not None:
-                x, y, yaw = fallback
-                active_point.update({"x": x, "y": y, "yaw": yaw})
-                self._publish_coverage_observation(
-                    "fallback_selected", patrol_idx, active_point)
-                self._publish_status("coverage_fallback_selected")
-                result = self.send_goal(x, y, yaw)
-                if self.triggered:
-                    return "triggered"
-                if self.current_goal_pose_accepted:
-                    navigation_reached = True
-                elif self.current_goal_needs_yaw_alignment:
-                    if (self._wait_navigation_idle() and
-                            self._align_coverage_anchor_yaw((x, y, yaw))):
+            self._wait_navigation_idle()
+            rejected_fallbacks = set()
+            stages = progressive_fallback_stages(
+                self.coverage_anchor_position_tolerance,
+                self.coverage_fallback_radii,
+                self.coverage_fallback_radius_step,
+                self.coverage_fallback_max_radius,
+                self.coverage_fallback_tolerance_step,
+                self.coverage_fallback_max_position_tolerance)
+            for stage_index, (radius, arrival_tolerance) in enumerate(stages, 1):
+                pose = self._get_robot_pose(self.base_frame)
+                if (pose is not None and
+                        math.hypot(requested_x - pose[0],
+                                   requested_y - pose[1]) <= arrival_tolerance):
+                    x, y, yaw = pose[0], pose[1], requested_yaw
+                    active_point.update({"x": x, "y": y, "yaw": yaw})
+                    self._publish_coverage_observation(
+                        "fallback_tolerance_accepted", patrol_idx, active_point)
+                    self._publish_status("coverage_fallback_tolerance_accepted")
+                    rospy.logwarn(
+                        "[vision_triggered_navigator] scan point %d accepted at "
+                        "nearby pose after widening tolerance: stage=%d "
+                        "distance=%.3fm tolerance=%.3fm.",
+                        patrol_idx + 1, stage_index,
+                        math.hypot(requested_x - pose[0],
+                                   requested_y - pose[1]), arrival_tolerance)
+                    if self._align_coverage_anchor_yaw((x, y, yaw)):
                         navigation_reached = True
-                elif result == actionlib.GoalStatus.SUCCEEDED:
-                    navigation_reached = True
+                        break
+                    if self.triggered:
+                        return "triggered"
+
+                for _candidate_attempt in range(
+                        self.coverage_fallback_attempts_per_stage):
+                    fallback = self._select_coverage_fallback(
+                        requested_x, requested_y, requested_yaw,
+                        radii=[radius], rejected=rejected_fallbacks)
+                    if fallback is None:
+                        break
+                    x, y, yaw = fallback
+                    rejected_fallbacks.add((round(x, 3), round(y, 3)))
+                    active_point.update({"x": x, "y": y, "yaw": yaw})
+                    self._publish_coverage_observation(
+                        "fallback_selected", patrol_idx, active_point)
+                    self._publish_status("coverage_fallback_selected")
+                    rospy.logwarn(
+                        "[vision_triggered_navigator] scan point %d nearby "
+                        "attempt stage=%d radius=%.2fm arrival_tolerance=%.2fm.",
+                        patrol_idx + 1, stage_index, radius,
+                        arrival_tolerance)
+                    result = self.send_goal(
+                        x, y, yaw, position_tolerance=arrival_tolerance)
+                    if self.triggered:
+                        return "triggered"
+                    if self.current_goal_pose_accepted:
+                        navigation_reached = True
+                    elif self.current_goal_needs_yaw_alignment:
+                        if (self._wait_navigation_idle() and
+                                self._align_coverage_anchor_yaw((x, y, yaw))):
+                            navigation_reached = True
+                    elif result == actionlib.GoalStatus.SUCCEEDED:
+                        navigation_reached = True
+                    if navigation_reached:
+                        break
+                    self._wait_navigation_idle()
+                if navigation_reached:
+                    break
 
         if not navigation_reached:
-            self.cmd_vel_pub.publish(Twist())
-            rospy.logwarn(
-                "[vision_triggered_navigator] scan point %d could not be reached "
-                "without prolonged oscillation (state=%s timeout=%s no_progress=%s "
-                "rotation_stall=%s); skip this point and keep the mission moving.",
-                patrol_idx + 1, str(result), self.current_goal_timed_out,
-                self.current_goal_no_progress, self.current_goal_rotation_stall)
-            return "skipped_failed"
+            # The robot's current occupied pose is necessarily reachable.  Use
+            # it as the final observation fallback so an unreachable calibrated
+            # anchor can never suppress that anchor's OCR sweep.
+            self.cancel_goal()
+            self._wait_navigation_idle()
+            pose = self._get_robot_pose(self.base_frame)
+            if pose is None:
+                rospy.logerr(
+                    "[vision_triggered_navigator] scan point %d has no TF for "
+                    "nearby fallback; holding briefly for pose recovery.",
+                    patrol_idx + 1)
+                pose_deadline = rospy.get_time() + 3.0
+                while (not rospy.is_shutdown() and pose is None and
+                       not self.triggered and rospy.get_time() < pose_deadline):
+                    self.cmd_vel_pub.publish(Twist())
+                    rospy.sleep(0.1)
+                    pose = self._get_robot_pose(self.base_frame)
+            if self.triggered:
+                return "triggered"
+            if pose is None:
+                # Scanning is still more useful than silently losing an anchor.
+                # Keep the configured metadata and perform the sweep without a
+                # position/yaw correction until TF recovers inside step scan.
+                x, y, yaw = requested_x, requested_y, requested_yaw
+                active_point.update({"x": x, "y": y, "yaw": yaw})
+                navigation_reached = True
+                rospy.logerr(
+                    "[vision_triggered_navigator] scan point %d TF remained "
+                    "unavailable; retaining stationary OCR dwell and sweep "
+                    "instead of skipping.", patrol_idx + 1)
+            else:
+                x, y, yaw = pose[0], pose[1], requested_yaw
+                active_point.update({"x": x, "y": y, "yaw": yaw})
+                self._publish_coverage_observation(
+                    "forced_nearby_observation", patrol_idx, active_point)
+                self._publish_status("coverage_forced_nearby_observation")
+                rospy.logwarn(
+                    "[vision_triggered_navigator] scan point %d exhausted nearby "
+                    "navigation candidates; scanning from current reachable pose "
+                    "(%.3f,%.3f) instead of skipping.",
+                    patrol_idx + 1, x, y)
+                if not self._align_coverage_anchor_yaw((x, y, yaw)):
+                    pose = self._get_robot_pose(self.base_frame) or pose
+                    yaw = pose[2]
+                    active_point["yaw"] = yaw
+                    rospy.logwarn(
+                        "[vision_triggered_navigator] scan point %d initial yaw "
+                        "could not be aligned; performing its sweep from current "
+                        "heading %.1fdeg rather than skipping.",
+                        patrol_idx + 1, math.degrees(yaw))
+                navigation_reached = True
         if not self._wait_navigation_idle():
             self.cmd_vel_pub.publish(Twist())
-            rospy.logerr(
-                "[vision_triggered_navigator] 精确锚点%d到达后move_base未释放控制权，禁止观察自转并进入下一原始点.",
+            self.cancel_goal()
+            self._hold_stopped(0.3)
+            rospy.logwarn(
+                "[vision_triggered_navigator] scan point %d move_base release "
+                "was delayed; goal cancelled and scan retained.",
                 patrol_idx + 1)
-            return "skipped_failed"
 
         self.cmd_vel_pub.publish(Twist())
         self._publish_coverage_observation("scanning", patrol_idx, active_point)
@@ -2422,6 +2627,23 @@ class VisionTriggeredNavigator(object):
                 now - self.target_payload_at <=
                 self.memory_parking_target_stale)
 
+    def _memory_target_snapshot(self, fallback_error=None,
+                                fallback_pose=None):
+        """Read one internally consistent OCR error/pose pair."""
+        with self.target_lock:
+            error = self.target_error
+            payload_at = self.target_payload_at
+            image_stamp = self.target_image_stamp
+            capture_pose = self.target_capture_pose
+            sequence = self.target_sequence
+        if error is None:
+            error = fallback_error
+        if capture_pose is None:
+            capture_pose = fallback_pose
+        return (error, payload_at, image_stamp,
+                None if capture_pose is None else tuple(capture_pose),
+                sequence)
+
     def _memory_heading_command(self, target_odom_yaw, maximum=None):
         if not self._odom_is_fresh() or self.odom_pose is None:
             return 0.0, None
@@ -2432,28 +2654,50 @@ class VisionTriggeredNavigator(object):
             self.memory_parking_align_kp * error, -limit, limit)
         return command, error
 
+    def _memory_forced_cardinal_map_yaw(self):
+        """Return the parking-only fixed heading for selected scan anchors."""
+        return {
+            1: -math.pi / 2.0,
+            4: math.pi / 2.0,
+            5: math.pi / 2.0,
+            8: -math.pi / 2.0,
+        }.get(int(self.active_coverage_anchor or 0))
+
     def _memory_cardinal_target_odom(self):
-        """Get a cardinal heading while preserving the current map/odom offset."""
+        """Get the anchor-selected cardinal heading in the odom frame."""
         if self.odom_pose is None:
             return None
+        forced_map_yaw = self._memory_forced_cardinal_map_yaw()
         map_pose = self._get_robot_pose(self.base_frame)
         if map_pose is None:
+            if forced_map_yaw is not None:
+                rospy.logwarn(
+                    "MEMORY_PARK_CARDINAL_FORCED anchor=P%d target=%.1fdeg "
+                    "source=odom_fallback",
+                    self.active_coverage_anchor,
+                    math.degrees(forced_map_yaw))
+                return normalize_angle(forced_map_yaw)
             return memory_nearest_cardinal_yaw(self.odom_pose[2])
-        target_map_yaw = memory_nearest_cardinal_yaw(map_pose[2])
+        target_map_yaw = (
+            forced_map_yaw if forced_map_yaw is not None
+            else memory_nearest_cardinal_yaw(map_pose[2]))
+        if forced_map_yaw is not None:
+            rospy.logwarn(
+                "MEMORY_PARK_CARDINAL_FORCED anchor=P%d target=%.1fdeg "
+                "current=%.1fdeg source=map",
+                self.active_coverage_anchor,
+                math.degrees(target_map_yaw),
+                math.degrees(map_pose[2]))
         correction = normalize_angle(target_map_yaw - map_pose[2])
         return normalize_angle(self.odom_pose[2] + correction)
 
-    def _memory_align_nearest_cardinal(self, target_override=None,
-                                       attempt_name="primary"):
+    def _memory_align_nearest_cardinal(self):
         """Straighten to a selected map-axis heading without wall fitting."""
-        self._publish_status(
-            "memory_parking_cardinal_aligning" if target_override is None
-            else "memory_parking_cardinal_alternate_aligning")
+        self._publish_status("memory_parking_cardinal_aligning")
         deadline = rospy.get_time() + self.memory_parking_align_timeout
+        dynamic_deadline_set = False
         stable_since = None
-        cardinal_target = (
-            None if target_override is None
-            else normalize_angle(float(target_override)))
+        cardinal_target = None
         rate = rospy.Rate(25)
         while not rospy.is_shutdown() and rospy.get_time() < deadline:
             if not self._odom_is_fresh() or self.odom_pose is None:
@@ -2467,9 +2711,7 @@ class VisionTriggeredNavigator(object):
                     rate.sleep()
                     continue
                 rospy.logwarn(
-                    "MEMORY_PARK_CARDINAL attempt=%s target=%.1fdeg "
-                    "current=%.1fdeg",
-                    attempt_name,
+                    "MEMORY_PARK_CARDINAL target=%.1fdeg current=%.1fdeg",
                     math.degrees(cardinal_target),
                     math.degrees(self.odom_pose[2]))
 
@@ -2478,6 +2720,21 @@ class VisionTriggeredNavigator(object):
                 self.cmd_vel_pub.publish(Twist())
                 rate.sleep()
                 continue
+
+            if not dynamic_deadline_set:
+                # Allow enough time for the one-time cardinal alignment,
+                # including acceleration and its proportional tail.
+                effective_speed = max(
+                    0.08, self.memory_parking_align_max_wz * 0.55)
+                required_timeout = max(
+                    self.memory_parking_align_timeout,
+                    abs(error) / effective_speed + 2.0)
+                deadline = max(deadline, rospy.get_time() + required_timeout)
+                dynamic_deadline_set = True
+                rospy.loginfo(
+                    "MEMORY_PARK_CARDINAL_TIMEOUT_BUDGET angle=%.1fdeg "
+                    "timeout=%.1fs",
+                    math.degrees(abs(error)), required_timeout)
             if abs(error) <= self.memory_parking_align_tolerance:
                 self.cmd_vel_pub.publish(Twist())
                 if stable_since is None:
@@ -2486,9 +2743,9 @@ class VisionTriggeredNavigator(object):
                       self.memory_parking_align_stable):
                     self._publish_status("memory_parking_straightened")
                     rospy.logwarn(
-                        "MEMORY_PARK_STRAIGHT source=cardinal attempt=%s "
+                        "MEMORY_PARK_STRAIGHT source=cardinal "
                         "target=%.1fdeg error=%+.1fdeg",
-                        attempt_name, math.degrees(cardinal_target),
+                        math.degrees(cardinal_target),
                         math.degrees(error))
                     return cardinal_target
                 rate.sleep()
@@ -2517,7 +2774,7 @@ class VisionTriggeredNavigator(object):
         self.cmd_vel_pub.publish(Twist())
         if cardinal_target is not None and self.odom_pose is not None:
             error = normalize_angle(cardinal_target - self.odom_pose[2])
-            if abs(error) <= math.radians(8.0):
+            if abs(error) <= self.memory_parking_align_relaxed_tolerance:
                 self._publish_status("memory_parking_straightened_relaxed")
                 rospy.logwarn(
                     "MEMORY_PARK_CARDINAL_RELAXED error=%+.1fdeg; continuing",
@@ -2536,23 +2793,24 @@ class VisionTriggeredNavigator(object):
         return min(finite) if finite else float("inf")
 
     def _memory_escape_lateral_obstacle(self, target_yaw, side_clearance):
-        """Back up briefly when a cone blocks the requested lateral motion."""
+        """Move forward briefly when a cone blocks the lateral parking path."""
         if self.odom_pose is None:
             return False
         start_pose = tuple(self.odom_pose)
-        rear_clear = (self.scan_rear_min is None or
-                      self.scan_rear_min > self.memory_parking_rear_stop)
-        if rear_clear:
-            velocity = -self.memory_parking_escape_speed
-            direction_name = "back"
-        else:
+        front_clear = (self.scan_front_min is not None and
+                       self.scan_front_min >
+                       self.memory_parking_front_escape_min)
+        if not front_clear:
             self._publish_status("memory_parking_escape_waiting")
             self._hold_stopped(0.25)
             rospy.logwarn_throttle(
                 1.0,
-                "MEMORY_PARK_ESCAPE_WAIT side=%.3f rear=%s",
-                side_clearance, str(self.scan_rear_min))
+                "MEMORY_PARK_ESCAPE_WAIT side=%.3f front=%s required=%.3f",
+                side_clearance, str(self.scan_front_min),
+                self.memory_parking_front_escape_min)
             return False
+        velocity = self.memory_parking_escape_speed
+        direction_name = "forward"
 
         self._publish_status("memory_parking_cone_micro_escape")
         rospy.logwarn(
@@ -2570,10 +2828,11 @@ class VisionTriggeredNavigator(object):
             if abs(displacement) >= self.memory_parking_escape_step:
                 self.cmd_vel_pub.publish(Twist())
                 return True
-            if velocity < 0.0 and self.scan_rear_min is not None:
-                if self.scan_rear_min <= self.memory_parking_rear_stop:
-                    self.cmd_vel_pub.publish(Twist())
-                    return False
+            if (self.scan_front_min is None or
+                    self.scan_front_min <=
+                    self.memory_parking_front_escape_min):
+                self.cmd_vel_pub.publish(Twist())
+                return False
             twist = Twist()
             twist.linear.x = velocity
             twist.angular.z, _ = self._memory_heading_command(
@@ -2632,7 +2891,7 @@ class VisionTriggeredNavigator(object):
             twist.angular.z, heading_error = self._memory_heading_command(
                 target_yaw, maximum=0.10)
             if (heading_error is not None and
-                    abs(heading_error) > math.radians(8.0)):
+                    abs(heading_error) > self.memory_parking_motion_heading_gate):
                 twist.linear.y = 0.0
             self.cmd_vel_pub.publish(twist)
             rate.sleep()
@@ -2641,7 +2900,8 @@ class VisionTriggeredNavigator(object):
 
     def _memory_center_sign_laterally(self, target_yaw, remembered_error,
                                       timeout=None,
-                                      reacquire_timeout=None):
+                                      reacquire_timeout=None,
+                                      initial_snapshot=None):
         """Center using a timestamped image-to-wall odometry projection."""
         self._publish_status("memory_parking_lateral_centering")
         self.memory_parking_center_result = "running"
@@ -2658,24 +2918,39 @@ class VisionTriggeredNavigator(object):
             max(0.5, float(reacquire_timeout)))
         deadline = rospy.get_time() + center_timeout
         center_started_at = rospy.get_time()
-        last_error = float(remembered_error)
-        last_visible_at = self.target_payload_at
+        if initial_snapshot is None:
+            (snapshot_error, snapshot_at, _snapshot_image_stamp,
+             snapshot_pose, snapshot_sequence) = self._memory_target_snapshot(
+                remembered_error, start_pose)
+        else:
+            (snapshot_error, snapshot_at, _snapshot_image_stamp,
+             snapshot_pose, snapshot_sequence) = initial_snapshot
+            if snapshot_error is None:
+                snapshot_error = remembered_error
+            if snapshot_pose is None:
+                snapshot_pose = start_pose
+        last_error = float(snapshot_error)
+        last_visible_at = snapshot_at
         centered_since = None
-        processed_sequence = -1
+        prediction_reached_since = None
+        processed_sequence = snapshot_sequence
         post_align_observation = False
+        prediction_search_started = False
         model_source = "remembered"
 
         wall_distance = (self.scan_front_wall_distance
                          if self.scan_front_wall_distance is not None else 0.48)
-        capture_pose = self.target_capture_pose or start_pose
-        capture_travel = local_lateral_displacement(
-            start_pose, capture_pose, target_yaw)
-        target_travel = capture_travel + projected_lateral_offset(
+        capture_pose = snapshot_pose or start_pose
+        target_travel = remembered_target_lateral_travel(
+            start_pose, capture_pose, target_yaw,
             last_error, wall_distance, self.camera_horizontal_fov,
-            self.memory_parking_projection_gain)
+            self.memory_parking_projection_gain,
+            self.camera_bearing_sign)
         target_travel = memory_clamp(
             target_travel, -self.memory_parking_max_lateral_travel,
             self.memory_parking_max_lateral_travel)
+        remembered_target_travel = target_travel
+        prediction_returning_to_memory = False
         rospy.logwarn(
             "MEMORY_PARK_PROJECT source=remembered error=%+.3f "
             "wall=%.3fm target_travel=%+.3fm",
@@ -2689,23 +2964,30 @@ class VisionTriggeredNavigator(object):
                 rate.sleep()
                 continue
 
-            target_fresh = (self._memory_target_is_fresh(now) and
-                            self.target_payload_at >= center_started_at and
-                            (self.target_image_stamp <= 0.0 or
-                             self.target_image_stamp >= center_started_at - 0.15))
-            if target_fresh and self.target_sequence != processed_sequence:
-                processed_sequence = self.target_sequence
-                last_error = float(self.target_error)
+            (current_error, current_payload_at, current_image_stamp,
+             current_capture_pose, current_sequence) = (
+                self._memory_target_snapshot(last_error, self.odom_pose))
+            target_fresh = (
+                current_error is not None and
+                now - current_payload_at <= self.memory_parking_target_stale and
+                current_payload_at >= center_started_at and
+                (current_image_stamp <= 0.0 or
+                 current_image_stamp >= center_started_at - 0.15))
+            if target_fresh and current_sequence != processed_sequence:
+                processed_sequence = current_sequence
+                last_error = float(current_error)
                 last_visible_at = now
-                observed_pose = self.target_capture_pose or self.odom_pose
+                observed_pose = current_capture_pose or self.odom_pose
                 observed_travel = local_lateral_displacement(
                     start_pose, observed_pose, target_yaw)
                 observed_wall = (self.scan_front_wall_distance
                                  if self.scan_front_wall_distance is not None
                                  else wall_distance)
-                candidate = observed_travel + projected_lateral_offset(
+                candidate = remembered_target_lateral_travel(
+                    start_pose, observed_pose, target_yaw,
                     last_error, observed_wall, self.camera_horizontal_fov,
-                    self.memory_parking_projection_gain)
+                    self.memory_parking_projection_gain,
+                    self.camera_bearing_sign)
                 candidate = memory_clamp(
                     candidate, -self.memory_parking_max_lateral_travel,
                     self.memory_parking_max_lateral_travel)
@@ -2715,30 +2997,90 @@ class VisionTriggeredNavigator(object):
                     target_travel = candidate
                 post_align_observation = True
                 model_source = (
-                    "timestamped_ocr" if self.target_capture_pose is not None
+                    "timestamped_ocr" if current_capture_pose is not None
                     else "arrival_ocr")
                 rospy.logwarn(
                     "MEMORY_PARK_PROJECT source=%s error=%+.3f "
                     "capture_travel=%+.3fm target_travel=%+.3fm",
                     model_source, last_error, observed_travel, target_travel)
 
-            if (not post_align_observation and
-                    now - center_started_at >=
-                    reacquire_limit):
-                self.cmd_vel_pub.publish(Twist())
-                self.memory_parking_center_result = "sign_not_reacquired"
-                rospy.logwarn(
-                    "MEMORY_PARK_SIGN_NOT_REACQUIRED elapsed=%.1fs "
-                    "travel=%+.3fm target=%+.3fm; trying alternate cardinal",
-                    now - center_started_at,
-                    local_lateral_displacement(
-                        start_pose, self.odom_pose, target_yaw),
-                    target_travel)
-                return False
-
             travel = local_lateral_displacement(
                 start_pose, self.odom_pose, target_yaw)
             position_error = target_travel - travel
+
+            if (not post_align_observation and
+                    abs(position_error) <=
+                    self.memory_parking_center_position_tolerance):
+                self.cmd_vel_pub.publish(Twist())
+                if prediction_returning_to_memory:
+                    self._publish_status("memory_parking_sign_centered")
+                    self.memory_parking_center_result = (
+                        "centered_from_memory_after_search_return")
+                    rospy.logwarn(
+                        "MEMORY_PARK_SEARCH_RETURNED travel=%+.3fm "
+                        "remembered_target=%+.3fm; continuing directly to "
+                        "lidar forward parking",
+                        travel, remembered_target_travel)
+                    return True
+                if prediction_reached_since is None:
+                    prediction_reached_since = now
+                    rospy.logwarn(
+                        "MEMORY_PARK_MEMORY_TARGET_REACHED travel=%+.3fm "
+                        "target=%+.3fm; holding for fresh OCR",
+                        travel, target_travel)
+                elif (now - prediction_reached_since >= min(
+                        reacquire_limit,
+                        self.memory_parking_prediction_hold)):
+                    if (not prediction_search_started and
+                            abs(travel) <
+                            self.memory_parking_min_reacquire_search):
+                        search_velocity = lateral_velocity_for_image_error(
+                            last_error,
+                            self.memory_parking_center_kp,
+                            self.memory_parking_search_vy,
+                            self.memory_parking_search_vy)
+                        search_direction = (
+                            1.0 if search_velocity >= 0.0 else -1.0)
+                        target_travel = memory_clamp(
+                            travel + search_direction *
+                            self.memory_parking_min_reacquire_search,
+                            -self.memory_parking_max_lateral_travel,
+                            self.memory_parking_max_lateral_travel)
+                        prediction_search_started = True
+                        prediction_reached_since = None
+                        rospy.logwarn(
+                            "MEMORY_PARK_REACQUIRE_SEARCH direction=%s "
+                            "from=%+.3fm target=%+.3fm remembered_error=%+.3f",
+                            "left" if search_direction > 0.0 else "right",
+                            travel, target_travel, last_error)
+                        continue
+                    if (prediction_search_started and
+                            not prediction_returning_to_memory):
+                        target_travel = remembered_target_travel
+                        prediction_returning_to_memory = True
+                        prediction_reached_since = None
+                        rospy.logwarn(
+                            "MEMORY_PARK_REACQUIRE_MISSED returning from "
+                            "travel=%+.3fm to remembered_target=%+.3fm",
+                            travel, remembered_target_travel)
+                        continue
+                    # The remembered image projection has already placed the
+                    # robot at the expected sign center.  A cardinal rotation
+                    # can move the sign outside the camera view even when this
+                    # lateral position is usable, so do not rotate away or
+                    # fail solely because no fresh OCR frame was reacquired.
+                    self.cmd_vel_pub.publish(Twist())
+                    self._publish_status("memory_parking_sign_centered")
+                    self.memory_parking_center_result = "centered_from_memory"
+                    rospy.logwarn(
+                        "MEMORY_PARK_CENTERED_FROM_MEMORY travel=%+.3fm "
+                        "target=%+.3fm; fresh OCR unavailable, continuing "
+                        "directly to lidar forward parking",
+                        travel, target_travel)
+                    return True
+                rate.sleep()
+                continue
+            prediction_reached_since = None
 
             if (post_align_observation and
                     abs(position_error) <=
@@ -2778,8 +3120,17 @@ class VisionTriggeredNavigator(object):
                 clearance = self._memory_lateral_clearance(requested_vy)
                 if clearance <= self.memory_parking_side_stop:
                     self.cmd_vel_pub.publish(Twist())
-                    self._memory_escape_lateral_obstacle(
+                    escape_started_at = rospy.get_time()
+                    escaped = self._memory_escape_lateral_obstacle(
                         target_yaw, clearance)
+                    # Obstacle avoidance is part of completing the remembered
+                    # lateral move and must not consume the centering budget
+                    # when it succeeds. A blocked escape still consumes the
+                    # normal timeout so this state cannot wait forever.
+                    if escaped:
+                        deadline += max(
+                            0.0, rospy.get_time() - escape_started_at)
+                    self._publish_status("memory_parking_lateral_centering")
                     rate.sleep()
                     continue
                 if clearance < self.memory_parking_side_slow:
@@ -2792,7 +3143,8 @@ class VisionTriggeredNavigator(object):
             twist.linear.y = requested_vy
             twist.angular.z, heading_error = self._memory_heading_command(
                 target_yaw, maximum=0.12)
-            if heading_error is not None and abs(heading_error) > math.radians(8.0):
+            if (heading_error is not None and
+                    abs(heading_error) > self.memory_parking_motion_heading_gate):
                 twist.linear.y = 0.0
             self.cmd_vel_pub.publish(twist)
             rospy.loginfo_throttle(
@@ -2933,7 +3285,8 @@ class VisionTriggeredNavigator(object):
             twist.linear.x = speed
             twist.angular.z, heading_error = self._memory_heading_command(
                 target_yaw, maximum=0.10)
-            if heading_error is not None and abs(heading_error) > math.radians(15.0):
+            if (heading_error is not None and
+                    abs(heading_error) > self.memory_parking_motion_heading_gate):
                 twist.linear.x = 0.0
             self.cmd_vel_pub.publish(twist)
             rospy.loginfo_throttle(
@@ -2955,48 +3308,33 @@ class VisionTriggeredNavigator(object):
         if not self._wait_navigation_idle(timeout=2.0):
             rospy.logerr("MEMORY_PARK_MOVE_BASE_NOT_IDLE")
             return False
-        if self.target_error is None:
+        remembered_snapshot = self._memory_target_snapshot()
+        (remembered_error, _remembered_at, _remembered_image_stamp,
+         _remembered_pose, _remembered_sequence) = remembered_snapshot
+        if remembered_error is None:
             rospy.logerr("MEMORY_PARK_NO_INITIAL_SIGN")
             return False
-        remembered_error = float(self.target_error)
+        remembered_error = float(remembered_error)
         remembered_payload = dict(self.last_target_payload or {})
-        initial_yaw = (
-            None if self.odom_pose is None else float(self.odom_pose[2]))
         self._publish_status("memory_parking_sign_remembered")
         rospy.logwarn(
             "MEMORY_PARK_REMEMBER error=%+.3f center_x=%s image_width=%s",
             remembered_error, str(remembered_payload.get("target_center_x")),
             str(remembered_payload.get("image_width")))
 
-        target_yaw = self._memory_align_nearest_cardinal(
-            attempt_name="primary")
+        target_yaw = self._memory_align_nearest_cardinal()
         if target_yaw is None:
             return False
         if not self._memory_center_sign_laterally(
-                target_yaw, remembered_error):
-            if (self.memory_parking_center_result != "sign_not_reacquired" or
-                    initial_yaw is None):
-                return False
-            alternate_yaw, reverse_direction, primary_correction = (
-                alternate_cardinal_yaw(initial_yaw, target_yaw))
-            self._publish_status("memory_parking_cardinal_retrying")
+                target_yaw, remembered_error,
+                initial_snapshot=remembered_snapshot):
+            self._publish_status("memory_parking_centering_failed")
             rospy.logwarn(
-                "MEMORY_PARK_CARDINAL_ALTERNATE initial=%.1fdeg "
-                "primary=%.1fdeg correction=%+.1fdeg alternate=%.1fdeg "
-                "rotation=%s",
-                math.degrees(initial_yaw), math.degrees(target_yaw),
-                math.degrees(primary_correction),
-                math.degrees(alternate_yaw),
-                "clockwise" if reverse_direction < 0.0 else
-                "counterclockwise")
-            target_yaw = self._memory_align_nearest_cardinal(
-                target_override=alternate_yaw,
-                attempt_name="alternate")
-            if target_yaw is None:
-                return False
-            if not self._memory_center_sign_laterally(
-                    target_yaw, remembered_error):
-                return False
+                "MEMORY_PARK_CENTER_FAILED_KEEP_CARDINAL anchor=P%d "
+                "target=%.1fdeg reason=%s; cardinal heading remains locked",
+                self.active_coverage_anchor, math.degrees(target_yaw),
+                self.memory_parking_center_result)
+            return False
         return self._memory_drive_forward_to_wall(target_yaw)
 
     def _align_to_nearest_cardinal(self):
@@ -3798,11 +4136,13 @@ class VisionTriggeredNavigator(object):
 
         state = "PATROL"
         patrol_idx = 0
-        coverage_order = coverage_anchor_order(
+        coverage_passes = coverage_anchor_passes(
             len(self.patrol_points),
             self.preferred_coverage_anchor,
             self.max_coverage_anchors,
         )
+        coverage_pass_index = 0
+        coverage_order = coverage_passes[0] if coverage_passes else []
         if (self.preferred_coverage_anchor > 0 and coverage_order and
                 coverage_order[0] == self.preferred_coverage_anchor - 1):
             rospy.loginfo(
@@ -3822,16 +4162,31 @@ class VisionTriggeredNavigator(object):
             if state == "PATROL":
                 if self.coverage_search_mode:
                     if coverage_position >= coverage_count:
+                        if coverage_pass_index + 1 < len(coverage_passes):
+                            coverage_pass_index += 1
+                            coverage_order = coverage_passes[coverage_pass_index]
+                            coverage_count = len(coverage_order)
+                            coverage_position = 0
+                            self.cmd_vel_pub.publish(Twist())
+                            self._publish_status("coverage_reverse_rescan_started")
+                            rospy.logwarn(
+                                "[vision_triggered_navigator] first coverage pass "
+                                "completed without target; starting reverse rescan: %s",
+                                "->".join(str(index + 1)
+                                          for index in coverage_order))
+                            continue
                         rospy.logerr(
-                            "[vision_triggered_navigator] %d个精确观察点已按原顺序处理完成，但未锁定目标.",
-                            coverage_count)
+                            "[vision_triggered_navigator] forward and reverse "
+                            "coverage passes completed (%d anchors each), but no "
+                            "target was locked.", coverage_count)
                         self._publish_status("failed")
                         break
 
                     point_idx = coverage_order[coverage_position]
                     point = self.patrol_points[point_idx]
                     rospy.loginfo(
-                        "[vision_triggered_navigator] === 覆盖锚点 %d / %d，逻辑编号%d ===",
+                        "[vision_triggered_navigator] === 覆盖轮次 %d / %d，锚点 %d / %d，逻辑编号%d ===",
+                        coverage_pass_index + 1, len(coverage_passes),
                         coverage_position + 1, coverage_count, point_idx + 1)
                     outcome = self._visit_coverage_point(point, point_idx)
                     if outcome == "triggered":

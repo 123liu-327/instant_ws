@@ -1,12 +1,45 @@
-﻿<launch>
-  <!-- Minimal debug launch: image processing only, no /cmd_vel publication. -->
-  <arg name="image_topic" default="/ucar_camera/image_raw" />
-  <arg name="show_window" default="true" />
-  <arg name="publish_debug_image" default="true" />
+<launch>
+  <!-- Camera + gray/IPM debug + Line_Follower debug. No base driver or /cmd_vel publisher. -->
+  <arg name="start_camera" default="true" />
+  <arg name="start_gray_debug" default="true" />
+  <arg name="start_line_follower_debug" default="true" />
 
-  <node pkg="flow_end" type="image_process_debug" name="flow_end_image_process_debug" output="screen">
+  <arg name="camera_device_path" default="/dev/video0" />
+  <arg name="low_exposure_absolute" default="150" />
+  <arg name="image_topic" default="/ucar_camera/image_raw" />
+  <arg name="gray_debug_topic" default="/flow_end/follow_test_debug" />
+  <arg name="line_follower_debug_topic" default="/img_follow" />
+  <arg name="line_track_topic" default="/line_follower/track" />
+  <arg name="show_window" default="false" />
+  <arg name="publish_debug_image" default="true" />
+  <arg name="line_track_min_points" default="20" />
+  <arg name="line_follower_image_config" default="$(find line_follower)/config/image.cfg" />
+  <arg name="line_follower_pid_config" default="$(find line_follower)/config/pid.cfg" />
+
+  <include if="$(arg start_camera)" file="$(find ucar_camera)/launch/ucar_camera.launch">
+    <arg name="device_path" value="$(arg camera_device_path)" />
+    <arg name="image_topic" value="$(arg image_topic)" />
+    <arg name="low_exposure_absolute" value="$(arg low_exposure_absolute)" />
+  </include>
+
+  <node if="$(arg start_gray_debug)"
+        pkg="flow_end" type="image_process_debug"
+        name="flow_end_image_process_debug" output="screen">
     <param name="image_topic" value="$(arg image_topic)" />
+    <param name="debug_topic" value="$(arg gray_debug_topic)" />
     <param name="show_window" value="$(arg show_window)" />
     <param name="publish_debug_image" value="$(arg publish_debug_image)" />
   </node>
+
+  <include if="$(arg start_line_follower_debug)"
+           file="$(find line_follower)/launch/line_follower.launch">
+    <arg name="image_topic" value="$(arg image_topic)" />
+    <arg name="track_topic" value="$(arg line_track_topic)" />
+    <arg name="debug_topic" value="$(arg line_follower_debug_topic)" />
+    <arg name="image_config" value="$(arg line_follower_image_config)" />
+    <arg name="pid_config" value="$(arg line_follower_pid_config)" />
+    <arg name="publish_cmd_vel" value="false" />
+    <arg name="publish_debug_image" value="$(arg publish_debug_image)" />
+    <arg name="min_track_points" value="$(arg line_track_min_points)" />
+  </include>
 </launch>

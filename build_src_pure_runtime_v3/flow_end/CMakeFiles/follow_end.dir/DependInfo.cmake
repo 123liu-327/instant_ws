@@ -39,6 +39,7 @@ set(CMAKE_CXX_TARGET_INCLUDE_PATH
   "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/tf/include"
   "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/tf2/include"
   "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/tf2_msgs/include"
+  "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/line_follower/include"
   "/usr/include/opencv"
   )
 

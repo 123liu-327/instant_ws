@@ -18,6 +18,8 @@
   <arg name="parking_lateral_speed" default="0.10" />
   <arg name="parking_lateral_deadband" default="0.03" />
   <arg name="parking_lateral_cmd_sign" default="1.0" />
+  <arg name="vision_source" default="gray" />
+  <arg name="line_track_topic" default="/line_follower/track" />
 
   <include if="$(arg start_base_driver)" file="$(find ucar_controller)/launch/base_driver.launch" />
 
@@ -39,6 +41,8 @@
     <arg name="parking_lateral_speed" value="$(arg parking_lateral_speed)" />
     <arg name="parking_lateral_deadband" value="$(arg parking_lateral_deadband)" />
     <arg name="parking_lateral_cmd_sign" value="$(arg parking_lateral_cmd_sign)" />
+    <arg name="vision_source" value="$(arg vision_source)" />
+    <arg name="line_track_topic" value="$(arg line_track_topic)" />
   </include>
 
   <include if="$(arg start_speech)" file="$(find speech_command)/launch/speech_command.launch" />

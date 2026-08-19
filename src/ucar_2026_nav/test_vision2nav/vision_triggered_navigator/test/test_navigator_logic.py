@@ -14,6 +14,7 @@ if SCRIPTS not in sys.path:
 from navigator_logic import (
     build_quadrilateral_walls,
     coverage_anchor_order,
+    coverage_anchor_passes,
     center_angular_command,
     center_step_angle,
     coverage_motion_is_rotation_stall,
@@ -33,6 +34,7 @@ from navigator_logic import (
     parking_footprint_margins,
     parking_footprint_inside,
     parking_goal_from_wall,
+    progressive_fallback_stages,
     ray_segment_intersection,
     scan_dwell_deadline,
     sensor_is_fresh,
@@ -46,6 +48,18 @@ from navigator_logic import (
     wall_fit_is_continuous,
     wall_frame_docking_command,
 )
+
+
+def test_progressive_fallback_stages_expand_radius_and_tolerance():
+    stages = progressive_fallback_stages(
+        0.20, [0.18, 0.30, 0.42], 0.12, 0.72, 0.08, 0.52)
+    expected = [
+        (0.18, 0.28), (0.30, 0.36), (0.42, 0.44),
+        (0.54, 0.52), (0.66, 0.52), (0.72, 0.52),
+    ]
+    assert len(stages) == len(expected)
+    for actual, wanted in zip(stages, expected):
+        assert actual == pytest.approx(wanted)
 
 
 MEASURED_CORNERS = [
@@ -62,6 +76,24 @@ def test_preferred_anchor_continues_in_cyclic_scan_order():
 
 def test_cached_anchor_and_max_count_keep_forward_order():
     assert coverage_anchor_order(9, preferred_anchor=4, max_count=3) == [3, 4, 5]
+
+
+def test_coverage_anchor_passes_reverse_the_actual_forward_order():
+    assert coverage_anchor_passes(8) == [
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [7, 6, 5, 4, 3, 2, 1, 0],
+    ]
+
+
+def test_coverage_anchor_passes_preserve_preferred_subset_then_reverse_it():
+    assert coverage_anchor_passes(8, preferred_anchor=6, max_count=4) == [
+        [5, 6, 7, 0],
+        [0, 7, 6, 5],
+    ]
+
+
+def test_coverage_anchor_passes_are_empty_without_points():
+    assert coverage_anchor_passes(0) == []
 
 
 def test_one_shot_trigger_is_idempotent():

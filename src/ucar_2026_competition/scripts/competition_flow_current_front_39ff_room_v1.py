@@ -22,6 +22,8 @@ import actionlib
 import rosnode
 import rospy
 from actionlib_msgs.msg import GoalStatus
+from dynamic_reconfigure.msg import BoolParameter, Config, DoubleParameter
+from dynamic_reconfigure.srv import Reconfigure
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from move_base_msgs.msg import (
     MoveBaseAction,
@@ -40,6 +42,8 @@ from ucar_2026_competition.logic import (
     base_is_stopped,
     TemporalTargetFilter,
     DirectedYawAccumulator,
+    extra_distance_acceptance_bounds,
+    extra_distance_is_accepted,
     JsonLineBuffer,
     TRACK_CONFIG,
     normalize_angle,
@@ -386,6 +390,12 @@ class CompetitionFlow:
             rospy.get_param("~ocr_required_hits", 2),
             rospy.get_param("~ocr_evidence_window_sec", 1.5),
         )
+        self.parking_trigger_stationary_hold = max(0.0, float(
+            rospy.get_param("~parking_trigger_stationary_hold_sec", 0.30)))
+        self.parking_trigger_odom_max_age = max(0.1, float(
+            rospy.get_param("~parking_trigger_odom_max_age_sec", 0.50)))
+        self.parking_trigger_covered_grace = max(0.0, float(
+            rospy.get_param("~parking_trigger_covered_grace_sec", 0.60)))
         self.sim_preview_filter = TemporalTargetFilter(
             rospy.get_param("~simulation_cache_required_hits", 2),
             rospy.get_param("~simulation_cache_window_sec", 1.8),
@@ -532,7 +542,7 @@ class CompetitionFlow:
             },
             "task4": {
                 "flow": [
-                    "stop-line approach with usb_cam",
+                    "direct navigation to final stop pose (yellow detector disabled)",
                     "camera ownership switch after stop line",
                     "traffic-light recognition",
                 ],
@@ -1125,6 +1135,48 @@ class CompetitionFlow:
                 category_filter.push(category, None, now)
         return target_estimate
 
+    def _parking_trigger_context(self, now):
+        """Return whether fresh OCR may accumulate votes for parking."""
+        with self.lock:
+            observation = dict(self.coverage_observation or {})
+            observation_age = now - self.coverage_observation_received_at
+            stopped_since = self.base_stopped_since
+            odom_age = now - self.qr_odom_received_at
+            navigator_status = str(self.navigator_status or "").strip().lower()
+        state = str(observation.get("state", "")).strip().lower()
+        anchor_index = int(observation.get("anchor_index", 0) or 0)
+        stopped_for = (
+            0.0 if stopped_since is None else max(0.0, now - stopped_since))
+        motion_status = (
+            "aligning" in navigator_status or
+            "transit" in navigator_status or
+            navigator_status in (
+                "patrolling",
+                "coverage_preferred_view_not_reacquired",
+                "coverage_goal_extended",
+                "coverage_goal_retry",
+                "coverage_fallback_selected",
+            )
+        )
+        state_ready = (
+            state == "scanning" or
+            (state == "covered" and
+             observation_age <= self.parking_trigger_covered_grace)
+        )
+        ready = (
+            anchor_index > 0 and state_ready and not motion_status and
+            stopped_since is not None and
+            stopped_for >= self.parking_trigger_stationary_hold and
+            0.0 <= odom_age <= self.parking_trigger_odom_max_age
+        )
+        return ready, {
+            "state": state or "none",
+            "anchor": anchor_index,
+            "stopped_for": stopped_for,
+            "odom_age": odom_age,
+            "navigator_status": navigator_status or "none",
+        }
+
     def _ocr_cb(self, msg):
         if not self.ocr_target:
             return
@@ -1135,6 +1187,8 @@ class CompetitionFlow:
             return
         now = time.monotonic()
         self.ocr_last_message_at = now
+        trigger_context_ready, trigger_context = (
+            self._parking_trigger_context(now))
         localization_estimate = self._process_factory_sign_localization(
             payload, category)
         localization_locked = bool(
@@ -1142,7 +1196,16 @@ class CompetitionFlow:
             localization_estimate.get("status") == "locked")
         target_box = (payload.get("merged_target_bbox") or
                       payload.get("target_bbox"))
-        if category == self.ocr_target and target_box:
+        trigger_bbox_metrics = (
+            ocr_observation_quality(payload) if target_box else None)
+        trigger_edge_margin = max(0.0, float(rospy.get_param(
+            "~parking_trigger_bbox_edge_margin_ratio", 0.01)))
+        trigger_bbox_touches_edge = bool(
+            trigger_bbox_metrics is not None and
+            float(trigger_bbox_metrics["bbox_edge_margin_ratio"]) <
+            trigger_edge_margin)
+        if (category == self.ocr_target and target_box and
+                (trigger_context_ready or self.vision_trigger_latched)):
             if self.factory_sign_localization_mode != "active":
                 self.vision_target_pub.publish(msg)
             elif (localization_locked or
@@ -1153,8 +1216,12 @@ class CompetitionFlow:
                     self.factory_sign_estimates.get(category))
                 self.vision_target_pub.publish(String(
                     data=json.dumps(active_payload, ensure_ascii=False)))
-        legacy_confirmed = self.ocr_filter.push(
-            self.ocr_target, category, now)
+        if trigger_context_ready:
+            legacy_confirmed = self.ocr_filter.push(
+                self.ocr_target, category, now)
+        else:
+            self.ocr_filter.reset()
+            legacy_confirmed = False
         confirmed = (
             legacy_confirmed if self.factory_sign_localization_mode != "active"
             else legacy_confirmed and localization_locked)
@@ -1212,7 +1279,9 @@ class CompetitionFlow:
                 self.sim_category, category, now)
             if category == self.sim_category and target_box:
                 self._remember_simulation_observation(payload, sim_confirmed)
-        if (confirmed and category == self.ocr_target and target_box and
+        if (confirmed and trigger_context_ready and
+                category == self.ocr_target and target_box and
+                not trigger_bbox_touches_edge and
                 not self.vision_trigger_latched):
             if self.factory_parking_index == 1:
                 with self.lock:
@@ -1239,6 +1308,29 @@ class CompetitionFlow:
                 self.ocr_filter.hit_count,
                 self.ocr_filter.required,
             )
+        elif (confirmed and category == self.ocr_target and target_box and
+              trigger_bbox_touches_edge and
+              not self.vision_trigger_latched):
+            rospy.logwarn_throttle(
+                1.0,
+                "PARKING_TRIGGER_EDGE_REJECTED target=%s margin=%.3f "
+                "required=%.3f; continuing scan",
+                self.ocr_target,
+                float(trigger_bbox_metrics["bbox_edge_margin_ratio"]),
+                trigger_edge_margin,
+            )
+        elif (category == self.ocr_target and target_box and
+              not trigger_context_ready and
+              not self.vision_trigger_latched):
+            rospy.logwarn_throttle(
+                1.0,
+                "PARKING_TRIGGER_CONTEXT_REJECTED target=%s anchor=%d "
+                "state=%s stopped=%.2fs odom_age=%.2fs nav=%s",
+                self.ocr_target,
+                trigger_context["anchor"], trigger_context["state"],
+                trigger_context["stopped_for"], trigger_context["odom_age"],
+                trigger_context["navigator_status"],
+            )
 
     def _coverage_observation_cb(self, msg):
         try:
@@ -1256,6 +1348,9 @@ class CompetitionFlow:
             self.coverage_observation_received_at = time.monotonic()
             self.last_coverage_anchor_index = anchor_index
         state = str(payload.get("state", ""))
+        if (state not in ("scanning", "covered") and
+                not self.vision_trigger_latched):
+            self.ocr_filter.reset()
         signature = (anchor_index, state,
                      round(float(payload.get("x")), 2),
                      round(float(payload.get("y")), 2))
@@ -1279,19 +1374,49 @@ class CompetitionFlow:
             "~simulation_cache_observation_max_age_sec", 30.0))
         if not observation or observation_age > max_age:
             return
-        # A remembered target must belong to a point where the vehicle has
-        # actually stopped to scan.  A delayed OCR result while travelling to
-        # the next point must not move the memory to that next point.
+        # A remembered target must belong to an active scan point.  Continuous
+        # scan rotation is useful evidence too: the exact odom yaw and bbox
+        # quality identify the best view.  Transit observations remain banned.
         observation_state = str(observation.get("state", "")).strip().lower()
         if observation_state not in ("scanning", "covered"):
             return
 
+        try:
+            image_stamp = float(
+                ocr_payload.get("image_stamp") or
+                ocr_payload.get("stamp") or rospy.get_time())
+        except (TypeError, ValueError):
+            image_stamp = rospy.get_time()
         with self.lock:
             twist = self.base_twist
             odom_age = time.monotonic() - self.qr_odom_received_at
-            observed_odom_yaw = self.qr_odom_yaw
-        if (twist is None or odom_age > 0.5 or
-                not base_is_stopped(*twist)):
+            odom_samples = list(self.localization_odom_samples)
+            map_samples = list(self.localization_map_samples)
+        if twist is None or odom_age > 0.5:
+            return
+        pose_sync_tolerance = max(0.05, float(rospy.get_param(
+            "~simulation_cache_pose_sync_tolerance_sec", 0.25)))
+        odom_sample = _nearest_stamped(
+            odom_samples, image_stamp, pose_sync_tolerance)
+        if odom_sample is None:
+            rospy.logwarn_throttle(
+                2.0,
+                "[OCR CACHE] rejecting simulation view without a synchronized "
+                "odom pose (image_stamp=%.3f tolerance=%.3fs)",
+                image_stamp, pose_sync_tolerance)
+            return
+        map_sample = _nearest_stamped(
+            map_samples, image_stamp, pose_sync_tolerance)
+        observed_odom_pose = tuple(float(value) for value in odom_sample[1])
+        observed_odom_yaw = observed_odom_pose[2]
+        linear_speed = math.hypot(float(twist[0]), float(twist[1]))
+        angular_speed = abs(float(twist[2]))
+        max_linear_speed = max(0.0, float(rospy.get_param(
+            "~simulation_cache_max_linear_speed", 0.05)))
+        max_angular_speed = max(0.0, float(rospy.get_param(
+            "~simulation_cache_max_angular_speed", 0.80)))
+        if (linear_speed > max_linear_speed or
+                angular_speed > max_angular_speed):
             return
 
         metrics = ocr_observation_quality(ocr_payload)
@@ -1303,7 +1428,17 @@ class CompetitionFlow:
         sample = dict(metrics)
         sample.update({
             "odom_yaw": observed_odom_yaw,
+            "odom_pose": observed_odom_pose,
+            "map_pose": (
+                tuple(float(value) for value in map_sample[1])
+                if map_sample is not None else None),
+            "pose_stamp": float(odom_sample[0]),
             "seen_at_monotonic": time.monotonic(),
+            "motion_mode": (
+                "stationary" if base_is_stopped(*twist)
+                else "scan_rotation"),
+            "linear_speed": linear_speed,
+            "angular_speed": angular_speed,
         })
         with self.lock:
             evidence = self.simulation_anchor_evidence.setdefault(
@@ -1372,7 +1507,8 @@ class CompetitionFlow:
         rospy.logwarn(
             "[OCR CACHE] best simulation=%s scan_point=%d "
             "area=%.3f size=(%.2f,%.2f) center=(%.2f,%.2f) "
-            "complete=%s score=%.2f samples=%d previous=%d yaw=%.1fdeg",
+            "complete=%s score=%.2f samples=%d previous=%d "
+            "odom=(%.3f,%.3f,%.1fdeg) mode=%s",
             self.sim_category, current_anchor,
             float(observation["area_ratio"]),
             float(observation["bbox_width_ratio"]),
@@ -1382,7 +1518,10 @@ class CompetitionFlow:
             str(bool(observation["bbox_complete"])).lower(),
             float(observation["score"]),
             int(observation["sample_count"]), previous_anchor,
-            math.degrees(float(observation.get("odom_yaw", 0.0))),
+            float(observation["odom_pose"][0]),
+            float(observation["odom_pose"][1]),
+            math.degrees(float(observation["odom_pose"][2])),
+            str(observation.get("motion_mode", "unknown")),
         )
 
     def _rearm_target_trigger(self, reason):
@@ -1407,6 +1546,9 @@ class CompetitionFlow:
         status = msg.data.strip().lower()
         if status == "centering_recovering":
             self._rearm_target_trigger(status)
+        elif (("aligning" in status or "transit" in status) and
+              not self.vision_trigger_latched):
+            self.ocr_filter.reset()
         observing_prefixes = (
             "coverage_anchor_observing:",
             "coverage_remembered_heading_observing:",
@@ -1960,6 +2102,108 @@ class CompetitionFlow:
             rospy.sleep(0.1)
         self.move_base.cancel_goal()
         raise StageError("move_base goal timed out")
+
+    @staticmethod
+    def _dynamic_config_value(config, name):
+        for field in ("bools", "ints", "strs", "doubles"):
+            for parameter in getattr(config, field, []):
+                if parameter.name == name:
+                    return parameter.value
+        raise StageError(
+            "TEB dynamic configuration is missing parameter {}".format(name))
+
+    @staticmethod
+    def _teb_goal_config(xy_tolerance, yaw_tolerance, free_goal_vel):
+        config = Config()
+        config.doubles = [
+            DoubleParameter(
+                name="xy_goal_tolerance", value=float(xy_tolerance)),
+            DoubleParameter(
+                name="yaw_goal_tolerance", value=float(yaw_tolerance)),
+        ]
+        config.bools = [
+            BoolParameter(name="free_goal_vel", value=bool(free_goal_vel)),
+        ]
+        return config
+
+    def _set_task4_teb_goal_tolerances(self):
+        service_name = "/move_base/TebLocalPlannerROS/set_parameters"
+        timeout = float(rospy.get_param(
+            "~task4_teb_reconfigure_timeout_sec", 3.0))
+        try:
+            rospy.wait_for_service(service_name, timeout=timeout)
+            proxy = rospy.ServiceProxy(service_name, Reconfigure)
+            current_response = proxy(Config())
+            current = current_response.config
+            saved = {
+                "xy_goal_tolerance": float(self._dynamic_config_value(
+                    current, "xy_goal_tolerance")),
+                "yaw_goal_tolerance": float(self._dynamic_config_value(
+                    current, "yaw_goal_tolerance")),
+                "free_goal_vel": bool(self._dynamic_config_value(
+                    current, "free_goal_vel")),
+            }
+            requested_xy = float(rospy.get_param(
+                "~task4_final_xy_goal_tolerance", 0.04))
+            requested_yaw = float(rospy.get_param(
+                "~task4_final_yaw_goal_tolerance", 0.08))
+            if not 0.01 <= requested_xy <= 0.15:
+                raise StageError(
+                    "task4 final xy tolerance must be within [0.01, 0.15]m")
+            if not 0.02 <= requested_yaw <= 0.20:
+                raise StageError(
+                    "task4 final yaw tolerance must be within [0.02, 0.20]rad")
+            updated_response = proxy(self._teb_goal_config(
+                requested_xy, requested_yaw, False))
+            applied_xy = float(self._dynamic_config_value(
+                updated_response.config, "xy_goal_tolerance"))
+            applied_yaw = float(self._dynamic_config_value(
+                updated_response.config, "yaw_goal_tolerance"))
+            applied_free = bool(self._dynamic_config_value(
+                updated_response.config, "free_goal_vel"))
+            if (abs(applied_xy - requested_xy) > 1e-4 or
+                    abs(applied_yaw - requested_yaw) > 1e-4 or applied_free):
+                raise StageError(
+                    "TEB rejected task4 final tolerances: "
+                    "requested=({:.3f},{:.3f},false) "
+                    "applied=({:.3f},{:.3f},{})".format(
+                        requested_xy, requested_yaw,
+                        applied_xy, applied_yaw, applied_free))
+            rospy.loginfo(
+                "TASK4_FINAL_TOLERANCE_ACTIVE xy=%.3fm yaw=%.3frad "
+                "saved=(%.3f,%.3f,%s)",
+                applied_xy, applied_yaw,
+                saved["xy_goal_tolerance"],
+                saved["yaw_goal_tolerance"],
+                saved["free_goal_vel"])
+            return proxy, saved
+        except (rospy.ROSException, rospy.ServiceException) as exc:
+            raise StageError(
+                "unable to apply task4-only TEB goal tolerances: {}".format(exc))
+
+    def _restore_task4_teb_goal_tolerances(self, proxy, saved):
+        try:
+            response = proxy(self._teb_goal_config(
+                saved["xy_goal_tolerance"],
+                saved["yaw_goal_tolerance"],
+                saved["free_goal_vel"]))
+            restored_xy = float(self._dynamic_config_value(
+                response.config, "xy_goal_tolerance"))
+            restored_yaw = float(self._dynamic_config_value(
+                response.config, "yaw_goal_tolerance"))
+            restored_free = bool(self._dynamic_config_value(
+                response.config, "free_goal_vel"))
+            if (abs(restored_xy - saved["xy_goal_tolerance"]) > 1e-4 or
+                    abs(restored_yaw - saved["yaw_goal_tolerance"]) > 1e-4 or
+                    restored_free != saved["free_goal_vel"]):
+                raise StageError("TEB task4 tolerance restoration was rejected")
+            rospy.loginfo(
+                "TASK4_FINAL_TOLERANCE_RESTORED xy=%.3fm yaw=%.3frad free=%s",
+                restored_xy, restored_yaw, restored_free)
+        except (rospy.ServiceException, StageError) as exc:
+            raise StageError(
+                "unable to restore TEB goal tolerances after task4 navigation: {}".format(
+                    exc))
 
     def announce(self, event, item="", workshop="", decision="", text="", wait=True):
         service = rospy.get_param("~announce_service", "/competition_speech/announce")
@@ -2652,7 +2896,8 @@ class CompetitionFlow:
 
     def _factory_navigator_args(self, center_only, start_paused,
                                 preferred_coverage_anchor=0,
-                                preferred_odom_yaw=None):
+                                preferred_odom_yaw=None,
+                                preferred_odom_pose=None):
         args = {
             "config_profile": "vision_triggered_navigator_src6_clockwise_v1.yaml",
             "trigger_mode": "vision",
@@ -2678,6 +2923,14 @@ class CompetitionFlow:
             "coverage_preferred_odom_yaw": (
                 float(preferred_odom_yaw)
                 if preferred_odom_yaw is not None else 0.0),
+            "coverage_preferred_odom_pose_enabled": (
+                preferred_odom_pose is not None),
+            "coverage_preferred_odom_x": (
+                float(preferred_odom_pose[0])
+                if preferred_odom_pose is not None else 0.0),
+            "coverage_preferred_odom_y": (
+                float(preferred_odom_pose[1])
+                if preferred_odom_pose is not None else 0.0),
             "publish_initial_pose": (
                 False if self.mode == "task1_task2" else
                 bool_param("~navigator_publish_initial_pose", False)
@@ -2887,6 +3140,7 @@ class CompetitionFlow:
             return False
         preferred_anchor, preferred_source = self._second_parking_anchor_choice()
         preferred_yaw = None
+        preferred_odom_pose = self._second_parking_observation_pose()
         if self.cached_sim_observation:
             preferred_yaw = self.cached_sim_observation.get("odom_yaw")
         physical_category = self.category
@@ -2910,6 +3164,7 @@ class CompetitionFlow:
                     True,
                     preferred_anchor,
                     preferred_yaw,
+                    preferred_odom_pose,
                 ),
                 reuse_running=True,
             )
@@ -2918,9 +3173,27 @@ class CompetitionFlow:
         self.publish_status(
             "task2", "second_parking_prewarming",
             "second OCR/navigation loading during first announcement; "
-            "preferred_anchor={} source={}".format(
-                preferred_anchor, preferred_source))
+            "preferred_anchor={} source={} exact_odom_pose={}".format(
+                preferred_anchor, preferred_source,
+                ("none" if preferred_odom_pose is None else
+                 "({:.3f},{:.3f},{:.1f}deg)".format(
+                     preferred_odom_pose[0], preferred_odom_pose[1],
+                     math.degrees(preferred_odom_pose[2])))))
         return True
+
+    def _second_parking_observation_pose(self):
+        """Return the actual odom pose of the best cached simulation view."""
+        observation = self.cached_sim_observation
+        if not isinstance(observation, dict):
+            return None
+        raw_pose = observation.get("odom_pose")
+        if not isinstance(raw_pose, (list, tuple)) or len(raw_pose) < 3:
+            return None
+        try:
+            pose = tuple(float(raw_pose[index]) for index in range(3))
+        except (TypeError, ValueError):
+            return None
+        return pose if all(math.isfinite(value) for value in pose) else None
 
     def _second_parking_anchor_choice(self):
         """Choose a cached target point, otherwise continue after parking 1."""
@@ -3211,13 +3484,19 @@ class CompetitionFlow:
             preferred_anchor, preferred_source = (
                 self._second_parking_anchor_choice())
         preferred_yaw = None
+        preferred_odom_pose = self._second_parking_observation_pose()
         if parking_index == 2 and self.cached_sim_observation:
             preferred_yaw = self.cached_sim_observation.get("odom_yaw")
         if parking_index == 2 and preferred_anchor > 0:
             self.publish_status(
                 "task2", "simulation_scan_resume",
-                "parking 2 starts at anchor {} source={}".format(
-                    preferred_anchor, preferred_source))
+                "parking 2 returns to cached observation pose at anchor {} "
+                "source={} odom_pose={}".format(
+                    preferred_anchor, preferred_source,
+                    ("none" if preferred_odom_pose is None else
+                     "({:.3f},{:.3f},{:.1f}deg)".format(
+                         preferred_odom_pose[0], preferred_odom_pose[1],
+                         math.degrees(preferred_odom_pose[2])))))
         self.publish_status(
             "task2", "searching",
             "parking {}: searching {} with configured 8-point navigation".format(
@@ -3229,8 +3508,20 @@ class CompetitionFlow:
         parking_last_status = ""
         parking_stall_timeout = max(10.0, float(rospy.get_param(
             "~parking_fail_open_stall_timeout_sec", 45.0)))
-        parking_total_timeout = max(parking_stall_timeout, float(rospy.get_param(
+        parking_hard_timeout = max(15.0, float(rospy.get_param(
+            "~parking_fail_open_hard_timeout_sec", 35.0)))
+        parking_total_timeout = max(parking_hard_timeout, float(rospy.get_param(
             "~parking_fail_open_total_timeout_sec", 90.0)))
+        parking_progress_states = frozenset((
+            "target_locked",
+            "memory_parking_straightened",
+            "memory_parking_sign_centered",
+            "memory_parking_mid_recentered",
+            "memory_parking_forward",
+            "memory_parking_forward_resumed",
+            "memory_parking_stopped",
+            "arrived",
+        ))
         parking_failure_states = frozenset((
             "centering_failed", "parking_staging_failed",
             "parking_recenter_failed", "parking_wall_fit_failed",
@@ -3315,6 +3606,14 @@ class CompetitionFlow:
                     "coverage_preferred_odom_yaw": (
                         float(preferred_yaw)
                         if preferred_yaw is not None else 0.0),
+                    "coverage_preferred_odom_pose_enabled": (
+                        preferred_odom_pose is not None),
+                    "coverage_preferred_odom_x": (
+                        float(preferred_odom_pose[0])
+                        if preferred_odom_pose is not None else 0.0),
+                    "coverage_preferred_odom_y": (
+                        float(preferred_odom_pose[1])
+                        if preferred_odom_pose is not None else 0.0),
                     "publish_initial_pose": (
                         False if self.mode == "task1_task2" else
                         bool_param("~navigator_publish_initial_pose", False)),
@@ -3509,7 +3808,9 @@ class CompetitionFlow:
                     if parking_state_has_started(current_status):
                         if parking_phase_entered_at is None:
                             parking_phase_entered_at = now_monotonic
-                        parking_progress_at = now_monotonic
+                            parking_progress_at = now_monotonic
+                        elif current_status in parking_progress_states:
+                            parking_progress_at = now_monotonic
                 if current_status == "arrived":
                     break
                 if center_only and current_status == "centered":
@@ -3541,6 +3842,13 @@ class CompetitionFlow:
                         parking_progress_at = now_monotonic
                     stalled_for = now_monotonic - parking_progress_at
                     parking_elapsed = now_monotonic - parking_phase_entered_at
+                    if parking_elapsed >= parking_hard_timeout:
+                        accept_parking_fallback(
+                            "parking hard timeout {:.1f}s in state={} "
+                            "(avoidance cannot extend deadline)".format(
+                                parking_elapsed,
+                                current_status or "unknown"))
+                        break
                     if (stalled_for >= parking_stall_timeout or
                             parking_elapsed >= parking_total_timeout):
                         accept_parking_fallback(
@@ -3661,10 +3969,15 @@ class CompetitionFlow:
             simulation_workshop = CATEGORY_LABELS[simulation_category][1]
         if not simulation_major:
             simulation_major = CATEGORY_LABELS[simulation_category][0]
-        # The simulator is disabled in this profile.  Its requested category is
-        # still visited physically and announced before task4 takes over.
-        simulation_announcement = "仿真任务已完成，已将{}放入{}。".format(
-            simulation_item, simulation_workshop)
+        # With a real simulator connected, the second physical parking only
+        # establishes the handoff pose.  Announce completion exclusively after
+        # task3 receives the matching simulation_complete callback.  Preserve
+        # the historical no-simulator behavior when simulation is disabled.
+        simulation_announcement = (
+            "" if self.enable_simulation else
+            "仿真任务已完成，已将{}放入{}。".format(
+                simulation_item, simulation_workshop)
+        )
 
         self.publish_status(
             "task2", "second_parking_start",
@@ -3870,68 +4183,54 @@ class CompetitionFlow:
         self.publish_status("task3", "completed", result_text)
 
     def approach_task4_stop_line(self):
-        # Task 4 must not overlap the RKNN OCR/navigation stack.  Roslaunch
-        # process groups can occasionally leave a detached ROS node behind,
-        # so retire the named resources once more at the stage boundary.
+        # The calibrated navigation goal is already the accepted stop pose.
+        # Keep task4 independent from strict_mission/yellow_line_detector and
+        # hand off only after move_base succeeds and zero velocity is held.
         self.stop_child("factory_ocr")
         self.stop_child("factory_navigator")
         self._retire_ros_nodes(
             ["/factory_sign_ppocr_rknn_node", "/vision_triggered_navigator"],
             "task4_stop_line_memory_guard")
         self._trim_process_memory("task4_stop_line_memory_guard")
-        self._ensure_front_camera()
-        self.strict_mission_status = {}
+        target_x = float(rospy.get_param("~traffic_x"))
+        target_y = float(rospy.get_param("~traffic_y"))
+        target_yaw = float(rospy.get_param("~traffic_yaw"))
         self.publish_status(
             "task4", "approaching_stop_line",
-            "navigating to staging pose, then approaching the stop line visually")
-        self.start_child(
-            "strict_line",
-            "ucar_2026_strict_mission",
-            "strict_mission_src6_hybrid_v1.launch",
-            {
-                "start_traffic_detector": False,
-                "start_viewer": self.debug,
-                "traffic_pose_configured": True,
-                "traffic_staging_x": float(rospy.get_param("~traffic_x")),
-                "traffic_staging_y": float(rospy.get_param("~traffic_y")),
-                "traffic_staging_yaw": float(rospy.get_param("~traffic_yaw")),
-            },
-        )
+            "navigating directly to final stop pose; yellow detector disabled")
         try:
-            rospy.wait_for_service("/strict_mission/start", timeout=10.0)
-            response = rospy.ServiceProxy("/strict_mission/start", Trigger)()
-            if not response.success:
-                raise StageError(
-                    "strict stop-line approach refused start: {}".format(response.message))
-
-            timeout = (
-                float(rospy.get_param("~move_base_timeout_sec", 90.0))
-                + float(rospy.get_param("~line_approach_timeout_sec", 45.0))
-                + 15.0
+            teb_proxy, saved_tolerances = self._set_task4_teb_goal_tolerances()
+            try:
+                self.navigate(
+                    target_x, target_y, target_yaw, "task4",
+                    status_state="navigating_to_final_stop_pose")
+            finally:
+                self._restore_task4_teb_goal_tolerances(
+                    teb_proxy, saved_tolerances)
+            self.safe_stop(cancel_navigation=True)
+            rospy.sleep(0.30)
+            self._advance_after_yellow_line(
+                distance=float(rospy.get_param(
+                    "~task4_post_navigation_advance_m", 0.08)),
+                tolerance=float(rospy.get_param(
+                    "~task4_post_navigation_advance_tolerance_m", 0.01)),
+                speed=float(rospy.get_param(
+                    "~task4_post_navigation_advance_speed_mps", 0.12)),
+                timeout=float(rospy.get_param(
+                    "~task4_post_navigation_advance_timeout_sec", 6.0)),
+                status_state="post_navigation_advance_completed",
+                detail_prefix="advanced after final navigation",
             )
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                self.check_abort()
-                status = self.strict_mission_status
-                state = str(status.get("state", ""))
-                if state == "WAIT_TRAFFIC":
-                    distance = status.get("distance_m")
-                    self.publish_status(
-                        "task4", "stop_line_reached",
-                        "vehicle held before stop line; distance_m={}".format(distance))
-                    return
-                if state == "FAULT":
-                    raise StageError(
-                        "strict stop-line approach failed: {}".format(
-                            status.get("error") or status.get("detail") or "unknown fault"))
-                proc = self.children.get("strict_line")
-                if proc and proc.poll() is not None:
-                    raise StageError("strict stop-line approach exited unexpectedly")
-                rospy.sleep(0.1)
-            raise StageError(
-                "strict stop-line approach timed out after {:.1f}s".format(timeout))
+            settle_deadline = time.monotonic() + 0.5
+            while time.monotonic() < settle_deadline:
+                self.safe_stop(cancel_navigation=False)
+                rospy.sleep(0.05)
+            self.publish_status(
+                "task4", "stop_line_reached",
+                "navigation final pose reached and vehicle held; "
+                "goal=({:.3f},{:.3f},{:.3f}) yellow_detector=disabled".format(
+                    target_x, target_y, target_yaw))
         finally:
-            self.stop_child("strict_line")
             self.safe_stop(cancel_navigation=True)
 
     @staticmethod
@@ -3988,6 +4287,14 @@ class CompetitionFlow:
         deadline = time.monotonic() + float(timeout_sec)
         service_name = rospy.get_param(
             "~task45_camera_profile_service", "/ucar_camera/set_exposure_profile")
+        expected_width = int(rospy.get_param(
+            "~task45_camera_image_width", 640))
+        expected_height = int(rospy.get_param(
+            "~task45_camera_image_height", 480))
+        expected_encoding = str(rospy.get_param(
+            "~task45_camera_ros_encoding", "rgb8")).strip().lower()
+        expected_pixel_format = str(rospy.get_param(
+            "~task45_camera_pixel_format", "YUYV")).strip().upper()
         while time.monotonic() < deadline and not rospy.is_shutdown():
             self.check_abort()
             self.safe_stop(cancel_navigation=True)
@@ -3998,8 +4305,9 @@ class CompetitionFlow:
             image_ready = (
                 self.ucar_image_received_at > started_at
                 and time.monotonic() - self.ucar_image_received_at <= 1.0
-                and self.ucar_image_width == 1280
-                and self.ucar_image_height == 720
+                and self.ucar_image_width == expected_width
+                and self.ucar_image_height == expected_height
+                and self.ucar_image_encoding.strip().lower() == expected_encoding
             )
             service_ready = False
             try:
@@ -4009,14 +4317,19 @@ class CompetitionFlow:
                 pass
             if image_ready and service_ready:
                 rospy.logwarn(
-                    "TASK45_CAMERA_READY topic=/ucar_camera/image_raw size=%dx%d encoding=%s",
+                    "TASK45_CAMERA_READY topic=/ucar_camera/image_raw "
+                    "native=%dx%d/%s ros_encoding=%s",
                     self.ucar_image_width, self.ucar_image_height,
-                    self.ucar_image_encoding)
+                    expected_pixel_format, self.ucar_image_encoding)
                 return
             rospy.sleep(0.05)
         raise StageError(
-            "ucar_camera did not provide fresh 1280x720 images and exposure service "
-            "within {:.1f}s".format(float(timeout_sec)))
+            "ucar_camera did not provide fresh {}x{} {} images from native {} "
+            "capture and exposure service within {:.1f}s; last={}x{} {}".format(
+                expected_width, expected_height, expected_encoding,
+                expected_pixel_format, float(timeout_sec),
+                self.ucar_image_width, self.ucar_image_height,
+                self.ucar_image_encoding or "unknown"))
 
     def switch_task45_camera(self):
         if self.task45_camera_switched:
@@ -4032,6 +4345,14 @@ class CompetitionFlow:
         self._ensure_ucar_image_subscription()
 
         attempts = max(1, int(rospy.get_param("~task45_camera_start_attempts", 2)))
+        image_width = int(rospy.get_param("~task45_camera_image_width", 640))
+        image_height = int(rospy.get_param("~task45_camera_image_height", 480))
+        pixel_format = str(rospy.get_param(
+            "~task45_camera_pixel_format", "YUYV")).strip().upper()
+        capture_fps = float(rospy.get_param(
+            "~task45_camera_capture_fps", 30.0))
+        publish_rate = int(rospy.get_param(
+            "~task45_camera_publish_rate", 15))
         last_error = None
         for attempt in range(1, attempts + 1):
             self.check_abort()
@@ -4042,11 +4363,11 @@ class CompetitionFlow:
                 {
                     "device_path": rospy.get_param("~task45_camera_device", "/dev/video0"),
                     "image_topic": "/ucar_camera/image_raw",
-                    "image_width": 1280,
-                    "image_height": 720,
-                    "pixel_format": "MJPG",
-                    "capture_fps": 30,
-                    "rate": int(rospy.get_param("~task45_camera_rate", 15)),
+                    "image_width": image_width,
+                    "image_height": image_height,
+                    "pixel_format": pixel_format,
+                    "capture_fps": capture_fps,
+                    "rate": publish_rate,
                     "low_exposure_absolute": int(rospy.get_param(
                         "~task45_low_exposure_absolute", 150)),
                 })
@@ -4057,7 +4378,11 @@ class CompetitionFlow:
                 self.task45_camera_switched = True
                 self.publish_status(
                     "task4", "camera_ready",
-                    "ucar_camera owns /dev/video0 and 1280x720 stream is ready")
+                    "ucar_camera owns /dev/video0; native={}x{} {}@{}fps, "
+                    "ROS={} {}fps".format(
+                        image_width, image_height, pixel_format, capture_fps,
+                        rospy.get_param("~task45_camera_ros_encoding", "rgb8"),
+                        publish_rate))
                 return
             except StageError as exc:
                 last_error = exc
@@ -4073,10 +4398,17 @@ class CompetitionFlow:
         self.follow_status = ""
         self.follow_end = ""
         self.traffic_decision = ""
+        extra_distance_m = float(rospy.get_param(
+            "~task45_extra_distance_m", 0.15))
+        if extra_distance_m < 0.0:
+            raise StageError("task45_extra_distance_m must be non-negative")
+        rospy.loginfo(
+            "TASK45_CONFIG yellow_line_extra_distance=%.3fm",
+            extra_distance_m)
         self.start_child(
             "task45_vision_follow", "ucar_2026_competition",
             "traffic_flowend_handoff_v1.launch",
-            {"debug": self.debug})
+            {"debug": self.debug, "publish_commands": False})
         deadline = time.monotonic() + float(rospy.get_param(
             "~task45_stack_ready_timeout_sec", 15.0))
         while time.monotonic() < deadline and not rospy.is_shutdown():
@@ -4125,6 +4457,147 @@ class CompetitionFlow:
                 self.task45_camera_switched = False
                 self._release_ucar_image_subscription()
 
+    def _advance_after_yellow_line(
+            self, distance=None, tolerance=None, speed=None, timeout=None,
+            status_state="yellow_line_extra_distance_completed",
+            detail_prefix="advanced before task5"):
+        """Advance a guarded distance after the yellow-line stop."""
+        distance = float(
+            rospy.get_param("~task45_extra_distance_m", 0.15)
+            if distance is None else distance)
+        tolerance = float(
+            rospy.get_param("~task45_extra_distance_tolerance_m", 0.015)
+            if tolerance is None else tolerance)
+        if distance == 0.0:
+            self.publish_status(
+                "task4", "yellow_line_extra_distance_skipped",
+                "configured distance is zero")
+            return
+        try:
+            lower_bound, upper_bound = extra_distance_acceptance_bounds(
+                distance, tolerance)
+        except ValueError as exc:
+            raise StageError("invalid yellow-line extra distance: {}".format(exc))
+        speed = max(0.01, min(0.08, float(
+            rospy.get_param("~task45_extra_distance_speed_mps", 0.12)
+            if speed is None else speed)))
+        stale_sec = max(0.10, float(rospy.get_param(
+            "~task45_extra_distance_odom_stale_sec", 0.50)))
+        timeout = max(2.0, float(
+            rospy.get_param("~task45_extra_distance_timeout_sec", 10.0)
+            if timeout is None else timeout))
+        settle_sec = 0.30
+        rospy.loginfo(
+            "YELLOW_EXTRA_ADVANCE_CONFIG target=%.3fm tolerance=%.3fm "
+            "band=[%.3f,%.3f]m speed=%.3fm/s timeout=%.1fs",
+            distance, tolerance, lower_bound, upper_bound, speed, timeout)
+        deadline = time.monotonic() + timeout
+        start = None
+        while time.monotonic() < deadline and not rospy.is_shutdown():
+            with self.lock:
+                position = self.qr_odom_position
+                yaw = self.qr_odom_yaw
+                age = time.monotonic() - self.qr_odom_received_at
+            if position is not None and yaw is not None and age <= stale_sec:
+                start = (float(position[0]), float(position[1]), float(yaw))
+                break
+            self.cmd_pub.publish(Twist())
+            rospy.sleep(0.02)
+        if start is None:
+            raise StageError("fresh odometry unavailable for yellow-line advance")
+        start_x, start_y, start_yaw = start
+        last_progress = 0.0
+        last_lateral = 0.0
+        last_yaw_error = 0.0
+
+        def current_advance_metrics():
+            with self.lock:
+                position = self.qr_odom_position
+                yaw = self.qr_odom_yaw
+                age = time.monotonic() - self.qr_odom_received_at
+            if position is None or yaw is None or age > stale_sec:
+                raise StageError(
+                    "odometry became stale during yellow-line advance "
+                    "(age={:.3f}s)".format(age))
+            dx = float(position[0]) - start_x
+            dy = float(position[1]) - start_y
+            progress = dx * math.cos(start_yaw) + dy * math.sin(start_yaw)
+            lateral = -dx * math.sin(start_yaw) + dy * math.cos(start_yaw)
+            yaw_error = normalize_angle(float(yaw) - start_yaw)
+            return progress, lateral, yaw_error
+
+        rate = rospy.Rate(30)
+        while time.monotonic() < deadline and not rospy.is_shutdown():
+            try:
+                progress, lateral, yaw_error = current_advance_metrics()
+            except StageError:
+                self.cmd_pub.publish(Twist())
+                raise
+            last_progress = progress
+            last_lateral = lateral
+            last_yaw_error = yaw_error
+            remaining = max(0.0, deadline - time.monotonic())
+            rospy.loginfo_throttle(
+                0.5,
+                "YELLOW_EXTRA_ADVANCE progress=%.3fm target=%.3fm "
+                "band=[%.3f,%.3f]m speed=%.3fm/s remaining=%.1fs",
+                progress, distance, lower_bound, upper_bound, speed, remaining)
+            if progress >= lower_bound:
+                break
+            if (progress < -0.03 or abs(lateral) > 0.06 or
+                    abs(yaw_error) > math.radians(5.0)):
+                self.cmd_pub.publish(Twist())
+                raise StageError(
+                    "yellow-line advance drift exceeded safety limit: "
+                    "progress={:.3f}m lateral={:.3f}m yaw={:.1f}deg".format(
+                        progress, lateral, math.degrees(yaw_error)))
+            command = Twist()
+            command.linear.x = speed
+            self.cmd_pub.publish(command)
+            rate.sleep()
+        else:
+            self.cmd_pub.publish(Twist())
+            raise StageError(
+                "yellow-line extra distance advance timed out: "
+                "progress={:.3f}m target={:.3f}m lower={:.3f}m "
+                "lateral={:.3f}m yaw={:.1f}deg timeout={:.1f}s".format(
+                    last_progress, distance, lower_bound, last_lateral,
+                    math.degrees(last_yaw_error), timeout))
+
+        settle_deadline = time.monotonic() + settle_sec
+        while time.monotonic() < settle_deadline and not rospy.is_shutdown():
+            self.cmd_pub.publish(Twist())
+            rate.sleep()
+        try:
+            final_progress, final_lateral, final_yaw_error = (
+                current_advance_metrics())
+        except StageError:
+            self.cmd_pub.publish(Twist())
+            raise
+        self.cmd_pub.publish(Twist())
+        rospy.loginfo(
+            "YELLOW_EXTRA_ADVANCE_STOPPED progress=%.3fm target=%.3fm "
+            "band=[%.3f,%.3f]m lateral=%.3fm yaw=%.1fdeg",
+            final_progress, distance, lower_bound, upper_bound,
+            final_lateral, math.degrees(final_yaw_error))
+        if not extra_distance_is_accepted(
+                final_progress, lower_bound, upper_bound):
+            raise StageError(
+                "yellow-line extra distance outside tolerance after stop: "
+                "progress={:.3f}m accepted=[{:.3f},{:.3f}]m".format(
+                    final_progress, lower_bound, upper_bound))
+        if (final_progress < -0.03 or abs(final_lateral) > 0.06 or
+                abs(final_yaw_error) > math.radians(5.0)):
+            raise StageError(
+                "yellow-line advance drift exceeded safety limit after stop: "
+                "progress={:.3f}m lateral={:.3f}m yaw={:.1f}deg".format(
+                    final_progress, final_lateral,
+                    math.degrees(final_yaw_error)))
+        self.publish_status(
+            "task4", status_state,
+            "{} {:.3f}m; accepted=[{:.3f},{:.3f}]m".format(
+                detail_prefix, final_progress, lower_bound, upper_bound))
+
     def task4(self):
         skip_approach = bool_param("~skip_task4_stop_line_approach", False)
         configured = bool_param("~traffic_pose_configured", False)
@@ -4167,11 +4640,26 @@ class CompetitionFlow:
                     self.traffic_decision = ""
                 elif self.traffic_decision in ("left", "right", "straight"):
                     decision = self.traffic_decision
-                    self.announce("task4", decision=decision)
+                    decision_text = {
+                        "left": "左转",
+                        "right": "右转",
+                        "straight": "直行",
+                    }[decision]
+                    command = {
+                        "left": "Left",
+                        "right": "Right",
+                        "straight": "YLeft",
+                    }[decision]
+                    self.announce(
+                        "custom",
+                        text="识别结果为{}，执行{}路径".format(
+                            decision_text, decision_text))
                     self.traffic_pub.publish(String(data=decision))
+                    self._advance_after_yellow_line()
+                    self.follow_begin_pub.publish(String(data=command))
                     self.publish_status(
                         "task4", "completed",
-                        "decision={}; flow_end command already released".format(decision))
+                        "decision={}; extra distance completed and flow_end command released".format(decision))
                     self.traffic_decision = decision
                     return
                 proc = self.children.get("task45_vision_follow")
@@ -4187,7 +4675,7 @@ class CompetitionFlow:
         decision = self.traffic_decision or rospy.get_param("~traffic_decision", "").strip().lower()
         if decision not in ("left", "right", "straight"):
             raise StageError("task5 traffic_decision must be left/right/straight")
-        command = {"left": "Left", "right": "Right", "straight": "Middle"}[decision]
+        command = {"left": "Left", "right": "Right", "straight": "YLeft"}[decision]
         proc = self.children.get("task45_vision_follow")
         if proc is None or proc.poll() is not None:
             self.stop_task45_stack(stop_camera=True)

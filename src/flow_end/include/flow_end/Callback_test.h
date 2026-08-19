@@ -6,6 +6,7 @@
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/Imu.h>
 #include <std_msgs/String.h>
+#include <line_follower/LineTrack.h>
 
 #include <string>
 
@@ -20,10 +21,12 @@ void imageCallback(const sensor_msgs::ImageConstPtr &msg);
 void imuCallback(const sensor_msgs::Imu::ConstPtr &msg);
 void odomCallback(const nav_msgs::Odometry::ConstPtr &msg);
 void beginCallback(const std_msgs::String::ConstPtr &msg);
+void lineTrackCallback(const line_follower::LineTrack::ConstPtr &msg);
 
 void subscribeTopics(ros::NodeHandle &nh, const std::string &image_topic,
                      const std::string &imu_topic, const std::string &odom_topic,
-                     const std::string &begin_topic);
+                     const std::string &begin_topic,
+                     const std::string &line_track_topic);
 
 }  // namespace callback_test
 }  // namespace flow_end

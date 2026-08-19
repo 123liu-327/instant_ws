@@ -30,6 +30,7 @@ required_packages=(
   ucar_qr_decoder
   factory_sign_ppocr_rknn_test
   flow_end
+  line_follower
   traffic_light_vision
   ucar_camera
   simple_navigator

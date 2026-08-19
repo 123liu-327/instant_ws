@@ -33,6 +33,26 @@ def alternate_cardinal_yaw(initial_yaw, primary_yaw):
     return target, reverse_direction, correction
 
 
+def alignment_reacquire_is_usable(image_error, current_yaw,
+                                  max_image_error,
+                                  max_cardinal_offset):
+    """Accept a live sign observation during a recovery cardinal turn.
+
+    The sign must be sufficiently inside the image and the chassis must still
+    be close enough to a map-axis heading for a straight parking approach.
+    """
+    if image_error is None or current_yaw is None:
+        return False
+    values = (image_error, current_yaw, max_image_error,
+              max_cardinal_offset)
+    if not all(math.isfinite(float(value)) for value in values):
+        return False
+    cardinal_offset = abs(normalize_angle(
+        nearest_cardinal_yaw(current_yaw) - float(current_yaw)))
+    return (abs(float(image_error)) <= abs(float(max_image_error)) and
+            cardinal_offset <= abs(float(max_cardinal_offset)))
+
+
 def lateral_velocity_for_image_error(error, gain, minimum, maximum):
     """Return base_link lateral velocity for a normalized image-x error.
 
@@ -62,6 +82,38 @@ def projected_lateral_offset(error, wall_distance, horizontal_fov,
                      math.radians(10.0), math.radians(70.0))
     return (-float(projection_gain) * wall_distance * error *
             math.tan(half_fov))
+
+
+def remembered_target_lateral_travel(start_pose, capture_pose, target_yaw,
+                                     image_error, wall_distance,
+                                     horizontal_fov, projection_gain=1.0,
+                                     bearing_sign=-1.0):
+    """Project a pre-rotation sign observation into the straightened frame.
+
+    ``projected_lateral_offset`` is sufficient only when the vehicle heading
+    does not change after the image was captured.  Parking first snaps to a
+    cardinal heading, so the capture ray must also be rotated into that new
+    frame.  The result is the lateral travel from ``start_pose`` required to
+    place the remembered sign on the new forward axis.
+    """
+    start = tuple(float(value) for value in start_pose)
+    capture = tuple(float(value) for value in capture_pose)
+    distance = max(0.05, float(wall_distance))
+    half_fov = clamp(abs(float(horizontal_fov)) * 0.5,
+                     math.radians(10.0), math.radians(70.0))
+    pixel_bearing = math.atan(
+        float(bearing_sign) * float(projection_gain) *
+        clamp(float(image_error), -1.5, 1.5) * math.tan(half_fov))
+    ray_error = normalize_angle(capture[2] + pixel_bearing -
+                                float(target_yaw))
+    ray_error = clamp(ray_error, math.radians(-70.0), math.radians(70.0))
+
+    capture_forward = local_forward_displacement(
+        start, capture, target_yaw)
+    capture_lateral = local_lateral_displacement(
+        start, capture, target_yaw)
+    remaining_forward = max(0.05, distance - capture_forward)
+    return capture_lateral + remaining_forward * math.tan(ray_error)
 
 
 def front_obstacle_is_localized(front_min, front_median, wall_stop,

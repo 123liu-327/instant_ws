@@ -79,9 +79,9 @@ char *buffer1;
 bool if_print_proc_log = false;                                          // 是否打印log,调试用
 bool if_save_record_file = true;                                         // 是否保存音频到本地
 std::string USER_CONFIG_PATH = "/config/offline_QA.txt";                 // 离线问答对保存的地址
-string appid = "e9f954db";                                               // 仅用于在线AIUI，用户可修改，普通用户每天500次
-string key = "75471c174d320943e902d1b4e70175c4";                         // AIUI引擎Appid对应的AppKey
-string offline_appid = "appid = e9f954db";					 //仅用于离线命令词识别I，用户可修改.
+string appid = "4c8a2ec8";                                               // 仅用于在线AIUI，用户可修改，普通用户每天500次
+string key = "00deaefbd9b1d44a3e7bc460ba2e1493";                         // AIUI引擎Appid对应的AppKey
+string offline_appid = "appid = 4c8a2ec8";					 //仅用于离线命令词识别I，用户可修改.
 bool offline_mode = false;                                                // 若为true则开启离线识别引擎，否则仅为在线识别引擎
 char* GRAMMAR_FILE_PATH = (char*)"/config/call.bnf";                     // 离线引擎的语法文件,该变量的路径可不修改，但对应的bnf文件需要用户根据自己期望的待识别词语进行修改，可参看bnf语法
 char* CFG_FILE_PATH = (char*)"/config/AIUI/cfg/aiui.cfg";                // 语音识别配置文件地址,可根据需要修改该cfg文件里的参数

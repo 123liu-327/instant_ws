@@ -9,19 +9,19 @@ patrol_points:
     rotations:
       - {direction: "right", duration: 2.6180}
 
-  # P2: -60 deg, clockwise to +120 deg.
+  # P2: -60 deg, clockwise to +165 deg (135 deg sweep).
   - x: -1.63
     y: -2.79
     yaw: -1.0472
     rotations:
-      - {direction: "right", duration: 6.2832}
+      - {direction: "right", duration: 4.7124}
 
-  # P3: 180 deg, clockwise to +90 deg.
+  # P3: -135 deg, clockwise to +90 deg (135 deg sweep).
   - x: -1.66
-    y: -2.28
-    yaw: 3.1416
+    y: -2.08
+    yaw: -2.3562
     rotations:
-      - {direction: "right", duration: 3.1416}
+      - {direction: "right", duration: 4.7124}
 
   # P4 (former P5).
   - x: 0.30
@@ -37,15 +37,15 @@ patrol_points:
     rotations:
       - {direction: "left", duration: 4.00}
 
-  # P6 (former P7).
-  - x: 2.35
-    y: -1.77
-    yaw: -0.86
+  # P6 (former P7), start scanning at -45 deg.
+  - x: 2.25
+    y: -1.87
+    yaw: -0.7854
     rotations:
       - {direction: "left", duration: 4.50}
 
   # P7 (former P8).
-  - x: 2.34
+  - x: 2.25
     y: -2.74
     yaw: -2.18
     rotations:
@@ -53,7 +53,7 @@ patrol_points:
 
   # P8 (former P9).
   - x: 1.27
-    y: -2.89
-    yaw: -1.54
+    y: -2.74
+    yaw: -0.7854
     rotations:
       - {direction: "right", duration: 3.00}

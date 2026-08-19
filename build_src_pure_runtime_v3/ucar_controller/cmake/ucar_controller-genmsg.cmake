@@ -39,7 +39,7 @@ add_custom_target(_ucar_controller_generate_messages_check_deps_${_filename}
 
 get_filename_component(_filename "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv" NAME_WE)
 add_custom_target(_ucar_controller_generate_messages_check_deps_${_filename}
-  COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE} ${GENMSG_CHECK_DEPS_SCRIPT} "ucar_controller" "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv" "std_msgs/Header:sensor_msgs/BatteryState"
+  COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE} ${GENMSG_CHECK_DEPS_SCRIPT} "ucar_controller" "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv" "sensor_msgs/BatteryState:std_msgs/Header"
 )
 
 get_filename_component(_filename "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/SetLEDMode.srv" NAME_WE)
@@ -82,7 +82,7 @@ _generate_srv_cpp(ucar_controller
 _generate_srv_cpp(ucar_controller
   "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv"
   "${MSG_I_FLAGS}"
-  "/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg;/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg"
+  "/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg;/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg"
   ${CATKIN_DEVEL_PREFIX}/${gencpp_INSTALL_DIR}/ucar_controller
 )
 _generate_srv_cpp(ucar_controller
@@ -155,7 +155,7 @@ _generate_srv_eus(ucar_controller
 _generate_srv_eus(ucar_controller
   "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv"
   "${MSG_I_FLAGS}"
-  "/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg;/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg"
+  "/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg;/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg"
   ${CATKIN_DEVEL_PREFIX}/${geneus_INSTALL_DIR}/ucar_controller
 )
 _generate_srv_eus(ucar_controller
@@ -228,7 +228,7 @@ _generate_srv_lisp(ucar_controller
 _generate_srv_lisp(ucar_controller
   "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv"
   "${MSG_I_FLAGS}"
-  "/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg;/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg"
+  "/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg;/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg"
   ${CATKIN_DEVEL_PREFIX}/${genlisp_INSTALL_DIR}/ucar_controller
 )
 _generate_srv_lisp(ucar_controller
@@ -301,7 +301,7 @@ _generate_srv_nodejs(ucar_controller
 _generate_srv_nodejs(ucar_controller
   "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv"
   "${MSG_I_FLAGS}"
-  "/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg;/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg"
+  "/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg;/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg"
   ${CATKIN_DEVEL_PREFIX}/${gennodejs_INSTALL_DIR}/ucar_controller
 )
 _generate_srv_nodejs(ucar_controller
@@ -374,7 +374,7 @@ _generate_srv_py(ucar_controller
 _generate_srv_py(ucar_controller
   "/home/ucar/instant_ws/src_pure_runtime_ws_v3/src/ucar_controller/srv/GetBatteryInfo.srv"
   "${MSG_I_FLAGS}"
-  "/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg;/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg"
+  "/opt/ros/noetic/share/sensor_msgs/cmake/../msg/BatteryState.msg;/opt/ros/noetic/share/std_msgs/cmake/../msg/Header.msg"
   ${CATKIN_DEVEL_PREFIX}/${genpy_INSTALL_DIR}/ucar_controller
 )
 _generate_srv_py(ucar_controller

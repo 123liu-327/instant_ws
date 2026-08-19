@@ -7,24 +7,28 @@
   <arg name="traffic_staging_x" default="0.2395" />
   <arg name="traffic_staging_y" default="-3.10" />
   <arg name="traffic_staging_yaw" default="-1.5596" />
+  <arg name="python_executable" default="/usr/bin/python3" />
   <arg name="traffic_config_file"
        default="$(find ucar_2026_strict_mission)/config/traffic_light_no_speech.yaml" />
+  <arg name="yellow_line_topic" default="/strict_mission/yellow_line" />
 
-  <include if="$(arg start_traffic_detector)"
-           file="$(find ucar_2026_traffic_light_rknn_test)/launch/traffic_light_rknn_x11_speak_test.launch">
-    <arg name="start_camera" value="false" />
-    <arg name="start_tts" value="false" />
-    <arg name="start_competition_speech" value="false" />
-    <arg name="start_viewer" value="$(arg start_viewer)" />
-    <arg name="config_file" value="$(arg traffic_config_file)" />
-    <arg name="required" value="true" />
-  </include>
+  <!-- Traffic recognition is started by the competition handoff after WAIT_TRAFFIC.
+       Keep start_traffic_detector for launch-file compatibility, but do not create
+       a second camera owner here. -->
+
+  <node pkg="flow_end" type="yellow_line_detector" name="yellow_line_detector"
+        output="screen" required="true">
+    <param name="image_topic" value="/usb_cam/image_raw" />
+    <param name="output_topic" value="$(arg yellow_line_topic)" />
+    <rosparam command="load" file="$(arg config_file)" />
+  </node>
 
   <node pkg="ucar_2026_strict_mission"
         type="strict_mission_node.py"
         name="strict_mission"
         output="screen"
-        required="true">
+        required="true"
+        launch-prefix="$(arg python_executable)">
     <rosparam command="load" file="$(arg config_file)" />
     <param name="traffic_pose_configured" value="$(arg traffic_pose_configured)" />
     <param name="traffic_staging_x" value="$(arg traffic_staging_x)" />

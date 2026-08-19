@@ -5,6 +5,7 @@
   <arg name="traffic_staging_x" default="0.2395" />
   <arg name="traffic_staging_y" default="-3.10" />
   <arg name="traffic_staging_yaw" default="-1.5596" />
+  <arg name="python_executable" default="/usr/bin/python3" />
 
   <include file="$(find ucar_2026_strict_mission)/launch/strict_mission.launch">
     <arg name="start_traffic_detector" value="$(arg start_traffic_detector)" />
@@ -13,5 +14,6 @@
     <arg name="traffic_staging_x" value="$(arg traffic_staging_x)" />
     <arg name="traffic_staging_y" value="$(arg traffic_staging_y)" />
     <arg name="traffic_staging_yaw" value="$(arg traffic_staging_yaw)" />
+    <arg name="python_executable" value="$(arg python_executable)" />
   </include>
 </launch>

@@ -13,6 +13,7 @@ int main(int argc, char **argv) {
     std::string begin_topic;
     std::string end_topic;
     std::string path_param;
+    std::string line_track_topic;
     bool publish_debug_image = true;
     bool show_window = false;
     bool parking_enabled = true;
@@ -54,6 +55,7 @@ int main(int argc, char **argv) {
     private_nh.param<std::string>("begin_topic", begin_topic, "/follow_begin");
     private_nh.param<std::string>("end_topic", end_topic, "/follow_end");
     private_nh.param<std::string>("path_select", path_param, "right");
+    private_nh.param<std::string>("line_track_topic", line_track_topic, "/line_follower/track");
     private_nh.param<bool>("publish_debug_image", publish_debug_image, true);
     private_nh.param<bool>("show_window", show_window, false);
     private_nh.param<bool>("parking_enabled", parking_enabled, true);
@@ -114,7 +116,8 @@ int main(int argc, char **argv) {
 
     flow_end::follow_test::initializeImagePipeline();
     flow_end::callback_test::advertiseTopics(nh, cmd_vel_topic, end_topic);
-    flow_end::callback_test::subscribeTopics(nh, image_topic, imu_topic, odom_topic, begin_topic);
+    flow_end::callback_test::subscribeTopics(nh, image_topic, imu_topic, odom_topic,
+                                             begin_topic, line_track_topic);
 
     flow_end::follow_test::publishStatus("IDLE");
     ROS_WARN("follow_test started. path_select=%s, waiting for %s Left/Middle/Right.",

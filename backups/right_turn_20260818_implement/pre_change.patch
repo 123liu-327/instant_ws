@@ -1,0 +1,33 @@
+diff --git a/launch/follow_test.launch b/launch/follow_test.launch
+index ca99dcb..4491079 100644
+--- a/launch/follow_test.launch
++++ b/launch/follow_test.launch
+@@ -59,8 +59,8 @@
+   <arg name="default_dis_bias_right" default="0.0" />
+   <arg name="left_dis_bias_left" default="6.0" />
+   <arg name="left_dis_bias_right" default="0.0" />
+-  <arg name="right_dis_bias_left" default="10.0" />
+-  <arg name="right_dis_bias_right" default="-32.0" />
++  <arg name="right_dis_bias_left" default="12.0" />
++  <arg name="right_dis_bias_right" default="-35.0" />
+   <arg name="middle_dis_bias_left" default="0.0" />
+   <arg name="middle_dis_bias_right" default="0.0" />
+   <arg name="time_local" default="0.5" />
+@@ -119,7 +119,7 @@
+   <arg name="base_speed" default="0.30" />
+ 
+   <!-- 【关键】前视距离，单位 m。增大更平稳但转弯响应变慢；减小更灵敏但容易摆动。 -->
+-  <arg name="aim_distance" default="0.10" />
++  <arg name="aim_distance" default="0.08" />
+ 
+   <!-- 控制点纵向偏置，单位 m；会参与 dy 计算，通常保持标定值，不作为首选调参项。 -->
+   <arg name="aim_y_bias_m" default="0.20" />
+@@ -238,7 +238,7 @@
+   <arg name="initial_turn_rpts_threshold" default="500" />
+ 
+   <!-- 预转结束后的停顿时间，单位：秒。停顿期间持续发布零速度，再进入正常巡线。 -->
+-  <arg name="initial_turn_pause_sec" default="10" />
++  <arg name="initial_turn_pause_sec" default="0.65" />
+ 
+   <node pkg="flow_end" type="follow_test" name="follow_test" output="screen">
+     <param name="image_topic" value="$(arg image_topic)" />

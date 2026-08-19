@@ -9,24 +9,18 @@
   <arg name="traffic_decision_topic" default="/traffic_light/decision" />
   <arg name="camera_profile_service" default="/ucar_camera/set_exposure_profile" />
   <arg name="traffic_python_executable" default="/home/ucar/miniconda3/bin/python3" />
+  <arg name="publish_commands" default="true" />
 
-  <!-- Keep the follower alive but IDLE before a confirmed direction arrives. -->
+  <!-- Keep the follower alive but IDLE before a confirmed direction arrives.
+       Vision and motion tuning intentionally come from follow_test.launch. -->
   <include file="$(find flow_end)/launch/follow_test.launch">
     <arg name="image_topic" value="$(arg image_topic)" />
     <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)" />
     <arg name="begin_topic" value="$(arg begin_topic)" />
     <arg name="end_topic" value="$(arg end_topic)" />
-    <arg name="status_topic" value="/flow_end/follow_test_status" />
-    <arg name="publish_debug_image" value="$(arg debug)" />
-    <arg name="show_window" value="false" />
-    <arg name="enable_video_record" value="false" />
-    <arg name="initial_turn_angle_deg" value="30.0" />
-    <arg name="initial_turn_angular_speed" value="0.35" />
-    <arg name="initial_turn_rpts_threshold" value="250" />
-    <arg name="initial_turn_pause_sec" value="0.5" />
   </include>
 
-  <!-- The detector publishes Stop/Middle/Left/Right directly to the follower. -->
+  <!-- The current main flow passes publish_commands:=false and releases the follower after its guarded advance. -->
   <include file="$(find traffic_light_vision)/launch/traffic_light_detector.launch">
     <arg name="image_topic" value="$(arg image_topic)" />
     <arg name="enable_topic" value="$(arg traffic_enable_topic)" />
@@ -36,7 +30,7 @@
     <arg name="python_executable" value="$(arg traffic_python_executable)" />
     <arg name="require_camera_profile" value="true" />
     <arg name="enabled_at_start" value="false" />
-    <arg name="publish_commands" value="true" />
+    <arg name="publish_commands" value="$(arg publish_commands)" />
     <arg name="publish_decisions" value="true" />
     <arg name="publish_debug" value="$(arg debug)" />
   </include>

@@ -61,6 +61,7 @@
   <depend>cv_bridge</depend>
   <depend>image_transport</depend>
   <depend>tf</depend>
+  <depend>line_follower</depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
@@ -82,7 +83,6 @@
 
   </export>
 </package>
-
 
 
 

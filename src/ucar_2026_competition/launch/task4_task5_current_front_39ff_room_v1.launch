@@ -17,6 +17,10 @@
   <arg name="traffic_x" default="0.3695" />
   <arg name="traffic_y" default="-3.09" />
   <arg name="traffic_yaw" default="-1.5596" />
+  <arg name="task45_extra_distance_m" default="0.15" />
+  <arg name="task45_extra_distance_tolerance_m" default="0.015" />
+  <arg name="task45_extra_distance_speed_mps" default="0.12" />
+  <arg name="task45_extra_distance_timeout_sec" default="10.0" />
 
   <!-- Set true only for a manual test that starts already centered at the line. -->
   <arg name="skip_yellow_line_approach" default="false" />
@@ -41,6 +45,10 @@
     <arg name="traffic_x" value="$(arg traffic_x)" />
     <arg name="traffic_y" value="$(arg traffic_y)" />
     <arg name="traffic_yaw" value="$(arg traffic_yaw)" />
+    <arg name="task45_extra_distance_m" value="$(arg task45_extra_distance_m)" />
+    <arg name="task45_extra_distance_tolerance_m" value="$(arg task45_extra_distance_tolerance_m)" />
+    <arg name="task45_extra_distance_speed_mps" value="$(arg task45_extra_distance_speed_mps)" />
+    <arg name="task45_extra_distance_timeout_sec" value="$(arg task45_extra_distance_timeout_sec)" />
     <arg name="skip_task4_stop_line_approach" value="$(arg skip_yellow_line_approach)" />
     <arg name="stage_exclusive_resources" value="true" />
   </include>
