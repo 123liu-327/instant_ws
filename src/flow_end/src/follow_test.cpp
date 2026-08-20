@@ -25,6 +25,7 @@ int main(int argc, char **argv) {
     double parking_lateral_cmd_sign = 1.0;
     std::string parking_motion_mode = "s_curve";
     double parking_max_angular_speed = 0.35;
+    double parking_second_arc_max_angular_speed = 0.11;
     double parking_yaw_kp = 1.5;
     double parking_yaw_tolerance_deg = 3.0;
     double parking_timeout = 6.0;
@@ -67,6 +68,8 @@ int main(int argc, char **argv) {
     private_nh.param<double>("parking_lateral_cmd_sign", parking_lateral_cmd_sign, 1.0);
     private_nh.param<std::string>("parking_motion_mode", parking_motion_mode, "s_curve");
     private_nh.param<double>("parking_max_angular_speed", parking_max_angular_speed, 0.35);
+    private_nh.param<double>("parking_second_arc_max_angular_speed",
+                             parking_second_arc_max_angular_speed, 0.11);
     private_nh.param<double>("parking_yaw_kp", parking_yaw_kp, 1.5);
     private_nh.param<double>("parking_yaw_tolerance_deg", parking_yaw_tolerance_deg, 3.0);
     private_nh.param<double>("parking_timeout", parking_timeout, 6.0);
@@ -99,6 +102,7 @@ int main(int argc, char **argv) {
                                      parking_forward_speed, parking_lateral_speed,
                                      parking_lateral_deadband, parking_lateral_cmd_sign,
                                      parking_motion_mode, parking_max_angular_speed,
+                                     parking_second_arc_max_angular_speed,
                                      parking_yaw_kp, parking_yaw_tolerance_deg,
                                      parking_timeout, parking_odom_timeout,
                                      lost_corner_search_enabled,

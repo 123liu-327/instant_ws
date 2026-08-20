@@ -103,10 +103,12 @@
 
   <!-- 默认以两段对称圆弧完成横向修正；设为 lateral 可回退到旧的直接横移。 -->
   <arg name="parking_motion_mode" default="s_curve" />
-  <arg name="parking_max_angular_speed" default="0.35" />
+  <arg name="parking_max_angular_speed" default="0.23" />
+  <!-- S 曲线第二段回正专用角速度上限；第一段仍使用 parking_max_angular_speed。 -->
+  <arg name="parking_second_arc_max_angular_speed" default="0.11" />
   <arg name="parking_yaw_kp" default="1.5" />
-  <arg name="parking_yaw_tolerance_deg" default="3.0" />
-  <arg name="parking_timeout" default="6.0" />
+  <arg name="parking_yaw_tolerance_deg" default="18.0" />
+  <arg name="parking_timeout" default="7.0" />
   <arg name="parking_odom_timeout" default="0.5" />
 
   <!-- 是否发布调试图像 /flow_end/follow_test_debug，可用 rqt_image_view 查看。 -->
@@ -117,7 +119,7 @@
 
   <!-- 视频保存相关参数 -->
   <!-- 是否启用视频保存（启用后将替代ROS话题发布，直接保存为AVI文件） -->
-  <arg name="enable_video_record" default="true" />
+  <arg name="enable_video_record" default="false" />
 
   <!-- 视频帧率，建议10-15 FPS，过高会增加CPU和磁盘压力 -->
   <arg name="video_fps" default="10" />
@@ -332,6 +334,8 @@
     <param name="parking_lateral_cmd_sign" value="$(arg parking_lateral_cmd_sign)" />
     <param name="parking_motion_mode" value="$(arg parking_motion_mode)" />
     <param name="parking_max_angular_speed" value="$(arg parking_max_angular_speed)" />
+    <param name="parking_second_arc_max_angular_speed"
+           value="$(arg parking_second_arc_max_angular_speed)" />
     <param name="parking_yaw_kp" value="$(arg parking_yaw_kp)" />
     <param name="parking_yaw_tolerance_deg" value="$(arg parking_yaw_tolerance_deg)" />
     <param name="parking_timeout" value="$(arg parking_timeout)" />

@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import ctypes
 import gc
 import signal
@@ -204,6 +205,7 @@ class CompetitionFlow:
             self.start_event.set()
         self.children = {}
         self.child_log_handles = {}
+        self.child_log_paths = {}
         self.child_process_groups = {}
         self.lock = threading.RLock()
         self.voice_transition_lock = threading.Lock()
@@ -419,10 +421,13 @@ class CompetitionFlow:
         self.task1_task2_handoff_prepared = False
         self.traffic_decision = rospy.get_param("~traffic_decision", "").strip().lower()
         self.red_announced = False
-        self.strict_mission_status = {}
         self.track_status = {}
         self.follow_status = ""
         self.follow_end = ""
+        self.follow_status_received_at = 0.0
+        self.follow_status_changed_at = 0.0
+        self.follow_end_received_at = 0.0
+        self.follow_parking_started_at = None
         self.ucar_image_received_at = 0.0
         self.ucar_image_width = 0
         self.ucar_image_height = 0
@@ -495,9 +500,7 @@ class CompetitionFlow:
         rospy.Subscriber(
             "/follow_end", String, self._follow_end_cb, queue_size=20
         )
-        rospy.Subscriber(
-            "/strict_mission/status", String, self._strict_mission_cb, queue_size=20
-        )
+
         for _, topic, _ in TRACK_CONFIG.values():
             rospy.Subscriber(topic, String, self._track_cb, callback_args=topic, queue_size=10)
 
@@ -542,7 +545,7 @@ class CompetitionFlow:
             },
             "task4": {
                 "flow": [
-                    "direct navigation to final stop pose (yellow detector disabled)",
+                    "direct navigation to final stop pose",
                     "camera ownership switch after stop line",
                     "traffic-light recognition",
                 ],
@@ -1658,10 +1661,33 @@ class CompetitionFlow:
             self.traffic_decision = decision
 
     def _follow_status_cb(self, msg):
-        self.follow_status = msg.data.strip().upper()
+        status = msg.data.strip().upper()
+        if not status:
+            return
+        now = time.monotonic()
+        previous = self.follow_status
+        self.follow_status = status
+        self.follow_status_received_at = now
+        if status != previous:
+            self.follow_status_changed_at = now
+            rospy.logwarn(
+                "TASK5_FLOW_STATUS previous=%s current=%s",
+                previous or "missing", status)
+        if status == "PARKING" and self.follow_parking_started_at is None:
+            self.follow_parking_started_at = now
+            rospy.logwarn("TASK5_PARKING_WATCHDOG_ARMED source=flow_status")
 
     def _follow_end_cb(self, msg):
-        self.follow_end = msg.data.strip().upper()
+        end_state = msg.data.strip().upper()
+        if not end_state:
+            return
+        previous = self.follow_end
+        self.follow_end = end_state
+        self.follow_end_received_at = time.monotonic()
+        if end_state != previous:
+            rospy.logwarn(
+                "TASK5_FLOW_END previous=%s current=%s",
+                previous or "missing", end_state)
 
     def _ucar_image_cb(self, msg):
         self.ucar_image_received_at = time.monotonic()
@@ -1688,15 +1714,6 @@ class CompetitionFlow:
                 sub.unregister()
             except Exception:
                 pass
-
-    def _strict_mission_cb(self, msg):
-        try:
-            payload = json.loads(msg.data)
-            if isinstance(payload, dict):
-                self.strict_mission_status = payload
-        except Exception:
-            return
-
     def _track_cb(self, msg, topic):
         self.track_status[topic] = msg.data.strip().lower()
 
@@ -1915,6 +1932,7 @@ class CompetitionFlow:
                 log_dir, "{}_{}.log".format(key, int(time.time())))
             log_handle = open(log_path, "ab", buffering=0)
             self.child_log_handles[key] = log_handle
+            self.child_log_paths[key] = log_path
             rospy.loginfo("starting %s (details: %s)", key, log_path)
             proc = subprocess.Popen(
                 command, start_new_session=True,
@@ -1929,6 +1947,44 @@ class CompetitionFlow:
         except OSError:
             self.child_process_groups[key] = proc.pid
         return proc
+
+    @staticmethod
+    def _clean_child_log_line(line):
+        """Remove roslaunch terminal colour/control sequences before relaying."""
+        return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line).strip()
+
+    def _open_task5_log_tail(self):
+        """Open the flow_end child log so selected diagnostics reach the console."""
+        path = self.child_log_paths.get("task45_vision_follow")
+        if not path:
+            rospy.logwarn(
+                "TASK5_FLOW_LOG_RELAY unavailable: child output is not redirected")
+            return None
+        try:
+            handle = open(path, "r", encoding="utf-8", errors="replace")
+            rospy.loginfo("TASK5_FLOW_LOG_RELAY source=%s", path)
+            return handle
+        except OSError as exc:
+            rospy.logwarn("TASK5_FLOW_LOG_RELAY open failed: %s", exc)
+            return None
+
+    def _relay_task5_log(self, handle):
+        """Relay only high-value flow_end events from its quiet child log."""
+        if handle is None:
+            return
+        markers = (
+            "follow_test started",
+            "[Y_BRANCH]", "[Y_GUIDED]", "[Y_COORD]", "[Y_TURN]",
+            "[Y_REACQUIRE]", "[LOST_CORNER]", "[RIGHT_TURN]",
+            "[PARKING]", "[PARKING_",
+        )
+        while True:
+            line = handle.readline()
+            if not line:
+                break
+            clean = self._clean_child_log_line(line)
+            if clean and any(marker in clean for marker in markers):
+                rospy.logwarn("TASK5_FLOW_LOG %s", clean)
 
     def _ensure_front_camera(self):
         proc = self.children.get("front_camera")
@@ -4184,8 +4240,7 @@ class CompetitionFlow:
 
     def approach_task4_stop_line(self):
         # The calibrated navigation goal is already the accepted stop pose.
-        # Keep task4 independent from strict_mission/yellow_line_detector and
-        # hand off only after move_base succeeds and zero velocity is held.
+        # Task4 ends at the calibrated navigation pose; no line detector is used.
         self.stop_child("factory_ocr")
         self.stop_child("factory_navigator")
         self._retire_ros_nodes(
@@ -4197,7 +4252,7 @@ class CompetitionFlow:
         target_yaw = float(rospy.get_param("~traffic_yaw"))
         self.publish_status(
             "task4", "approaching_stop_line",
-            "navigating directly to final stop pose; yellow detector disabled")
+            "navigating directly to final stop pose")
         try:
             teb_proxy, saved_tolerances = self._set_task4_teb_goal_tolerances()
             try:
@@ -4209,7 +4264,7 @@ class CompetitionFlow:
                     teb_proxy, saved_tolerances)
             self.safe_stop(cancel_navigation=True)
             rospy.sleep(0.30)
-            self._advance_after_yellow_line(
+            self._advance_task45_distance(
                 distance=float(rospy.get_param(
                     "~task4_post_navigation_advance_m", 0.08)),
                 tolerance=float(rospy.get_param(
@@ -4228,7 +4283,7 @@ class CompetitionFlow:
             self.publish_status(
                 "task4", "stop_line_reached",
                 "navigation final pose reached and vehicle held; "
-                "goal=({:.3f},{:.3f},{:.3f}) yellow_detector=disabled".format(
+                "goal=({:.3f},{:.3f},{:.3f})".format(
                     target_x, target_y, target_yaw))
         finally:
             self.safe_stop(cancel_navigation=True)
@@ -4397,13 +4452,17 @@ class CompetitionFlow:
     def start_flowend_stack(self):
         self.follow_status = ""
         self.follow_end = ""
+        self.follow_status_received_at = 0.0
+        self.follow_status_changed_at = 0.0
+        self.follow_end_received_at = 0.0
+        self.follow_parking_started_at = None
         self.traffic_decision = ""
         extra_distance_m = float(rospy.get_param(
             "~task45_extra_distance_m", 0.15))
         if extra_distance_m < 0.0:
             raise StageError("task45_extra_distance_m must be non-negative")
         rospy.loginfo(
-            "TASK45_CONFIG yellow_line_extra_distance=%.3fm",
+            "TASK45_CONFIG task45_extra_distance=%.3fm",
             extra_distance_m)
         self.start_child(
             "task45_vision_follow", "ucar_2026_competition",
@@ -4457,11 +4516,11 @@ class CompetitionFlow:
                 self.task45_camera_switched = False
                 self._release_ucar_image_subscription()
 
-    def _advance_after_yellow_line(
+    def _advance_task45_distance(
             self, distance=None, tolerance=None, speed=None, timeout=None,
-            status_state="yellow_line_extra_distance_completed",
+            status_state="task45_extra_distance_completed",
             detail_prefix="advanced before task5"):
-        """Advance a guarded distance after the yellow-line stop."""
+        """Advance a guarded distance after the task45 stop."""
         distance = float(
             rospy.get_param("~task45_extra_distance_m", 0.15)
             if distance is None else distance)
@@ -4470,14 +4529,14 @@ class CompetitionFlow:
             if tolerance is None else tolerance)
         if distance == 0.0:
             self.publish_status(
-                "task4", "yellow_line_extra_distance_skipped",
+                "task4", "task45_extra_distance_skipped",
                 "configured distance is zero")
             return
         try:
             lower_bound, upper_bound = extra_distance_acceptance_bounds(
                 distance, tolerance)
         except ValueError as exc:
-            raise StageError("invalid yellow-line extra distance: {}".format(exc))
+            raise StageError("invalid task45 extra distance: {}".format(exc))
         speed = max(0.01, min(0.08, float(
             rospy.get_param("~task45_extra_distance_speed_mps", 0.12)
             if speed is None else speed)))
@@ -4488,7 +4547,7 @@ class CompetitionFlow:
             if timeout is None else timeout))
         settle_sec = 0.30
         rospy.loginfo(
-            "YELLOW_EXTRA_ADVANCE_CONFIG target=%.3fm tolerance=%.3fm "
+            "TASK45_EXTRA_ADVANCE_CONFIG target=%.3fm tolerance=%.3fm "
             "band=[%.3f,%.3f]m speed=%.3fm/s timeout=%.1fs",
             distance, tolerance, lower_bound, upper_bound, speed, timeout)
         deadline = time.monotonic() + timeout
@@ -4504,7 +4563,7 @@ class CompetitionFlow:
             self.cmd_pub.publish(Twist())
             rospy.sleep(0.02)
         if start is None:
-            raise StageError("fresh odometry unavailable for yellow-line advance")
+            raise StageError("fresh odometry unavailable for task45 advance")
         start_x, start_y, start_yaw = start
         last_progress = 0.0
         last_lateral = 0.0
@@ -4517,7 +4576,7 @@ class CompetitionFlow:
                 age = time.monotonic() - self.qr_odom_received_at
             if position is None or yaw is None or age > stale_sec:
                 raise StageError(
-                    "odometry became stale during yellow-line advance "
+                    "odometry became stale during task45 advance "
                     "(age={:.3f}s)".format(age))
             dx = float(position[0]) - start_x
             dy = float(position[1]) - start_y
@@ -4539,7 +4598,7 @@ class CompetitionFlow:
             remaining = max(0.0, deadline - time.monotonic())
             rospy.loginfo_throttle(
                 0.5,
-                "YELLOW_EXTRA_ADVANCE progress=%.3fm target=%.3fm "
+                "TASK45_EXTRA_ADVANCE progress=%.3fm target=%.3fm "
                 "band=[%.3f,%.3f]m speed=%.3fm/s remaining=%.1fs",
                 progress, distance, lower_bound, upper_bound, speed, remaining)
             if progress >= lower_bound:
@@ -4548,7 +4607,7 @@ class CompetitionFlow:
                     abs(yaw_error) > math.radians(5.0)):
                 self.cmd_pub.publish(Twist())
                 raise StageError(
-                    "yellow-line advance drift exceeded safety limit: "
+                    "task45 advance drift exceeded safety limit: "
                     "progress={:.3f}m lateral={:.3f}m yaw={:.1f}deg".format(
                         progress, lateral, math.degrees(yaw_error)))
             command = Twist()
@@ -4558,7 +4617,7 @@ class CompetitionFlow:
         else:
             self.cmd_pub.publish(Twist())
             raise StageError(
-                "yellow-line extra distance advance timed out: "
+                "task45 extra distance advance timed out: "
                 "progress={:.3f}m target={:.3f}m lower={:.3f}m "
                 "lateral={:.3f}m yaw={:.1f}deg timeout={:.1f}s".format(
                     last_progress, distance, lower_bound, last_lateral,
@@ -4576,20 +4635,20 @@ class CompetitionFlow:
             raise
         self.cmd_pub.publish(Twist())
         rospy.loginfo(
-            "YELLOW_EXTRA_ADVANCE_STOPPED progress=%.3fm target=%.3fm "
+            "TASK45_EXTRA_ADVANCE_STOPPED progress=%.3fm target=%.3fm "
             "band=[%.3f,%.3f]m lateral=%.3fm yaw=%.1fdeg",
             final_progress, distance, lower_bound, upper_bound,
             final_lateral, math.degrees(final_yaw_error))
         if not extra_distance_is_accepted(
                 final_progress, lower_bound, upper_bound):
             raise StageError(
-                "yellow-line extra distance outside tolerance after stop: "
+                "task45 extra distance outside tolerance after stop: "
                 "progress={:.3f}m accepted=[{:.3f},{:.3f}]m".format(
                     final_progress, lower_bound, upper_bound))
         if (final_progress < -0.03 or abs(final_lateral) > 0.06 or
                 abs(final_yaw_error) > math.radians(5.0)):
             raise StageError(
-                "yellow-line advance drift exceeded safety limit after stop: "
+                "task45 advance drift exceeded safety limit after stop: "
                 "progress={:.3f}m lateral={:.3f}m yaw={:.1f}deg".format(
                     final_progress, final_lateral,
                     math.degrees(final_yaw_error)))
@@ -4655,7 +4714,7 @@ class CompetitionFlow:
                         text="识别结果为{}，执行{}路径".format(
                             decision_text, decision_text))
                     self.traffic_pub.publish(String(data=decision))
-                    self._advance_after_yellow_line()
+                    self._advance_task45_distance()
                     self.follow_begin_pub.publish(String(data=command))
                     self.publish_status(
                         "task4", "completed",
@@ -4686,13 +4745,63 @@ class CompetitionFlow:
         started_at = time.monotonic()
         command_replayed = False
         timeout = float(rospy.get_param("~track_timeout_sec", 420.0))
+        parking_finish_timeout = max(0.5, float(rospy.get_param(
+            "~task5_parking_finish_timeout_sec", 7.0)))
         deadline = started_at + timeout
+        completion_reason = ""
+        parking_abort_logged = False
+        last_parking_watchdog_log = 0.0
+        flow_log = self._open_task5_log_tail()
+        rospy.loginfo(
+            "TASK5_MONITOR_CONFIG track_timeout=%.1fs "
+            "parking_finish_timeout=%.1fs",
+            timeout, parking_finish_timeout)
         try:
             while time.monotonic() < deadline and not rospy.is_shutdown():
                 self.check_abort()
+                self._relay_task5_log(flow_log)
                 if self.follow_status == "FINISHED" or self.follow_end == "STOP":
                     self.safe_stop(cancel_navigation=True)
+                    completion_reason = (
+                        "flow_end terminal signal status={} end={}".format(
+                            self.follow_status or "missing",
+                            self.follow_end or "missing"))
+                    rospy.logwarn("TASK5_FINISH_CONFIRMED %s", completion_reason)
                     break
+                now = time.monotonic()
+                if self.follow_status.startswith("PARKING_ABORTED_"):
+                    self.safe_stop(cancel_navigation=True)
+                    if not parking_abort_logged:
+                        parking_abort_logged = True
+                        rospy.logerr(
+                            "TASK5_PARKING_TERMINAL_MISSING status=%s; "
+                            "holding stop until %.1fs parking watchdog",
+                            self.follow_status, parking_finish_timeout)
+                if self.follow_parking_started_at is not None:
+                    parking_elapsed = now - self.follow_parking_started_at
+                    if now - last_parking_watchdog_log >= 0.5:
+                        last_parking_watchdog_log = now
+                        rospy.logwarn(
+                            "TASK5_PARKING_WATCHDOG status=%s end=%s "
+                            "elapsed=%.1fs remaining=%.1fs",
+                            self.follow_status or "missing",
+                            self.follow_end or "missing",
+                            parking_elapsed,
+                            max(0.0, parking_finish_timeout - parking_elapsed))
+                    if parking_elapsed >= parking_finish_timeout:
+                        self.safe_stop(cancel_navigation=True)
+                        self.follow_begin_pub.publish(String(data="Stop"))
+                        completion_reason = (
+                            "parking watchdog elapsed {:.1f}s; status={} end={}".format(
+                                parking_elapsed, self.follow_status or "missing",
+                                self.follow_end or "missing"))
+                        self.publish_status(
+                            "task5", "parking_finish_timeout",
+                            completion_reason + "; forcing safe mission completion")
+                        rospy.logerr(
+                            "TASK5_PARKING_FINISH_TIMEOUT %s",
+                            completion_reason)
+                        break
                 proc = self.children.get("task45_vision_follow")
                 if proc is None or proc.poll() is not None:
                     raise StageError("flow_end stack exited before FINISHED")
@@ -4715,9 +4824,18 @@ class CompetitionFlow:
             else:
                 raise StageError("flow_end line following timed out after {:.1f}s".format(timeout))
         finally:
+            self._relay_task5_log(flow_log)
+            if flow_log is not None:
+                flow_log.close()
             self.stop_task45_stack(stop_camera=True)
+        rospy.logwarn(
+            "TASK5_ANNOUNCEMENT_TRIGGER reason=%s",
+            completion_reason or "terminal loop completed")
         self.announce("task5")
-        self.publish_status("task5", "completed", "competition completed")
+        self.publish_status(
+            "task5", "completed",
+            "competition completed; {}".format(
+                completion_reason or "flow_end completed"))
 
     def run(self):
         try:

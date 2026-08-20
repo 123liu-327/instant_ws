@@ -19,6 +19,7 @@
   <arg name="coverage_preferred_odom_pose_enabled" default="false" />
   <arg name="coverage_preferred_odom_x" default="0.0" />
   <arg name="coverage_preferred_odom_y" default="0.0" />
+  <arg name="coverage_preferred_odom_position_tolerance_m" default="0.10" />
   <arg name="publish_initial_pose" default="true" />
   <arg name="navigate_to_end_after_trigger" default="true" />
   <arg name="coverage_search_mode" default="false" />
@@ -137,6 +138,7 @@
     <param name="coverage_preferred_odom_pose_enabled" value="$(arg coverage_preferred_odom_pose_enabled)" />
     <param name="coverage_preferred_odom_x" value="$(arg coverage_preferred_odom_x)" />
     <param name="coverage_preferred_odom_y" value="$(arg coverage_preferred_odom_y)" />
+    <param name="coverage_preferred_odom_position_tolerance_m" value="$(arg coverage_preferred_odom_position_tolerance_m)" />
     <param name="publish_initial_pose" value="$(arg publish_initial_pose)" />
     <param name="navigate_to_end_after_trigger" value="$(arg navigate_to_end_after_trigger)" />
     <param name="coverage_search_mode" value="$(arg coverage_search_mode)" />

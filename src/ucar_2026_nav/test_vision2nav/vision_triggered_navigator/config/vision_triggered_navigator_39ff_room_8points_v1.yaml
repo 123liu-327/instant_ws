@@ -3,7 +3,7 @@
 # removed completely, so navigation starts directly with P1 below.
 patrol_points:
   # P1: -45 deg, clockwise to -120 deg.
-  - x: -0.70
+  - x: -0.85
     y: -2.82
     yaw: -0.7854
     rotations:
@@ -24,7 +24,7 @@ patrol_points:
       - {direction: "right", duration: 4.7124}
 
   # P4 (former P5).
-  - x: 0.30
+  - x: 0.20
     y: -1.77
     yaw: 0.89
     rotations:

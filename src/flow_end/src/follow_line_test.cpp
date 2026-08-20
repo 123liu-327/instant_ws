@@ -168,6 +168,7 @@ double parking_lateral_deadband = 0.03;
 double parking_lateral_cmd_sign = 1.0;
 std::string parking_motion_mode = "s_curve";
 double parking_max_angular_speed = 0.35;
+double parking_second_arc_max_angular_speed = 0.11;
 double parking_yaw_kp = 1.5;
 double parking_yaw_tolerance_deg = 3.0;
 double parking_timeout = 6.0;
@@ -1457,11 +1458,14 @@ bool handleParkingCorner() {
     ros::Rate parking_rate(30.0);
 
     ROS_WARN("[PARKING_PLAN] mode=%s | target=(%.3f,%.3f)m | curved=%d | radius=%.3fm | "
-             "peak_yaw=%.1fdeg | path=%.3fm | cmd_v=%.3fm/s | ff_wz=%.3frad/s | start_yaw=%.1fdeg",
+             "peak_yaw=%.1fdeg | path=%.3fm | cmd_v=%.3fm/s | ff_wz=%.3frad/s | "
+             "wz_limit=(first=%.3f,second=%.3f)rad/s | start_yaw=%.1fdeg",
              parking_motion_mode.c_str(), parking_total_dist, parking_target_lateral,
              s_curve_plan.curved, s_curve_plan.radius,
              s_curve_plan.peak_yaw * 180.0 / PI, parking_path_length,
-             parking_cmd_speed, s_curve_plan.feedforward_wz, current_yaw);
+             parking_cmd_speed, s_curve_plan.feedforward_wz,
+             parking_max_angular_speed,
+             parking_second_arc_max_angular_speed, current_yaw);
 
     const auto abortParking = [&](const std::string &status, const char *reason) {
         publishStop();
@@ -1519,8 +1523,13 @@ bool handleParkingCorner() {
         if (use_s_curve) {
             const double feedforward_wz = parkingSCurveFeedforwardWz(s_curve_plan, traveled);
             const double requested_wz = feedforward_wz + parking_yaw_kp * yaw_error;
-            local_msg.angular.z = std::max(-parking_max_angular_speed,
-                                           std::min(parking_max_angular_speed, requested_wz));
+            const bool second_arc =
+                traveled >= s_curve_plan.total_length * 0.5;
+            const double active_max_wz = second_arc
+                ? parking_second_arc_max_angular_speed
+                : parking_max_angular_speed;
+            local_msg.angular.z = std::max(-active_max_wz,
+                                           std::min(active_max_wz, requested_wz));
         } else if (!path_complete &&
                    std::abs(legacy_lateral_remaining) >= parking_lateral_deadband) {
             local_msg.linear.y = legacy_lateral_remaining > 0.0
@@ -1540,10 +1549,14 @@ bool handleParkingCorner() {
             const double remaining = std::max(0.0, parking_path_length - parking_moved);
             const double progress = 100.0 * traveled / std::max(0.001, parking_path_length);
             ROS_WARN("[PARKING_PROGRESS] progress=%.0f%% | remaining=%.3fm/%.3fm | "
-                     "yaw=(ref=%.1f,actual=%.1f,error=%.1f)deg | cmd=(%.2f,%.2f,%.2f) | "
+                     "arc=%s | yaw=(ref=%.1f,actual=%.1f,error=%.1f)deg | "
+                     "cmd=(%.2f,%.2f,%.2f) | "
                      "odom_age=%.3fs | loops=%d | elapsed=%.2fs",
                      std::max(0.0, std::min(progress, 100.0)),
                      remaining, parking_path_length,
+                     !use_s_curve ? "lateral"
+                         : (traveled >= s_curve_plan.total_length * 0.5
+                                ? "second" : "first"),
                      reference_yaw * 180.0 / PI,
                      relative_yaw * 180.0 / PI,
                      yaw_error * 180.0 / PI,
@@ -2309,7 +2322,9 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
                double forward_parking_speed, double lateral_parking_speed,
                double lateral_parking_deadband, double lateral_cmd_sign,
                const std::string &parking_mode,
-               double max_parking_angular_speed, double parking_heading_kp,
+               double max_parking_angular_speed,
+               double second_arc_max_parking_angular_speed,
+               double parking_heading_kp,
                double parking_heading_tolerance_deg,
                double parking_timeout_sec, double parking_odom_timeout_sec,
                bool enable_lost_corner_search,
@@ -2335,6 +2350,8 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
         parking_motion_mode = "s_curve";
     }
     parking_max_angular_speed = std::max(0.0, max_parking_angular_speed);
+    parking_second_arc_max_angular_speed =
+        std::max(0.0, second_arc_max_parking_angular_speed);
     parking_yaw_kp = std::max(0.0, parking_heading_kp);
     parking_yaw_tolerance_deg = std::max(0.0, parking_heading_tolerance_deg);
     parking_timeout = std::max(0.1, parking_timeout_sec);

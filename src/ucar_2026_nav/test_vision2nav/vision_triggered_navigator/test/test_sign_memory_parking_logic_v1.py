@@ -14,7 +14,9 @@ from sign_memory_parking_logic_v1 import (
     local_lateral_displacement,
     remembered_target_lateral_travel,
     nearest_cardinal_yaw,
+    predicted_center_pose,
     projected_lateral_offset,
+    should_use_coarse_navigation,
     should_run_mid_recenter,
 )
 
@@ -86,6 +88,28 @@ class SignMemoryParkingLogicTest(unittest.TestCase):
             math.pi, 0.036, 0.564, math.radians(70.0), 0.88, -1.0)
         self.assertLess(travel, -0.25)
         self.assertGreater(travel, -0.40)
+
+    def test_coarse_navigation_uses_strict_error_threshold(self):
+        self.assertFalse(should_use_coarse_navigation(0.20, 0.20))
+        self.assertTrue(should_use_coarse_navigation(-0.201, 0.20))
+        self.assertFalse(should_use_coarse_navigation(None, 0.20))
+
+    def test_predicted_center_pose_moves_on_cardinal_lateral_axis(self):
+        pose, travel = predicted_center_pose(
+            (1.0, 2.0, math.pi * 0.5),
+            (1.0, 2.0, math.pi * 0.5), math.pi * 0.5,
+            0.5, 0.50, math.radians(70.0), 0.88, -1.0, 0.55)
+        self.assertLess(travel, 0.0)
+        self.assertGreater(pose[0], 1.0)
+        self.assertAlmostEqual(pose[1], 2.0, places=6)
+        self.assertAlmostEqual(pose[2], math.pi * 0.5, places=6)
+
+    def test_predicted_center_pose_clamps_excessive_lateral_travel(self):
+        pose, travel = predicted_center_pose(
+            (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.0,
+            -1.5, 2.0, math.radians(70.0), 1.0, -1.0, 0.30)
+        self.assertAlmostEqual(travel, 0.30, places=6)
+        self.assertAlmostEqual(pose[1], 0.30, places=6)
 
     def test_clockwise_primary_retries_counterclockwise(self):
         target, direction, correction = alternate_cardinal_yaw(

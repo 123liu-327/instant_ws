@@ -9,14 +9,15 @@
   <arg name="traffic_yaw" default="-1.5596" />
   <arg name="task4_final_xy_goal_tolerance" default="0.04" />
   <arg name="task4_final_yaw_goal_tolerance" default="0.08" />
-  <arg name="task4_post_navigation_advance_m" default="0.18" />//
+  <arg name="task4_post_navigation_advance_m" default="0.18" />
   <arg name="task4_post_navigation_advance_tolerance_m" default="0.01" />
-  <arg name="task4_post_navigation_advance_speed_mps" default="0.12" />
+  <arg name="task4_post_navigation_advance_speed_mps" default="0.18" />
   <arg name="task4_post_navigation_advance_timeout_sec" default="6.0" />
   <arg name="task45_extra_distance_m" default="0.20" />
   <arg name="task45_extra_distance_tolerance_m" default="0.015" />
-  <arg name="task45_extra_distance_speed_mps" default="0.12" />
+  <arg name="task45_extra_distance_speed_mps" default="0.18" />
   <arg name="task45_extra_distance_timeout_sec" default="10.0" />
+  <arg name="task5_parking_finish_timeout_sec" default="7.0" />
   <arg name="task45_camera_image_width" default="640" />
   <arg name="task45_camera_image_height" default="480" />
   <arg name="task45_camera_pixel_format" default="YUYV" />
@@ -123,6 +124,7 @@
     <arg name="task45_extra_distance_tolerance_m" value="$(arg task45_extra_distance_tolerance_m)" />
     <arg name="task45_extra_distance_speed_mps" value="$(arg task45_extra_distance_speed_mps)" />
     <arg name="task45_extra_distance_timeout_sec" value="$(arg task45_extra_distance_timeout_sec)" />
+    <arg name="task5_parking_finish_timeout_sec" value="$(arg task5_parking_finish_timeout_sec)" />
     <arg name="task45_camera_image_width" value="$(arg task45_camera_image_width)" />
     <arg name="task45_camera_image_height" value="$(arg task45_camera_image_height)" />
     <arg name="task45_camera_pixel_format" value="$(arg task45_camera_pixel_format)" />

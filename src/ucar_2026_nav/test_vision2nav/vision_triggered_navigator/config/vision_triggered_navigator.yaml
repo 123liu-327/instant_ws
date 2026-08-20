@@ -53,7 +53,7 @@ coverage_fallback_max_radius_m: 0.72
 coverage_fallback_radius_step_m: 0.12
 coverage_fallback_tolerance_step_m: 0.08
 coverage_fallback_max_position_tolerance_m: 0.52
-coverage_fallback_attempts_per_stage: 2
+coverage_fallback_attempts_per_stage: 4
 max_coverage_anchors: 0
 center_only: false
 coverage_scan_settle_sec: 0.20
@@ -93,6 +93,23 @@ camera_boresight_yaw_offset: 0.0
 camera_horizontal_fov_deg: 70.0
 camera_bearing_sign: -1.0
 arrival_hold_sec: 0.15
+
+# 厂牌明显偏离画面中心时，先用move_base接近预计横移终点；失败后仍由横移接管。
+memory_parking_coarse_nav_enabled: true
+memory_parking_coarse_nav_error_threshold: 0.20
+memory_parking_coarse_nav_attempts: 1
+memory_parking_coarse_nav_precheck: false
+memory_parking_coarse_nav_clear_between_attempts: false
+memory_parking_coarse_nav_position_tolerance_m: 0.10
+memory_parking_coarse_nav_yaw_tolerance_deg: 7.0
+memory_parking_coarse_nav_timeout_sec: 12.0
+memory_parking_coarse_nav_no_progress_timeout_sec: 4.0
+memory_parking_coarse_nav_min_progress_m: 0.03
+memory_parking_forward_timeout_sec: 15.0
+memory_parking_min_vx: 0.06
+memory_parking_max_vx: 0.135
+memory_parking_mid_vx: 0.165
+memory_parking_far_vx: 0.225
 
 # 任务2完整模式覆盖这些参数；独立导航默认维持原0.4m目标且不做50cm框验证。
 validate_parking_box: false

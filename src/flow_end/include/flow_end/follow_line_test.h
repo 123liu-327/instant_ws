@@ -49,6 +49,7 @@ extern double parking_lateral_deadband;
 extern double parking_lateral_cmd_sign;
 extern std::string parking_motion_mode;
 extern double parking_max_angular_speed;
+extern double parking_second_arc_max_angular_speed;
 extern double parking_yaw_kp;
 extern double parking_yaw_tolerance_deg;
 extern double parking_timeout;
@@ -143,7 +144,9 @@ void configure(bool publish_debug, bool show_debug_window, bool enable_parking,
                double forward_parking_speed, double lateral_parking_speed,
                double lateral_parking_deadband, double lateral_cmd_sign,
                const std::string &parking_mode,
-               double max_parking_angular_speed, double parking_heading_kp,
+               double max_parking_angular_speed,
+               double second_arc_max_parking_angular_speed,
+               double parking_heading_kp,
                double parking_heading_tolerance_deg,
                double parking_timeout_sec, double parking_odom_timeout_sec,
                bool enable_lost_corner_search,

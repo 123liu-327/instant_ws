@@ -59,6 +59,8 @@ void refreshRuntimeParams() {
     double lateral_cmd_sign = follow_test::parking_lateral_cmd_sign;
     std::string parking_mode = follow_test::parking_motion_mode;
     double max_parking_angular_speed = follow_test::parking_max_angular_speed;
+    double second_arc_max_parking_angular_speed =
+        follow_test::parking_second_arc_max_angular_speed;
     double parking_heading_kp = follow_test::parking_yaw_kp;
     double parking_heading_tolerance_deg = follow_test::parking_yaw_tolerance_deg;
     double parking_timeout_sec = follow_test::parking_timeout;
@@ -136,6 +138,9 @@ void refreshRuntimeParams() {
     private_nh.param<double>("parking_lateral_cmd_sign", lateral_cmd_sign, lateral_cmd_sign);
     private_nh.param<std::string>("parking_motion_mode", parking_mode, parking_mode);
     private_nh.param<double>("parking_max_angular_speed", max_parking_angular_speed, max_parking_angular_speed);
+    private_nh.param<double>("parking_second_arc_max_angular_speed",
+                             second_arc_max_parking_angular_speed,
+                             second_arc_max_parking_angular_speed);
     private_nh.param<double>("parking_yaw_kp", parking_heading_kp, parking_heading_kp);
     private_nh.param<double>("parking_yaw_tolerance_deg", parking_heading_tolerance_deg, parking_heading_tolerance_deg);
     private_nh.param<double>("parking_timeout", parking_timeout_sec, parking_timeout_sec);
@@ -269,6 +274,7 @@ void refreshRuntimeParams() {
                            forward_parking_speed, lateral_parking_speed,
                            lateral_parking_deadband, lateral_cmd_sign,
                            parking_mode, max_parking_angular_speed,
+                           second_arc_max_parking_angular_speed,
                            parking_heading_kp, parking_heading_tolerance_deg,
                            parking_timeout_sec, parking_odom_timeout_sec,
                            enable_lost_corner_search, lost_corner_timeout,
@@ -415,7 +421,7 @@ void beginCallback(const std_msgs::String::ConstPtr &msg) {
     follow_test::startInitialTurnIfNeeded();
     
     // 启动调试信息
-    ROS_WARN("[CMD] StartFollow | path=%s | bias_left=%.1f | bias_right=%.1f | Time_local=%.2f | init_turn=%d | parking=%d | allow_either_l=%d | parking_extra=%.3f | park_mode=%s | park_vx=%.2f | park_vy=%.2f | park_max_wz=%.2f | lat_deadband=%.3f | y_sign=%.0f | lost_search=%d | base_speed=%.2f m/s | init_angle=%.1f deg | rpts_thresh=%d | min_pid_speed=%.2f",
+    ROS_WARN("[CMD] StartFollow | path=%s | bias_left=%.1f | bias_right=%.1f | Time_local=%.2f | init_turn=%d | parking=%d | allow_either_l=%d | parking_extra=%.3f | park_mode=%s | park_vx=%.2f | park_vy=%.2f | park_max_wz=%.2f | park_second_max_wz=%.2f | lat_deadband=%.3f | y_sign=%.0f | lost_search=%d | base_speed=%.2f m/s | init_angle=%.1f deg | rpts_thresh=%d | min_pid_speed=%.2f",
          pathToString(follow_test::path_select).c_str(),
          Dis_Bias_Left, Dis_Bias_Right,
          Time_local,
@@ -427,6 +433,7 @@ void beginCallback(const std_msgs::String::ConstPtr &msg) {
          follow_test::parking_forward_speed,
          follow_test::parking_lateral_speed,
          follow_test::parking_max_angular_speed,
+         follow_test::parking_second_arc_max_angular_speed,
          follow_test::parking_lateral_deadband,
          follow_test::parking_lateral_cmd_sign,
          follow_test::lost_corner_search_enabled,

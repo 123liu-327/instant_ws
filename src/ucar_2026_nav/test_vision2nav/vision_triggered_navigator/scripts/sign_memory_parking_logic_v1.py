@@ -116,6 +116,38 @@ def remembered_target_lateral_travel(start_pose, capture_pose, target_yaw,
     return capture_lateral + remaining_forward * math.tan(ray_error)
 
 
+def should_use_coarse_navigation(image_error, threshold):
+    """Use move_base only when the remembered sign is meaningfully off-centre."""
+    if image_error is None:
+        return False
+    try:
+        error = float(image_error)
+        limit = abs(float(threshold))
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(error) and math.isfinite(limit) and abs(error) > limit
+
+
+def predicted_center_pose(start_pose, capture_pose, target_yaw, image_error,
+                          wall_distance, horizontal_fov,
+                          projection_gain=1.0, bearing_sign=-1.0,
+                          max_lateral_travel=0.55):
+    """Return the odom pose reached by straightening then centering laterally."""
+    start = tuple(float(value) for value in start_pose)
+    travel = remembered_target_lateral_travel(
+        start, capture_pose, target_yaw, image_error, wall_distance,
+        horizontal_fov, projection_gain, bearing_sign)
+    travel = clamp(travel, -abs(float(max_lateral_travel)),
+                   abs(float(max_lateral_travel)))
+    lateral_x = -math.sin(float(target_yaw))
+    lateral_y = math.cos(float(target_yaw))
+    return (
+        start[0] + lateral_x * travel,
+        start[1] + lateral_y * travel,
+        normalize_angle(target_yaw),
+    ), travel
+
+
 def front_obstacle_is_localized(front_min, front_median, wall_stop,
                                 hard_stop, separation_margin):
     """Distinguish a narrow foreground obstacle from the parking wall.
